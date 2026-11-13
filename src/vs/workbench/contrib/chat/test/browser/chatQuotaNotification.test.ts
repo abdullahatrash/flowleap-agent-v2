@@ -468,7 +468,7 @@ suite('ChatQuotaNotificationContribution', () => {
 
 			assert.ok(notificationMock.getNotification());
 			assert.strictEqual(notificationMock.getNotification()!.message, 'Usage Blocked');
-			assert.strictEqual(notificationMock.getNotification()!.description, 'Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.');
+			assert.strictEqual(notificationMock.getNotification()!.description, 'Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.');
 			assert.strictEqual(notificationMock.getNotification()!.actions.length, 0);
 		});
 
@@ -480,7 +480,7 @@ suite('ChatQuotaNotificationContribution', () => {
 
 			assert.ok(notificationMock.getNotification());
 			assert.strictEqual(notificationMock.getNotification()!.message, 'Usage Blocked');
-			assert.strictEqual(notificationMock.getNotification()!.description, 'Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.');
+			assert.strictEqual(notificationMock.getNotification()!.description, 'Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.');
 			assert.strictEqual(notificationMock.getNotification()!.actions.length, 0);
 		});
 

@@ -121,9 +121,10 @@ suite('Model picker destinations', () => {
 				buildModelPickerDestinations([], service),
 				buildModelPickerDestinations([], service, [], undefined, true),
 			]),
-			[service, noDefault].map(() => [
+			// FlowLeap: without a default vendor the built-in destination falls back to the product name.
+			['GitHub Copilot', 'FlowLeap'].map(label => [
 				[],
-				[{ id: 'builtIn', label: 'GitHub Copilot', icon: ThemeIcon.fromId('chat-model-provider-copilot'), models: [], placeholders: [] }],
+				[{ id: 'builtIn', label, icon: ThemeIcon.fromId('chat-model-provider-copilot'), models: [], placeholders: [] }],
 			]),
 		);
 	});

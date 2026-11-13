@@ -422,7 +422,7 @@ suite('ModelPickerTelemetry', () => {
 			const welcome = result.welcome();
 			welcome?.runAction();
 			assert.deepStrictEqual({ welcome: welcome?.text, visible: result.visible, events: result.events, openedLinks: result.openedLinks }, entitlement === ChatEntitlement.Free ? {
-				welcome: ['Copilot', 'No models are available. Upgrade to GitHub Copilot Pro to use the best models.', 'Upgrade'],
+				welcome: ['Copilot', 'No models are available. Upgrade to FlowLeap Pro to use the best models.', 'Upgrade'],
 				visible: false,
 				events: [{ name: 'chat.modelPickerInteraction', data: { interaction: 'premiumModelUpgradePlanClicked' } }],
 				openedLinks: ['command:workbench.action.chat.upgradePlan'],

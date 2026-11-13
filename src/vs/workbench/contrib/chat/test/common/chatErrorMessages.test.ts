@@ -89,7 +89,7 @@ suite('ChatErrorMessages', () => {
 					copilotPlan: 'business',
 				},
 			}), { copilotPlan: 'free' });
-			assert.strictEqual(details?.message, 'You\'ve reached your monthly chat messages quota. Upgrade to Copilot Pro or wait for your allowance to renew.');
+			assert.strictEqual(details?.message, 'You\'ve reached your monthly chat messages quota. Upgrade to FlowLeap Pro or wait for your allowance to renew.');
 		});
 
 		// Drift guard: the node layer (platform/agentHost/node/shared/forwardedChatError.ts)
@@ -150,7 +150,7 @@ suite('ChatErrorMessages', () => {
 			const details = getChatErrorDetailsFromFetchError(fetchError, 'free');
 			assert.deepStrictEqual(details, {
 				code: 'quota_exceeded',
-				message: 'You\'ve reached your monthly chat messages quota. Upgrade to Copilot Pro or wait for your allowance to renew.',
+				message: 'You\'ve reached your monthly chat messages quota. Upgrade to FlowLeap Pro or wait for your allowance to renew.',
 				isQuotaExceeded: true,
 			});
 		});
@@ -291,13 +291,13 @@ suite('ChatErrorMessages', () => {
 
 		test('usage-based billing business plan with reset date', () => {
 			const message = getQuotaMessageForPlan('business', true, '2030-01-15T00:00:00.000Z');
-			assert.ok(message.startsWith('You\'ve reached your credit limit. To continue working, please contact your organization\'s Copilot admin or wait until your credits reset on'));
+			assert.ok(message.startsWith('You\'ve reached your credit limit. To continue working, please contact your organization\'s FlowLeap admin or wait until your credits reset on'));
 		});
 
 		test('default plan, no usage-based billing', () => {
 			assert.strictEqual(
 				getQuotaMessageForPlan(undefined),
-				'You\'ve exhausted your premium model quota. For additional paid premium requests, please reach out to your organization\'s Copilot admin or wait for your allowance to renew.',
+				'You\'ve exhausted your premium model quota. For additional paid premium requests, please reach out to your organization\'s FlowLeap admin or wait for your allowance to renew.',
 			);
 		});
 
@@ -305,8 +305,8 @@ suite('ChatErrorMessages', () => {
 			assert.deepStrictEqual(
 				[getQuotaMessageForPlan('edu', true, '2030-01-15T00:00:00.000Z'), getQuotaMessageForPlan('edu', true)],
 				[
-					`You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro, or wait until your credits reset on ${new Date('2030-01-15T00:00:00.000Z').toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.`,
-					'You\'ve reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro, or wait for your credits to reset.',
+					`You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro, or wait until your credits reset on ${new Date('2030-01-15T00:00:00.000Z').toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.`,
+					'You\'ve reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro, or wait for your credits to reset.',
 				],
 			);
 		});
@@ -314,7 +314,7 @@ suite('ChatErrorMessages', () => {
 		test('edu plan without usage-based billing', () => {
 			assert.strictEqual(
 				getQuotaMessageForPlan('edu'),
-				'You\'ve exhausted your premium model quota. Please enable additional paid premium requests, upgrade to Copilot Pro, or wait for your allowance to renew.',
+				'You\'ve exhausted your premium model quota. Please enable additional paid premium requests, upgrade to FlowLeap Pro, or wait for your allowance to renew.',
 			);
 		});
 	});

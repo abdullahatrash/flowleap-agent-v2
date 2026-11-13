@@ -554,7 +554,7 @@ suite('Chat Accessibility Help', () => {
 	test('documents Auto as the first Copilot model and independent provider navigation', () => {
 		const help = getAccessibilityHelpText('agentView', new MockKeybindingService(), true);
 		assert.deepStrictEqual({
-			autoEntry: help.includes('Auto is the first model in the Copilot tab and is selected like any other model'),
+			autoEntry: help.includes('Auto is the first model in the provider tab and is selected like any other model'),
 			providers: help.includes('Provider tabs and search remain available'),
 			noSwitch: help.includes('Auto switch'),
 			noImplicitSelection: help.includes('Browsing another provider does not change the selected model'),
