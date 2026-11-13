@@ -8,7 +8,7 @@ import * as dom from '../../../../base/browser/dom.js';
 import { renderIcon } from '../../../../base/browser/ui/iconLabel/iconLabels.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { Disposable, IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, IReader } from '../../../../base/common/observable.js';
+import { autorun, IReader, observableFromEvent } from '../../../../base/common/observable.js';
 import { isEqual } from '../../../../base/common/resources.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -29,6 +29,8 @@ import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/d
 import { ISessionsHostLayoutService } from '../../../../workbench/services/sessions/browser/sessionsHostLayoutService.js';
 import { Menus } from '../../../../workbench/contrib/sessions/browser/menus.js';
 import { AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID, AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, AGENT_HOST_SYNC_CHANGESET_OPERATION_ID } from '../../../../platform/agentHost/common/agentHostChangesetOperationService.js';
+import { PatentIdeContextKeys } from '../../../../workbench/common/patent/patentIdeContextKeys.js';
+import { isPatentHiddenChangesetOperation } from '../../../../workbench/contrib/sessionChanges/common/patentChangesetOperations.js';
 import { ISessionsService } from '../../../../workbench/contrib/sessions/browser/sessionsService.js';
 import { resolveSessionCommandTarget } from '../../../../workbench/contrib/sessions/browser/sessionCommandTarget.js';
 import { IChat, ISessionChangeset, ISessionChangesetOperation, ISessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus, SessionStatus, UNCOMMITTED_CHANGES_CHANGESET_ID, ISession } from '../../../../workbench/services/sessions/common/session.js';
@@ -343,8 +345,9 @@ function isChangesetOperationBusy(operation: ISessionChangesetOperation): boolea
  * changeset. Those in the title of its Changes editor are, for a new (untitled) session, the changeset-scoped operations
  * of its uncommitted changes (except Sync and Checkout), and for an existing session the Commit operation of the
  * changeset selected in its Changes view; the title bar's button bar omits Commit, so that it always lives here.
+ * FlowLeap Patent IDE (#471): with `patentIdeMode`, the pull request, merge and checkout operations are not shown.
  */
-export function getChangesetOperations(session: ISession | undefined, chat: IChat | undefined, changes: Pick<IChangesSessionObservables, 'changesetObs' | 'changesetOperationsObs'>, reader: IReader | undefined): IChangesetOperations {
+export function getChangesetOperations(session: ISession | undefined, chat: IChat | undefined, changes: Pick<IChangesSessionObservables, 'changesetObs' | 'changesetOperationsObs'>, reader: IReader | undefined, patentIdeMode = false): IChangesetOperations {
 	const entries: IChangesetOperationEntry[] = [];
 	const changeset = changes.changesetObs.read(reader);
 	for (const operation of changeset?.operations.read(reader) ?? []) {
@@ -365,6 +368,7 @@ export function getChangesetOperations(session: ISession | undefined, chat: ICha
 		operations = titleChangeset?.operations.read(reader)
 			.filter(operation => operation.id !== AGENT_HOST_SYNC_CHANGESET_OPERATION_ID)
 			.filter(operation => operation.id !== AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID)
+			.filter(operation => !patentIdeMode || !isPatentHiddenChangesetOperation(operation.id))
 			.filter(operation => operation.scopes.includes(SessionChangesetOperationScope.Changeset)) ?? [];
 		hasUncommittedChanges = (session.workspace.read(reader)?.folders[0]?.gitRepository?.uncommittedChanges ?? 0) > 0;
 	} else {
@@ -518,8 +522,9 @@ const changesetOperationActions = new class {
 export function bindChangesetOperations(source: Pick<ISessionActionContextKeysSource, 'session'> & { readonly chat?: ISessionActionContextKeysSource['chat']; readonly changes: Pick<IChangesSessionObservables, 'changesetObs' | 'changesetOperationsObs'> }, contextKeyService: IContextKeyService): IDisposable {
 	const shown = SessionChangesetOperationsContext.bindTo(contextKeyService);
 	const enabled = SessionEnabledChangesetOperationsContext.bindTo(contextKeyService);
+	const patentIdeModeObs = observableFromEvent(contextKeyService.onDidChangeContext, () => PatentIdeContextKeys.Mode.getValue(contextKeyService) === true);
 	return autorun(reader => {
-		const { entries } = getChangesetOperations(source.session.read(reader), source.chat?.read(reader), source.changes, reader);
+		const { entries } = getChangesetOperations(source.session.read(reader), source.chat?.read(reader), source.changes, reader, patentIdeModeObs.read(reader));
 		contextKeyService.bufferChangeEvents(() => {
 			shown.set(entries.map(entry => entry.key));
 			enabled.set(entries.filter(entry => entry.enabled).map(entry => entry.key));

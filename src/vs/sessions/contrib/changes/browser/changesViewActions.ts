@@ -16,6 +16,7 @@ import { Action2, IAction2Options, MenuId, MenuRegistry, registerAction2 } from 
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { PatentIdeContextKeys } from '../../../../workbench/common/patent/patentIdeContextKeys.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { bindContextKey } from '../../../../platform/observable/common/platformObservableUtils.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
@@ -116,7 +117,8 @@ class OpenPullRequestAction extends Action2 {
 				order: 9,
 				when: ContextKeyExpr.and(
 					IsSessionsWindowContext,
-					ActiveSessionContextKeys.HasPullRequest)
+					ActiveSessionContextKeys.HasPullRequest,
+					PatentIdeContextKeys.Mode.toNegated()) // FlowLeap Patent IDE: no pull requests in Patent IDE mode (#471)
 			}
 		});
 	}
