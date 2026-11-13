@@ -1,8 +1,8 @@
 diff --git a/src/vs/base/common/product.ts b/src/vs/base/common/product.ts
-index 0767bb78c5a..2de672a95bc 100644
+index 37cbeefd169..9838b2b993b 100644
 --- a/src/vs/base/common/product.ts
 +++ b/src/vs/base/common/product.ts
-@@ -281,6 +281,13 @@ export interface IProductConfiguration {
+@@ -287,6 +287,13 @@ export interface IProductConfiguration {
  
  	readonly remoteDefaultExtensionsIfInstalledLocally?: string[];
  
@@ -17,10 +17,10 @@ index 0767bb78c5a..2de672a95bc 100644
  	 * Maps an extension-contributed setting key to either a full enterprise {@link IPolicy}
  	 * (the setting owns/"parents" the policy — the original syntax) or an
 diff --git a/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts b/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts
-index e8edbe1bfdd..efe893ffca5 100644
+index 584b13144bf..a364a598186 100644
 --- a/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts
 +++ b/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts
-@@ -38,6 +38,7 @@ import { getContextMenuActions } from '../../../../platform/actions/browser/menu
+@@ -39,6 +39,7 @@ import { getContextMenuActions } from '../../../../platform/actions/browser/menu
  import { IViewDescriptorService, ViewContainerLocation, ViewContainerLocationToString } from '../../../common/views.js';
  import { IExtensionService } from '../../../services/extensions/common/extensions.js';
  import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
@@ -28,7 +28,7 @@ index e8edbe1bfdd..efe893ffca5 100644
  import { IViewsService } from '../../../services/views/common/viewsService.js';
  import { SwitchCompositeViewAction } from '../compositeBarActions.js';
  import { IHostService } from '../../../services/host/browser/host.js';
-@@ -450,6 +451,7 @@ export class ActivityBarCompositeBar extends PaneCompositeBar {
+@@ -452,6 +453,7 @@ export class ActivityBarCompositeBar extends PaneCompositeBar {
  		@IConfigurationService private readonly configurationService: IConfigurationService,
  		@IMenuService private readonly menuService: IMenuService,
  		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
@@ -36,7 +36,7 @@ index e8edbe1bfdd..efe893ffca5 100644
  	) {
  		super(location,
  			{
-@@ -458,7 +460,7 @@ export class ActivityBarCompositeBar extends PaneCompositeBar {
+@@ -460,7 +462,7 @@ export class ActivityBarCompositeBar extends PaneCompositeBar {
  					options.fillExtraContextMenuActions(actions, e);
  					this.fillContextMenuActions(actions, e);
  				}
@@ -46,7 +46,7 @@ index e8edbe1bfdd..efe893ffca5 100644
  		if (globalActivities) {
  			this.globalCompositeBar = this._register(instantiationService.createInstance(GlobalCompositeBar, () => this.getContextMenuActions(), (theme: IColorTheme) => this.options.colors(theme), this.options.activityHoverOptions));
 diff --git a/src/vs/workbench/browser/parts/paneCompositeBar.ts b/src/vs/workbench/browser/parts/paneCompositeBar.ts
-index 048de8a0c9f..f9b4f4102c1 100644
+index ee76b0ef3b4..4e6d33440c9 100644
 --- a/src/vs/workbench/browser/parts/paneCompositeBar.ts
 +++ b/src/vs/workbench/browser/parts/paneCompositeBar.ts
 @@ -22,6 +22,7 @@ import { IViewDescriptorService, ViewContainer, IViewContainerModel, ViewContain
@@ -57,7 +57,7 @@ index 048de8a0c9f..f9b4f4102c1 100644
  import { isNative } from '../../../base/common/platform.js';
  import { Before2D, ICompositeDragAndDrop } from '../dnd.js';
  import { ThemeIcon } from '../../../base/common/themables.js';
-@@ -108,6 +109,7 @@ export class PaneCompositeBar extends Disposable {
+@@ -109,6 +110,7 @@ export class PaneCompositeBar extends Disposable {
  		@IContextKeyService protected readonly contextKeyService: IContextKeyService,
  		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService,
  		@IWorkbenchLayoutService protected readonly layoutService: IWorkbenchLayoutService,
@@ -65,7 +65,7 @@ index 048de8a0c9f..f9b4f4102c1 100644
  	) {
  		super();
  
-@@ -339,10 +341,15 @@ export class PaneCompositeBar extends Disposable {
+@@ -343,10 +345,15 @@ export class PaneCompositeBar extends Disposable {
  		for (const viewContainer of viewContainers) {
  			this.addComposite(viewContainer);
  
