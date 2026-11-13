@@ -12,6 +12,12 @@ import { ILanguageModelsService } from '../../common/languageModels.js';
 const copilotHarnessPolicyUrl = 'https://aka.ms/vscode-copilot-harness-policy';
 
 /**
+ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
+ * Referenced here by string on purpose so core does not take a dependency on the extension.
+ */
+const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
+
+/**
  * Why a session type cannot currently be selected, or
  * {@link SessionTypeAvailability.Available} when it can.
  */
@@ -145,8 +151,8 @@ export function getSessionTypeUnavailableDescription(availability: SessionTypeAv
 	switch (availability) {
 		case SessionTypeAvailability.SignInRequired:
 			return new MarkdownString(
-				localize('chat.sessionType.signInLink', "[Sign in](command:workbench.action.chat.triggerSetup)"),
-				{ isTrusted: { enabledCommands: ['workbench.action.chat.triggerSetup'] } }
+				localize('chat.sessionType.signInLink', "[Sign in](command:{0})", FLOWLEAP_SIGN_IN_COMMAND_ID),
+				{ isTrusted: { enabledCommands: [FLOWLEAP_SIGN_IN_COMMAND_ID] } }
 			);
 		case SessionTypeAvailability.UpgradeRequired:
 			return new MarkdownString(
@@ -170,13 +176,13 @@ export function getSessionTypeUnavailableDescription(availability: SessionTypeAv
 export function getSessionTypeUnavailableHover(availability: SessionTypeAvailability): IMarkdownString | undefined {
 	switch (availability) {
 		case SessionTypeAvailability.SignInRequired: {
-			const hover = new MarkdownString('', { isTrusted: { enabledCommands: ['workbench.action.chat.triggerSetup'] }, supportThemeIcons: true });
-			hover.appendMarkdown(localize('chat.sessionType.signInHover', "[Sign in to GitHub Copilot](command:workbench.action.chat.triggerSetup) to use this agent."));
+			const hover = new MarkdownString('', { isTrusted: { enabledCommands: [FLOWLEAP_SIGN_IN_COMMAND_ID] }, supportThemeIcons: true });
+			hover.appendMarkdown(localize('chat.sessionType.signInHover', "[Sign in to FlowLeap](command:{0}) to use this agent.", FLOWLEAP_SIGN_IN_COMMAND_ID));
 			return hover;
 		}
 		case SessionTypeAvailability.UpgradeRequired: {
 			const hover = new MarkdownString('', { isTrusted: { enabledCommands: ['workbench.action.chat.upgradePlan'] }, supportThemeIcons: true });
-			hover.appendMarkdown(localize('chat.sessionType.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan) to use this agent."));
+			hover.appendMarkdown(localize('chat.sessionType.upgradeHover', "[Upgrade to FlowLeap Pro](command:workbench.action.chat.upgradePlan) to use this agent."));
 			return hover;
 		}
 		case SessionTypeAvailability.NoModels:
@@ -197,7 +203,7 @@ export function getSessionTypeUnavailableLabel(availability: SessionTypeAvailabi
 		case SessionTypeAvailability.SignInRequired:
 			return localize('chat.sessionType.signInMobile', "Requires sign in");
 		case SessionTypeAvailability.UpgradeRequired:
-			return localize('chat.sessionType.upgradeMobile', "Requires GitHub Copilot Pro");
+			return localize('chat.sessionType.upgradeMobile', "Requires FlowLeap Pro");
 		case SessionTypeAvailability.NoModels:
 			return localize('chat.sessionType.noModels', "No models available");
 		case SessionTypeAvailability.DisabledByPolicy:
