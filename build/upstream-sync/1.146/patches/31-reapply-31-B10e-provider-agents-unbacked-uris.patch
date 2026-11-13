@@ -1,5 +1,5 @@
 diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/customizationHarnessService.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/customizationHarnessService.ts
-index acc5af9624e..53a87859769 100644
+index 285b91cd3a6..5519f2c9803 100644
 --- a/src/vs/workbench/contrib/chat/browser/aiCustomization/customizationHarnessService.ts
 +++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/customizationHarnessService.ts
 @@ -13,6 +13,7 @@ import {
@@ -7,11 +7,11 @@ index acc5af9624e..53a87859769 100644
  import { SessionType } from '../../common/chatSessionsService.js';
  import { URI } from '../../../../../base/common/uri.js';
 +import { IFileService } from '../../../../../platform/files/common/files.js';
- 
- /**
-  * Core implementation of the customization harness service.
-@@ -23,11 +24,13 @@ import { URI } from '../../../../../base/common/uri.js';
- class CustomizationHarnessService extends CustomizationHarnessServiceBase {
+ import { IChatWidgetService } from '../chat.js';
+ import { Disposable } from '../../../../../base/common/lifecycle.js';
+ import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../common/contributions.js';
+@@ -28,11 +29,13 @@ import { isUntitledChatSession } from '../../common/model/chatUri.js';
+ export class CustomizationHarnessService extends CustomizationHarnessServiceBase {
  	constructor(
  		@IPromptsService promptsService: IPromptsService,
 +		@IFileService fileService: IFileService,
@@ -25,7 +25,7 @@ index acc5af9624e..53a87859769 100644
  	}
  
 diff --git a/src/vs/workbench/contrib/chat/common/customizationHarnessService.ts b/src/vs/workbench/contrib/chat/common/customizationHarnessService.ts
-index f71aaf3290b..fa1a978dda2 100644
+index cfd381e79f3..0588c75d25e 100644
 --- a/src/vs/workbench/contrib/chat/common/customizationHarnessService.ts
 +++ b/src/vs/workbench/contrib/chat/common/customizationHarnessService.ts
 @@ -11,8 +11,10 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
@@ -33,13 +33,13 @@ index f71aaf3290b..fa1a978dda2 100644
  import { localize } from '../../../../nls.js';
  import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 +import { IFileService } from '../../../../platform/files/common/files.js';
- import { AICustomizationManagementSection, AICustomizationSource, BUILTIN_STORAGE } from './aiCustomizationWorkspaceService.js';
- import { PromptsType } from './promptSyntax/promptTypes.js';
+ import { AICustomizationManagementSection, AICustomizationScope, AICustomizationSource, BUILTIN_STORAGE } from './aiCustomizationWorkspaceService.js';
+ import { PromptsType, Target } from './promptSyntax/promptTypes.js';
 +import { PromptFileParser } from './promptSyntax/promptFileParser.js';
  import { AGENT_MD_FILENAME } from './promptSyntax/config/promptFileLocations.js';
  import { IAgentSource, IChatPromptSlashCommand, ICustomAgent, IPromptsService, IResolvedChatPromptSlashCommand, matchesSessionType, PromptsStorage } from './promptSyntax/service/promptsService.js';
  import { CancellationToken } from '../../../../base/common/cancellation.js';
-@@ -508,6 +510,7 @@ export class CustomizationHarnessServiceBase implements ICustomizationHarnessSer
+@@ -665,6 +667,7 @@ export class CustomizationHarnessServiceBase implements ICustomizationHarnessSer
  		staticHarnesses: readonly IHarnessDescriptor[],
  		defaultHarness: string,
  		private readonly promptsService: IPromptsService,
@@ -47,7 +47,7 @@ index f71aaf3290b..fa1a978dda2 100644
  	) {
  		this._staticHarnesses = staticHarnesses;
  		this.promptsService = promptsService;
-@@ -664,7 +667,13 @@ export class CustomizationHarnessServiceBase implements ICustomizationHarnessSer
+@@ -824,7 +827,13 @@ export class CustomizationHarnessServiceBase implements ICustomizationHarnessSer
  		const result: ICustomAgent[] = [];
  		for (const item of items) {
  			if (item.type === PromptsType.agent) {
