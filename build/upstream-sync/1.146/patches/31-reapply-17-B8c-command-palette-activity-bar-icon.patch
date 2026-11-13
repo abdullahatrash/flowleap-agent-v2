@@ -1,5 +1,5 @@
 diff --git a/src/vs/workbench/browser/parts/globalCompositeBar.ts b/src/vs/workbench/browser/parts/globalCompositeBar.ts
-index df905d0daa7..c0a9358cccd 100644
+index d0f5bd1bd21..cb3791ef715 100644
 --- a/src/vs/workbench/browser/parts/globalCompositeBar.ts
 +++ b/src/vs/workbench/browser/parts/globalCompositeBar.ts
 @@ -52,13 +52,22 @@ import { IDefaultAccountService } from '../../../platform/defaultAccount/common/
@@ -145,10 +145,10 @@ index df905d0daa7..c0a9358cccd 100644
  
  	constructor(
 diff --git a/src/vs/workbench/test/browser/parts/globalCompositeBar.test.ts b/src/vs/workbench/test/browser/parts/globalCompositeBar.test.ts
-index a9dcce73fc2..98964944a86 100644
+index 51ff68d8153..18d60521c54 100644
 --- a/src/vs/workbench/test/browser/parts/globalCompositeBar.test.ts
 +++ b/src/vs/workbench/test/browser/parts/globalCompositeBar.test.ts
-@@ -81,6 +81,23 @@ suite('GlobalCompositeBar', () => {
+@@ -82,6 +82,23 @@ suite('GlobalCompositeBar', () => {
  
  		assert.deepStrictEqual({ heights, height: bar.getHeight(28, 0), actions: bar.globalActivityActionBar.length() }, { heights: [], height: 28, actions: 1 });
  	});
