@@ -85,14 +85,14 @@ suite('FrostedGlassContribution', () => {
 		return { configuration, layout, addedContainer, accessibility, transparencyChanged, theme, nativeHost, gpuChanged, warnings, createContribution, state, styleState, configure };
 	}
 
-	test('shares enabled and opacity defaults with the Agents window', () => {
+	test('shares enabled (off by default, FlowLeap) and opacity defaults with the Agents window', () => {
 		assert.deepStrictEqual({
 			enabled: properties[LayoutSettings.MODERN_UI_FROSTED_GLASS].default,
 			agentsWindow: properties[LayoutSettings.MODERN_UI_FROSTED_GLASS].agentsWindow,
 			opacity: properties[LayoutSettings.MODERN_UI_FROSTED_GLASS_OPACITY].default,
 			agentsOpacity: properties[LayoutSettings.MODERN_UI_FROSTED_GLASS_OPACITY].agentsWindow,
 		}, {
-			enabled: true,
+			enabled: false,
 			agentsWindow: undefined,
 			opacity: 80,
 			agentsOpacity: undefined,

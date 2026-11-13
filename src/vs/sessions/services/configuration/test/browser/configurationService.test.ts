@@ -588,7 +588,8 @@ suite('Sessions ConfigurationService', () => {
 			return { value: element.value, configured: element.isConfigured };
 		});
 		const defaults = readSettings();
-		await testObject.updateValue(LayoutSettings.MODERN_UI_FROSTED_GLASS, false);
+		// FlowLeap: frosted glass is off by default, so the override turns it on.
+		await testObject.updateValue(LayoutSettings.MODERN_UI_FROSTED_GLASS, true);
 		await testObject.updateValue(LayoutSettings.MODERN_UI_FROSTED_GLASS_OPACITY, 75);
 		await testObject.reloadConfiguration();
 		const configured = readSettings();
@@ -610,14 +611,14 @@ suite('Sessions ConfigurationService', () => {
 			reset: readSettings(),
 		}, {
 			profile: { isDefault: false, isAgentsWindowProfile: true, inheritsSettings: true },
-			defaults: [{ value: true, configured: false }, { value: ModernUIFrostedGlassOpacity.Default, configured: false }],
-			configured: [{ value: false, configured: true }, { value: 75, configured: true }],
-			effective: [false, 75],
+			defaults: [{ value: false, configured: false }, { value: ModernUIFrostedGlassOpacity.Default, configured: false }],
+			configured: [{ value: true, configured: true }, { value: 75, configured: true }],
+			effective: [true, 75],
 			persisted: {
-				[LayoutSettings.MODERN_UI_FROSTED_GLASS]: false,
+				[LayoutSettings.MODERN_UI_FROSTED_GLASS]: true,
 				[LayoutSettings.MODERN_UI_FROSTED_GLASS_OPACITY]: 75,
 			},
-			reset: [{ value: true, configured: false }, { value: ModernUIFrostedGlassOpacity.Default, configured: false }],
+			reset: [{ value: false, configured: false }, { value: ModernUIFrostedGlassOpacity.Default, configured: false }],
 		});
 	}));
 
