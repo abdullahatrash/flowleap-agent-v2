@@ -28,7 +28,7 @@ Two PRs, in order. Each one leaves `main` releasable.
 
 **PR B — `src/vs` + `src/vscode-dts` wholesale at 1.146.0** with a new kit `build/upstream-sync/1.146/` (copy of the 1.140 kit, step 10 adjusted: keep `platform/agentHost/{node,electron-main}`, rewrite `vs/sessions/...` imports of fork-only files to the moved paths, drop `agentSessionState` handling). Re-apply the 13 patches that still apply, re-anchor or re-derive the 42 that do not (survey §5), add one script per new fork intent since #464 (survey §6), new keep-outs (survey §6 last paragraph), `extensions/media-preview` deleted for core `mediaPreview`. Separate PRD section when PR A is merged.
 
-**Release** after PR B: Claude SDK tarballs 0.3.304 (`build/flowleap/produce-claude-sdk.ts`, `product.agentSdks.claude` re-stamped), six-platform dry run, founder word for the tag.
+**Release** after PR B: Claude SDK tarballs 0.3.304 (`build/flowleap/produce-claude-sdk.ts`, `product.agentSdks.claude` re-stamped), one three-platform dry run (macOS arm64, Windows x64, Linux x64), founder word for the tag.
 
 ## Fork intents in `build/` to re-apply on upstream's 1.146.0 files (PR A)
 
@@ -58,7 +58,7 @@ Two PRs, in order. Each one leaves `main` releasable.
 1. `pnpm install` from clean at the root succeeds on macOS and in CI (Linux, Windows) with frozen lockfiles.
 2. `npx tsgo --noEmit -p src/tsconfig.json` 0 errors; `pnpm run valid-layers-check`; `pnpm run gulp compile-extensions`; `pnpm run typecheck` (build/); unit suite green (`scripts/test.sh` after transpile).
 3. The app launches from the worktree on Electron 43.8.6: chat view renders, Agents Window opens, a Claude session streams.
-4. Six-platform release dry run green (sequential dispatches; founder or lead triggers).
+4. ~~Six-platform release dry run~~ Founder decision 2026-11-13: no dry run for PR A. One three-platform dry run (macOS arm64, Windows x64, Linux x64, sequential) runs after PR B and before the release; a packaging fault from PR A is found and fixed in `build/` there.
 5. `docs/dev/LOCAL-DEV.md` and the kit README describe the pnpm setup; the 1.140 kit's step 11 is marked superseded.
 
 ## PR A — what actually changed (2026-11-13, branch `port/1146-pnpm-build`)
