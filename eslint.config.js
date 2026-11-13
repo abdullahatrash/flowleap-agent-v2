@@ -9,12 +9,13 @@ import { builtinModules } from 'module';
 import path from 'path';
 import tseslint from 'typescript-eslint';
 
-import stylisticTs from '@stylistic/eslint-plugin-ts';
+import stylistic from '@stylistic/eslint-plugin';
 import * as pluginLocal from './.eslint-plugin-local/index.ts';
 import * as pluginCopilotLocal from './extensions/copilot/.eslintplugin/index.ts';
 import pluginImport from 'eslint-plugin-import';
 import pluginJsdoc from 'eslint-plugin-jsdoc';
 
+import { fixupPluginRules } from '@eslint/compat';
 import pluginHeader from 'eslint-plugin-header';
 pluginHeader.rules.header.meta.schema = false;
 
@@ -44,7 +45,7 @@ export default defineConfig(
 		},
 		plugins: {
 			'local': pluginLocal,
-			'header': pluginHeader,
+			'header': fixupPluginRules(/** @type {any} */ (pluginHeader)),
 		},
 		rules: {
 			'constructor-super': 'warn',
@@ -152,7 +153,7 @@ export default defineConfig(
 			parser: tseslint.parser,
 		},
 		plugins: {
-			'@stylistic/ts': stylisticTs,
+			'@stylistic': stylistic,
 			'@typescript-eslint': tseslint.plugin,
 			'local': pluginLocal,
 			'jsdoc': pluginJsdoc,
@@ -160,8 +161,8 @@ export default defineConfig(
 		rules: {
 			// Disable built-in semi rules in favor of stylistic
 			'semi': 'off',
-			'@stylistic/ts/semi': 'warn',
-			'@stylistic/ts/member-delimiter-style': 'warn',
+			'@stylistic/semi': 'warn',
+			'@stylistic/member-delimiter-style': 'warn',
 			'local/code-no-unused-expressions': [
 				'warn',
 				{
@@ -368,6 +369,9 @@ export default defineConfig(
 			'**/test/**',
 			'**/*.test.ts',
 			'**/*.integrationTest.ts',
+			// This directory is the validation boundary for typed metadata: its readers
+			// are the only place that may read `_meta` directly (as upstream).
+			'src/vs/platform/agentHost/common/meta/**',
 			// Codex's own generated app-server protocol (not AHP `_meta`).
 		],
 		plugins: {
@@ -1108,6 +1112,7 @@ export default defineConfig(
 			'local/code-no-static-node-module-import': [
 				'error',
 				// Files that run in separate processes, not on the electron-main startup path
+				'src/vs/platform/agentHost/node/**/*.ts',
 				'src/vs/platform/files/node/watcher/**/*.ts',
 				'src/vs/platform/terminal/node/**/*.ts',
 				// Files that use small, safe modules
@@ -2942,5 +2947,20 @@ export default defineConfig(
 		},
 		rules: {
 			'local/code-no-new-javascript-files': 'error',
+		},
+	},
+	{
+		files: ['src/vs/**/*.ts'],
+		rules: {
+			'local/code-no-legacy-notification-parsing': ['error', {
+				allowedFiles: [
+					'src/vs/workbench/api/browser/mainThreadMessageService.ts',
+					'src/vs/workbench/api/browser/mainThreadProgress.ts',
+					'src/vs/platform/notification/test/common/notificationMessage.test.ts',
+					'src/vs/workbench/test/common/notifications.test.ts',
+					'src/vs/workbench/test/browser/notificationsList.test.ts',
+					'src/vs/workbench/services/progress/test/browser/progressService.test.ts',
+				],
+			}],
 		},
 	});

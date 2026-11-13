@@ -7,9 +7,10 @@
 # Modifications to this file require sign-off from the CODEOWNERS.
 #
 # Lines starting with `#` are comments. Blank lines are ignored.
-
 .github/skills/heap-snapshot-analysis/helpers/streamSnapshot.mjs
+.pnpmfile.mjs
 .vscode-test.js
+build/.pnpmfile.mjs
 build/azure-pipelines/common/installPlaywright.js
 build/azure-pipelines/github-check-run.js
 build/builtin/browser-main.js
@@ -17,12 +18,26 @@ build/builtin/main.js
 build/codex/generate-protocol.mjs
 build/flowleap/stamp-flowleap-version.mjs
 build/flowleap/stamp-update-config.mjs
+build/flowleap/verify-entry-points.mjs
+build/next/devTunnelsShims/buffer.js
+build/next/devTunnelsShims/bufferutil.cjs
+build/next/devTunnelsShims/empty.cjs
+build/next/devTunnelsShims/process.js
+build/next/devTunnelsShims/utf8Validate.cjs
+build/next/devTunnelsShims/vscodeJsonrpc.cjs
+build/next/devTunnelsWebEntry.js
+build/npm/stubs/sharp/index.js
+build/upstream-sync/1.140/tools/closure.mjs
+build/upstream-sync/1.140/tools/div.mjs
+docs/media/549/probe.mjs
 eslint.config.js
+extensions/.pnpmfile.mjs
 extensions/copilot/.mocha-multi-reporters.js
 extensions/copilot/.mocharc.js
 extensions/copilot/.vscode-test.mjs
 extensions/copilot/.vscode/extensions/visualization-runner/entry.js
 extensions/copilot/evals/assertions/key-gate-assertions.mjs
+extensions/copilot/evals/assertions/skill-grounded-assertions.mjs
 extensions/copilot/evals/assertions/trajectory-assertions.mjs
 extensions/copilot/script/electron/simulationWorkbenchMain.js
 extensions/copilot/src/extension/completions-core/vscode-node/extension/test/run.js
@@ -50,6 +65,7 @@ extensions/copilot/test/simulation/fixtures/tests/generate-jest/some/sum.test.js
 extensions/copilot/test/simulation/fixtures/tests/simple-js-proj copy/src/index.js
 extensions/copilot/test/simulation/fixtures/tests/simple-js-proj/src/index.js
 extensions/copilot/test/simulationExtension/extension.js
+extensions/cpp/build/update-grammars.js
 extensions/css-language-features/server/test/index.js
 extensions/css-language-features/server/test/pathCompletionFixtures/.foo.js
 extensions/css-language-features/server/test/pathCompletionFixtures/src/feature.js
@@ -63,6 +79,8 @@ extensions/html-language-features/server/src/test/pathCompletionFixtures/src/tes
 extensions/html-language-features/server/test/index.js
 extensions/html/build/update-grammar.mjs
 extensions/json/build/update-grammars.js
+extensions/latex/build/update-grammars.js
+extensions/less/build/update-grammar.js
 extensions/markdown-pdf/extension.js
 extensions/markdown-pdf/src/compile.js
 extensions/markdown-pdf/test/runTest.js
@@ -71,17 +89,29 @@ extensions/markdown-pdf/test/suite/index.js
 extensions/media-preview/media/audioPreview.js
 extensions/media-preview/media/imagePreview.js
 extensions/media-preview/media/videoPreview.js
+extensions/microsoft-authentication/packageMocks/dpapi/dpapi.js
+extensions/microsoft-authentication/packageMocks/keytar/index.js
+extensions/objective-c/build/update-grammars.js
 extensions/pdf-preview/media/pdfPreview.js
 extensions/pdf-preview/test/pdfTextExtractor.test.cjs
+extensions/php/build/update-grammar.mjs
 extensions/postinstall.mjs
+extensions/razor/build/update-grammar.mjs
+extensions/rust/build/update-grammar.mjs
 extensions/search-result/syntaxes/generateTMLanguage.js
 extensions/sql/build/update-grammar.mjs
 extensions/terminal-suggest/scripts/update-specs.js
 extensions/theme-seti/build/update-icon-theme.js
 extensions/typescript-basics/build/update-grammars.mjs
 extensions/typescript-language-features/test-workspace/foojs.js
+extensions/vscode-api-tests/testWorkspace/debug.js
+extensions/vscode-api-tests/testWorkspace/far.js
+extensions/vscode-api-tests/testWorkspace/worker.js
+extensions/vscode-colorize-tests/test/colorize-fixtures/test.js
+extensions/vscode-colorize-tests/test/colorize-fixtures/test6916.js
 extensions/yaml/build/update-grammar.js
 gulpfile.mjs
+remote/.pnpmfile.mjs
 scripts/chat-simulation/common/perf-scenarios.js
 scripts/chat-simulation/common/utils.js
 scripts/chat-simulation/merge-ci-summary.js

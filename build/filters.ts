@@ -25,9 +25,12 @@ export const all = Object.freeze<string[]>([
 	'!cli/**/*',
 	'!out*/**',
 	'!extensions/**/out*/**',
+	'!extensions/**/*-out/**',
 	'!test/**/out/**',
+	'!build/ripple/target/**',
 	'!**/node_modules/**',
 	'!**/*.js.map',
+	'!**/*.tsbuildinfo',
 ]);
 
 export const unicodeFilter = Object.freeze<string[]>([
@@ -39,7 +42,7 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!LICENSES.chromium.html',
 	'!**/LICENSE',
 
-	'!**/*.{dll,exe,png,bmp,jpg,scpt,cur,ttf,woff,eot,template,ico,icns,opus,wasm}',
+	'!**/*.{dll,exe,png,bmp,jpg,gif,webp,scpt,cur,ttf,woff,eot,template,ico,icns,opus,wasm}',
 	'!**/test/**',
 	'!**/*.test.ts',
 	'!**/*.{d.ts,json,md}',
@@ -59,7 +62,6 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!extensions/**/dist/**',
 	'!extensions/**/out/**',
 	'!extensions/**/snippets/**',
-	'!extensions/**/colorize-fixtures/**',
 	'!extensions/terminal-suggest/src/shell/fishBuiltinsCache.ts',
 
 	// extensions/copilot has its own code style
@@ -99,7 +101,7 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!resources/linux/snap/electron-launch',
 	'!build/ext.js',
 	'!build/darwin/patch-dmg.py',
-	'!build/npm/gyp/patches/gyp_spectre_mitigation_support.patch',
+	'!build/npm/patches/*.patch',
 	'!product.overrides.json',
 	'!src/vs/platform/endpoint/common/licenseAgreement.ts',
 
@@ -123,6 +125,7 @@ export const indentationFilter = Object.freeze<string[]>([
 	// except multiple specific files
 	'!**/package.json',
 	'!**/package-lock.json',
+	'!**/Cargo.lock',
 
 	// except multiple specific folders
 	'!**/codicon/**',
@@ -133,7 +136,6 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!extensions/**/snippets/**',
 	'!extensions/**/syntaxes/**',
 	'!extensions/**/themes/**',
-	'!extensions/**/colorize-fixtures/**',
 
 	// extensions/copilot has its own code style
 	'!extensions/copilot/**',
@@ -145,12 +147,12 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!src/vs/*/**/*.d.ts',
 	'!src/typings/**/*.d.ts',
 	'!extensions/**/*.d.ts',
-	'!**/*.{svg,exe,png,bmp,jpg,scpt,bat,cmd,cur,ttf,woff,eot,md,ps1,psm1,template,yaml,yml,d.ts.recipe,ico,icns,plist,opus,admx,adml,wasm}',
+	'!**/*.{svg,exe,png,bmp,jpg,gif,webp,scpt,bat,cmd,cur,ttf,woff,eot,md,ps1,psm1,template,yaml,yml,d.ts.recipe,ico,icns,plist,opus,admx,adml,wasm}',
 	'!build/{lib,download,linux,darwin}/**/*.js',
 	'!build/**/*.sh',
 	'!build/azure-pipelines/**/*.js',
 	'!build/azure-pipelines/**/*.config',
-	'!build/npm/gyp/custom-headers/**',
+	'!build/npm/headers/**',
 	'!**/Dockerfile',
 	'!**/Dockerfile.*',
 	'!**/*.Dockerfile',
@@ -182,6 +184,8 @@ export const copyrightFilter = Object.freeze<string[]>([
 	'!**/*.bat',
 	'!**/*.cmd',
 	'!**/*.ico',
+	'!**/*.gif',
+	'!**/*.webp',
 	'!**/*.opus',
 	'!**/*.mp3',
 	'!**/*.icns',
@@ -198,10 +202,12 @@ export const copyrightFilter = Object.freeze<string[]>([
 	'!**/*.wasm',
 	'!**/*.tiff',
 	'!**/*.provisionprofile',
+	'!**/*.toml',
+	'!**/Cargo.lock',
 	'!build/**/*.init',
 	'!build/darwin/patch-dmg.py',
 	'!build/linux/libcxx-fetcher.*',
-	'!build/npm/gyp/custom-headers/**',
+	'!build/npm/headers/**',
 	'!resources/linux/snap/snapcraft.yaml',
 	'!resources/win32/bin/code.js',
 	'!resources/completions/**',
@@ -214,6 +220,7 @@ export const copyrightFilter = Object.freeze<string[]>([
 	'!extensions/typescript-language-features/node-maintainer/**',
 	'!extensions/html-language-features/server/src/modes/typescript/*',
 	'!extensions/*/server/bin/*',
+	'!src/vs/platform/agentHost/node/codex/protocol/generated/**',
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
 	'!extensions/mermaid-markdown-features/chat-webview-out/**',
 	'!extensions/mermaid-markdown-features/markdown-preview-out/**',
@@ -242,6 +249,7 @@ export const tsFormattingFilter = Object.freeze<string[]>([
 	'!extensions/html-language-features/server/lib/jquery.d.ts',
 	'!extensions/terminal-suggest/src/shell/zshBuiltinsCache.ts',
 	'!extensions/terminal-suggest/src/shell/fishBuiltinsCache.ts',
+	'!src/vs/platform/agentHost/node/codex/protocol/generated/**',
 
 	// extensions/copilot has its own code style
 	'!extensions/copilot/**',
@@ -251,6 +259,7 @@ export const eslintFilter = Object.freeze<string[]>([
 	'**/*.{js,cjs,mjs}',
 	'**/*.{ts,tsx,mts,cts}',
 	'.eslint-plugin-local/**/*.ts',
+	'!src/vs/platform/agentHost/node/codex/protocol/generated/**',
 	...readFileSync(join(import.meta.dirname, '..', '.eslint-ignore'))
 		.toString()
 		.split(/\r\n|\n/)
@@ -259,5 +268,10 @@ export const eslintFilter = Object.freeze<string[]>([
 ]);
 
 export const stylelintFilter = Object.freeze<string[]>([
-	'src/**/*.css'
+	'src/**/*.css',
+	'extensions/**/*.css',
+	'!extensions/**/node_modules/**',
+	'!extensions/**/test/**',
+	'!extensions/**/test-data/**',
+	'!extensions/**/testData/**',
 ]);

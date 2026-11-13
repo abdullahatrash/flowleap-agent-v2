@@ -2672,7 +2672,6 @@ export class CopilotAgent extends Disposable implements IAgent {
 				},
 				telemetry,
 				logLevel: copilotSdkLogLevelAtStartup,
-				enableRemoteSessions: startupConfig.sessionSync,
 				onGetTraceContext: () => this._otelService.getCurrentTraceContext() ?? {},
 				onGitHubTelemetry: notification => { void this._routeGitHubTelemetry(notification).catch(err => this._logService.trace(`[Copilot] GitHub telemetry routing failed: ${err instanceof Error ? err.message : String(err)}`)); },
 			};

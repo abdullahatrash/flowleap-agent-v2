@@ -62,7 +62,10 @@ function createPdf() {
 test('compiled extractor loads ESM PDF.js and its worker from paths containing spaces, # and %', async t => {
 	const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pdf-preview # percent% '));
 	t.after(() => fs.rm(directory, { recursive: true, force: true }));
-	await fs.symlink(path.resolve(__dirname, '../node_modules'), path.join(directory, 'node_modules'), 'junction');
+	// pnpm hoists pdfjs-dist out of the extension's own node_modules (extensions/node_modules);
+	// link the node_modules folder that actually holds it, found the way Node resolves it.
+	const pdfjsPackageJson = require.resolve('pdfjs-dist/package.json', { paths: [path.resolve(__dirname, '..')] });
+	await fs.symlink(path.resolve(path.dirname(pdfjsPackageJson), '..'), path.join(directory, 'node_modules'), 'junction');
 	const pdfPath = path.join(directory, 'disclosure # 1%.pdf');
 	await fs.writeFile(pdfPath, createPdf());
 	const { PdfTextExtractor, uri } = await loadExtractor();
