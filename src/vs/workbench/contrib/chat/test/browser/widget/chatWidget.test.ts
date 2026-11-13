@@ -26,6 +26,7 @@ import { TestConfigurationService } from '../../../../../../platform/configurati
 import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { MockContextKeyService } from '../../../../../../platform/keybinding/test/common/mockKeybindingService.js';
+import { PatentIdeContextKeys } from '../../../../../common/patent/patentIdeContextKeys.js';
 import { IHoverService } from '../../../../../../platform/hover/browser/hover.js';
 import { NullHoverService } from '../../../../../../platform/hover/test/browser/nullHoverService.js';
 import { TestInstantiationService } from '../../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
@@ -189,6 +190,8 @@ suite('ChatWidget', () => {
 		const rendererOptions: (IChatListItemRendererOptions['responseIdentity'])[] = [];
 		const modelPools: ({ pool: string | undefined; resource: string | undefined; revalidate?: boolean } | { cleared: true; revalidate?: boolean } | undefined)[] = [];
 		const contextKeyService = new MockContextKeyService();
+		// FlowLeap: outside Patent IDE mode the locked-agent placeholder keeps upstream's presentation.
+		PatentIdeContextKeys.Mode.bindTo(contextKeyService).set(false);
 		const requestInProgress = ChatContextKeys.requestInProgress.bindTo(contextKeyService);
 		const hasActiveRequest = ChatContextKeys.hasActiveRequest.bindTo(contextKeyService);
 		requestInProgress.set(true);
@@ -209,6 +212,7 @@ suite('ChatWidget', () => {
 			_appliedInputPlaceholder: false,
 			inputPartDisposable: { value: inputPart },
 			configurationService: new TestConfigurationService(),
+			contextKeyService,
 			chatSessionsService: upcastPartial<IChatSessionsService>({ getChatSessionContribution: () => undefined }),
 			listWidget: { updateRendererOptions: (options: IChatListItemRendererOptions) => { rendererOptions.push(options.responseIdentity); } },
 			rerenderListIfConnected: () => { },
@@ -1206,6 +1210,7 @@ suite('ChatWidget', () => {
 		const widget = Object.assign(Object.create(ChatWidget.prototype), {
 			inputPartDisposable: { value: input },
 			chatSessionsService: { getChatSessionContribution: () => undefined },
+			contextKeyService: new MockContextKeyService(),
 		}) as {
 			_lockedAgent?: { id: string; prefix: string; agentHostProviderId?: string };
 			getWelcomeViewContent(additionalMessage: string): IChatViewWelcomeContent;
@@ -1238,14 +1243,17 @@ suite('ChatWidget', () => {
 		const container = dom.$('.chat-welcome-view-container');
 		const contents: IChatViewWelcomeContent[] = [];
 		let instructionsHintCalls = 0;
+		const contextKeyService = new MockContextKeyService();
+		PatentIdeContextKeys.Mode.bindTo(contextKeyService).set(false);
 		const widget = Object.assign(Object.create(ChatWidget.prototype), {
+			contextKeyService,
 			_location: { location: ChatAgentLocation.Chat },
 			_viewModel: { getItems: () => [] },
 			inputPartDisposable: { value: { currentModeKind: ChatModeKind.Agent } },
 			viewOptions: {},
 			lifecycleService: { willShutdown: false },
 			chatAgentService: { getDefaultAgent: () => undefined },
-			chatEntitlementService: { anonymous: false, sentiment: { completed: false } },
+			chatEntitlementService: { anonymous: false, sentiment: { completed: false }, clientByokEnabled: false, hasByokModels: false },
 			chatSessionsService: { getChatSessionContribution: () => undefined },
 			welcomePart: store.add(new MutableDisposable()),
 			welcomeMessageContainer: container,
@@ -2594,6 +2602,8 @@ suite('ChatWidget - acceptInput submission', () => {
 			chatWidgetService: { value: chatWidgetService },
 			chatSessionsService: { value: chatSessionsService },
 			contextKeyService: { value: contextKeyService },
+			// FlowLeap: the BYOK send gate reads the entitlement service; a model is connected in these tests.
+			chatEntitlementService: { value: { clientByokEnabled: false, hasByokModels: false } },
 			policyRequiresAgentHost: { value: policyRequiresAgentHost },
 			viewContext: { value: { viewId: 'workbench.panel.chat.view.copilot' }, configurable: true },
 			chatSubmitRequestHandlerService: { value: chatSubmitRequestHandlerService },
