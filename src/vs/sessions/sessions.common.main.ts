@@ -492,6 +492,8 @@ import './contrib/providers/agentHost/browser/agentHostForkActions.js';
 import './contrib/chat/browser/customizationsDebugLog.contribution.js';
 // FlowLeap keep-out: the Copilot Cloud / Sandbox provider needs GitHub sign-in and the GitHub service (PRD 0017).
 // Local agent host provider (PRD 0018 A1, ADR 0009) is registered from sessions.desktop.main.ts.
+// FlowLeap: Local (in-process) sessions; upstream removed the Local harness (PRD 0017 A11).
+import './contrib/providers/localChatSessions/browser/localChatSessions.contribution.js';
 import './contrib/sessions/browser/sessions.contribution.js';
 import './contrib/canvases/browser/pinnedCanvases.contribution.js';
 import './contrib/sessions/browser/customizationsToolbar.contribution.js';

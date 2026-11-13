@@ -8,7 +8,7 @@ import { isEqual } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IChatSessionFileChange2 } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
+import { IChatSessionFileChange2 } from '../../../../../workbench/common/chatSessionFileChange.js';
 import { GitDiffChange, IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
 import { BRANCH_CHANGES_CHANGESET_ID, IChat, ISessionChangeset, ISessionChangesetOperation, ISessionChangesetOperationTarget, ISessionFileChange, ISessionWorkspace, sessionFileChangesEqual } from '../../../../../workbench/services/sessions/common/session.js';
 
