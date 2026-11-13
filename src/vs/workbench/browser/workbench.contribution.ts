@@ -833,7 +833,7 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 			},
 			[LayoutSettings.MODERN_UI]: {
 				'type': 'boolean',
-				'default': true,
+				'default': false, // FlowLeap D4 (PRD 0027): modern UI stays off until eyeballed
 				'description': localize('modernUI', "Controls whether the Modern UI Update is enabled. When on, the side bars and bottom panel are shown as floating cards with rounded corners and gaps, and a set of refreshed workbench styles is applied, matching the Agents window design."),
 				experiment: { mode: 'auto' },
 			},
@@ -845,7 +845,7 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 			},
 			[LayoutSettings.MODERN_UI_FROSTED_GLASS]: {
 				type: 'boolean',
-				default: true,
+				default: false, // FlowLeap D4 (PRD 0027): modern UI stays off until eyeballed
 				scope: ConfigurationScope.APPLICATION,
 				included: isNative,
 				markdownDescription: localize({ key: 'modernUIFrostedGlass', comment: ['{0} and {1} are placeholders for setting identifiers.'] }, "Adds a softly blurred background to menus, the Command Palette, and other pop-ups. Available in the Agents window and in editor windows with {0} enabled. Always respects reduced transparency in your operating system's accessibility settings, as well as {1}. Uses solid backgrounds in high contrast themes or when the effect isn't supported. Turn this off if you notice display or performance issues. Your operating system's own menus and dialogs are unchanged.", '`#workbench.experimental.modernUI#`', '`#workbench.reduceTransparency#`'),
