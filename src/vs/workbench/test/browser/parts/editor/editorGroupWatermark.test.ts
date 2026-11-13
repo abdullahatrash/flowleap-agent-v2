@@ -10,7 +10,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { KeyCode } from '../../../../../base/common/keyCodes.js';
 import { KeyCodeChord, ResolvedKeybinding } from '../../../../../base/common/keybindings.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
-import { isMacintosh, isWeb, OS } from '../../../../../base/common/platform.js';
+import { isMacintosh, OS } from '../../../../../base/common/platform.js';
 import { mock } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -22,7 +22,6 @@ import { USLayoutResolvedKeybinding } from '../../../../../platform/keybinding/c
 import { MockContextKeyService, MockKeybindingService } from '../../../../../platform/keybinding/test/common/mockKeybindingService.js';
 import { INotificationService, NotificationMessage } from '../../../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../../../platform/notification/test/common/testNotificationService.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { getIconRegistry } from '../../../../../platform/theme/common/iconRegistry.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../../platform/workspace/common/workspace.js';
 import { EditorGroupWatermark } from '../../../../browser/parts/editor/editorGroupWatermark.js';
@@ -126,8 +125,12 @@ suite('EditorGroupWatermark', () => {
 			override getWorkbenchState() { return workbenchState; }
 		});
 
+		// FlowLeap (B5c): the letterpress lists Open Chat / Show Files / Search Files / Find in Files / Show All
+		// Commands in a workspace and Open Chat / Open Recent / Show Files / Search Files in an empty window,
+		// with no keybinding filter.
 		for (const id of [
 			...keybindings.keys(),
+			'workbench.view.explorer',
 			'workbench.action.quickOpen',
 			'workbench.action.files.openFile',
 			'workbench.action.files.openFolder',
@@ -147,8 +150,10 @@ suite('EditorGroupWatermark', () => {
 
 		assert.deepStrictEqual(rows(), [
 			{ label: 'Open Chat', icon: 'codicon codicon-watermark-chat watermark-icon', iconHidden: 'true', keybinding: keybindings.get('workbench.action.chat.open')?.getAriaLabel() },
+			{ label: 'Show Files', icon: 'codicon codicon-watermark-explorer watermark-icon', iconHidden: 'true', keybinding: undefined },
+			{ label: 'Search Files', icon: 'codicon codicon-watermark-quick-open watermark-icon', iconHidden: 'true', keybinding: undefined },
+			{ label: 'Find in Files', icon: 'codicon codicon-watermark-find-in-files watermark-icon', iconHidden: 'true', keybinding: undefined },
 			{ label: 'Show All Commands', icon: 'codicon codicon-watermark-commands watermark-icon', iconHidden: 'true', keybinding: keybindings.get('workbench.action.showCommands')?.getAriaLabel() },
-			{ label: 'Open Settings', icon: 'codicon codicon-watermark-settings watermark-icon', iconHidden: 'true', keybinding: keybindings.get('workbench.action.openSettings')?.getAriaLabel() },
 		]);
 	});
 
@@ -174,7 +179,7 @@ suite('EditorGroupWatermark', () => {
 			row.click();
 		}
 
-		assert.deepStrictEqual(executedCommands, ['workbench.action.chat.open', 'workbench.action.showCommands', 'workbench.action.openSettings']);
+		assert.deepStrictEqual(executedCommands, ['workbench.action.chat.open', 'workbench.view.explorer', 'workbench.action.quickOpen', 'workbench.action.findInFiles', 'workbench.action.showCommands']);
 	});
 
 	test('renders each shortcut as a single interactive anchor without nested anchors', () => {
@@ -185,9 +190,9 @@ suite('EditorGroupWatermark', () => {
 			nestedAnchors: container.querySelectorAll('.watermark-box a a').length,
 			actionLabels: [...container.querySelectorAll('.watermark-box .action-label')].map(label => label.matches('a.watermark-entry[role="button"]')),
 		}, {
-			anchors: 3,
+			anchors: 5,
 			nestedAnchors: 0,
-			actionLabels: [true, true, true],
+			actionLabels: [true, true, true, true, true],
 		});
 	});
 
@@ -212,9 +217,15 @@ suite('EditorGroupWatermark', () => {
 			})),
 		}, {
 			toolbarLabel: 'Editor Shortcuts',
-			buttons: [...keybindings.values()].map((keybinding, index) => ({
+			buttons: [
+				`Open Chat (${keybindings.get('workbench.action.chat.open')!.getAriaLabel()})`,
+				'Show Files',
+				'Search Files',
+				'Find in Files',
+				`Show All Commands (${keybindings.get('workbench.action.showCommands')!.getAriaLabel()})`,
+			].map((label, index) => ({
 				role: 'button',
-				label: `${['Open Chat', 'Show All Commands', 'Open Settings'][index]} (${keybinding.getAriaLabel()})`,
+				label,
 				tabIndex: index === 0 ? 0 : -1,
 			})),
 		});
@@ -266,11 +277,11 @@ suite('EditorGroupWatermark', () => {
 		assert.strictEqual(await notification, commandError);
 	});
 
-	test('updates keybindings without duplicating rows or icons and removes unbound shortcuts', () => {
+	test('updates keybindings without duplicating rows or icons and keeps unbound shortcuts', () => {
 		render();
 		const updatedKeybinding = keybinding(KeyCode.KeyO);
 		keybindings.set('workbench.action.chat.open', updatedKeybinding);
-		keybindings.delete('workbench.action.openSettings');
+		keybindings.delete('workbench.action.showCommands');
 		keybindingsChanged.fire();
 		keybindingsChanged.fire();
 
@@ -278,10 +289,12 @@ suite('EditorGroupWatermark', () => {
 			labels: rows().map(row => row.label),
 			icons: container.querySelectorAll('.codicon').length,
 			keybinding: rows()[0].keybinding,
+			unbound: rows()[4].keybinding,
 		}, {
-			labels: ['Open Chat', 'Show All Commands'],
-			icons: 2,
+			labels: ['Open Chat', 'Show Files', 'Search Files', 'Find in Files', 'Show All Commands'],
+			icons: 5,
 			keybinding: updatedKeybinding.getAriaLabel(),
+			unbound: undefined,
 		});
 	});
 
@@ -292,43 +305,19 @@ suite('EditorGroupWatermark', () => {
 
 		assert.deepStrictEqual(keybindingLookups, [
 			'workbench.action.chat.open',
+			'workbench.view.explorer',
+			'workbench.action.quickOpen',
+			'workbench.action.findInFiles',
 			'workbench.action.showCommands',
-			'workbench.action.openSettings',
 		]);
 	});
 
-	test('keeps chat hidden when its context condition does not match', () => {
+	test('keeps chat visible without a chat-setup gate', () => {
+		// FlowLeap (B5c): Open Chat carries no `when`, so the chat-setup context never hides it.
 		chatEnabled = false;
 		render();
 
-		assert.deepStrictEqual(rows().map(row => row.label), ['Show All Commands', 'Open Settings']);
-	});
-
-	test('hides and restores chat when its context condition changes after rendering', () => {
-		render();
-		chatEnabled = false;
-		changeContext('chatSetupHidden');
-		const disabledLabels = rows().map(row => row.label);
-		chatEnabled = true;
-		changeContext('chatSetupHidden');
-
-		assert.deepStrictEqual({ disabledLabels, enabledLabels: rows().map(row => row.label) }, {
-			disabledLabels: ['Show All Commands', 'Open Settings'],
-			enabledLabels: ['Open Chat', 'Show All Commands', 'Open Settings'],
-		});
-	});
-
-	test('drops chat cached from a previous session once its context condition no longer matches', () => {
-		instantiationService.get(IStorageService).store('editorGroupWatermark.whenConditions', JSON.stringify({ 'workbench.action.chat.open': true }), StorageScope.PROFILE, StorageTarget.MACHINE);
-		chatEnabled = false;
-		render();
-		const cachedLabels = rows().map(row => row.label);
-		changeContext('chatSetupDisabledInWorkspace');
-
-		assert.deepStrictEqual({ cachedLabels, labels: rows().map(row => row.label) }, {
-			cachedLabels: ['Open Chat', 'Show All Commands', 'Open Settings'],
-			labels: ['Show All Commands', 'Open Settings'],
-		});
+		assert.deepStrictEqual(rows().map(row => row.label), ['Open Chat', 'Show Files', 'Search Files', 'Find in Files', 'Show All Commands']);
 	});
 
 	test('does not re-render for context changes that keep the visible shortcuts unchanged', () => {
@@ -337,7 +326,7 @@ suite('EditorGroupWatermark', () => {
 		changeContext('someUnrelatedKey');
 		changeContext('chatSetupHidden');
 
-		assert.deepStrictEqual([...container.querySelectorAll('.watermark-entry')].map((row, index) => row === before[index]), [true, true, true]);
+		assert.deepStrictEqual([...container.querySelectorAll('.watermark-entry')].map((row, index) => row === before[index]), [true, true, true, true, true]);
 	});
 
 	test('respects the tips setting when disabled and re-enabled', async () => {
@@ -359,38 +348,30 @@ suite('EditorGroupWatermark', () => {
 
 		assert.deepStrictEqual({ hiddenRows, labels: rows().map(row => row.label) }, {
 			hiddenRows: [],
-			labels: ['Open Chat', 'Show All Commands', 'Open Settings'],
+			labels: ['Open Chat', 'Show Files', 'Search Files', 'Find in Files', 'Show All Commands'],
 		});
 	});
 
-	test('renders file and folder icons in an empty window', () => {
+	test('renders chat, recent, files and search icons in an empty window', () => {
 		workbenchState = WorkbenchState.EMPTY;
-		for (const id of ['openFile', 'openFolder', 'openFileFolder', 'newUntitledFile']) {
-			keybindings.set(`workbench.action.files.${id}`, keybinding(KeyCode.KeyO));
-		}
-		keybindings.set('workbench.action.openRecent', keybinding(KeyCode.KeyR));
 		render();
 
 		assert.deepStrictEqual(rows().map(row => row.icon), [
 			'codicon codicon-watermark-chat watermark-icon',
-			'codicon codicon-watermark-commands watermark-icon',
 			'codicon codicon-watermark-open-recent watermark-icon',
-			...(isMacintosh && !isWeb ? ['codicon codicon-watermark-open-file-folder watermark-icon', 'codicon codicon-watermark-new-file watermark-icon'] : ['codicon codicon-watermark-open-file watermark-icon', 'codicon codicon-watermark-open-folder watermark-icon']),
+			'codicon codicon-watermark-explorer watermark-icon',
+			'codicon codicon-watermark-quick-open watermark-icon',
 		]);
 	});
 
-	for (const [id, icon] of [
-		['workbench.action.quickOpen', 'watermark-quick-open'],
-		['workbench.action.findInFiles', 'watermark-find-in-files'],
-		['workbench.action.terminal.toggleTerminal', 'watermark-terminal'],
-		['workbench.action.debug.start', 'watermark-debug'],
-	]) {
+	for (const [id, icon, index] of [
+		['workbench.action.quickOpen', 'watermark-quick-open', 2],
+		['workbench.action.findInFiles', 'watermark-find-in-files', 3],
+	] as const) {
 		test(`renders the icon for ${id}`, () => {
-			keybindings.delete('workbench.action.openSettings');
-			keybindings.set(id, keybinding(KeyCode.KeyT));
 			render();
 
-			assert.strictEqual(rows()[2].icon, `codicon codicon-${icon} watermark-icon`);
+			assert.strictEqual(rows()[index].icon, `codicon codicon-${icon} watermark-icon`);
 		});
 	}
 });
