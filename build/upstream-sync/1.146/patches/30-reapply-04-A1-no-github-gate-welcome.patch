@@ -1,8 +1,8 @@
 diff --git a/src/vs/sessions/browser/sessionsSetUpService.ts b/src/vs/sessions/browser/sessionsSetUpService.ts
-index bec71c8e93c..9a45df705c7 100644
+index d499373f620..987dee2eb40 100644
 --- a/src/vs/sessions/browser/sessionsSetUpService.ts
 +++ b/src/vs/sessions/browser/sessionsSetUpService.ts
-@@ -42,6 +42,14 @@ import { ISessionsManagementService } from '../services/sessions/common/sessions
+@@ -41,6 +41,14 @@ import { ISessionsManagementService } from '../../workbench/contrib/sessions/com
  
  const AIDisabledConfig = 'chat.disableAIFeatures';
  
@@ -17,7 +17,7 @@ index bec71c8e93c..9a45df705c7 100644
  export const ISessionsSetUpService = createDecorator<ISessionsSetUpService>('sessionsSetUpService');
  
  export interface ISessionsSetUpService {
-@@ -163,6 +171,14 @@ class SessionsSetUpWidget extends Disposable {
+@@ -141,6 +149,14 @@ class SessionsSetUpWidget extends Disposable {
  			return;
  		}
  
@@ -32,7 +32,7 @@ index bec71c8e93c..9a45df705c7 100644
  		// Learn when the default account resolves so the conditional-auth reaction
  		// can tell "signed out" from "not resolved yet". On first load the account
  		// is populated silently (no change event fires), so awaiting it once is the
-@@ -194,6 +210,49 @@ class SessionsSetUpWidget extends Disposable {
+@@ -168,6 +184,49 @@ class SessionsSetUpWidget extends Disposable {
  		}
  	}
  
@@ -82,7 +82,7 @@ index bec71c8e93c..9a45df705c7 100644
  	private async _checkWebAuth(): Promise<void> {
  		try {
  			const sessions = await this.authenticationService.getSessions('github');
-@@ -570,7 +629,7 @@ class SessionsSetUpWidget extends Disposable {
+@@ -535,7 +594,7 @@ class SessionsSetUpWidget extends Disposable {
  				alignment: DialogContentsAlignment.Vertical,
  				cancelId: 1,
  				disableCloseButton: true,
