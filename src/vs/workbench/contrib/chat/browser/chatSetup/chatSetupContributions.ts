@@ -24,6 +24,7 @@ import { CommandsRegistry, ICommandService } from '../../../../../platform/comma
 import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IsWebContext } from '../../../../../platform/contextkey/common/contextkeys.js';
+import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
 import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
@@ -74,6 +75,7 @@ export const ChatSetupFromAccountsWhen = ContextKeyExpr.and(
 	ChatContextKeys.Setup.hidden.negate(),
 	ChatContextKeys.Setup.disabledInWorkspace.negate(),
 	CONTEXT_DEFAULT_ACCOUNT_STATE.notEqualsTo(DefaultAccountStatus.Available),
+	PatentIdeContextKeys.Mode.negate(), // FlowLeap: the FlowLeap Accounts CTA (patentAuth.contribution) is the only sign-in entry in Patent IDE mode
 );
 
 export class ChatSetupContribution extends Disposable implements IWorkbenchContribution {
@@ -239,12 +241,15 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 					title: ChatSetupTriggerAction.CHAT_SETUP_ACTION_LABEL,
 					category: CHAT_CATEGORY,
 					f1: true,
-					precondition: ContextKeyExpr.or(
-						ChatContextKeys.Setup.hidden,
-						ChatContextKeys.Setup.disabledInWorkspace,
-						ChatContextKeys.Setup.untrusted,
-						ChatContextKeys.Setup.completed.negate(),
-						ChatContextKeys.Entitlement.canSignUp
+					precondition: ContextKeyExpr.and(
+						ContextKeyExpr.or(
+							ChatContextKeys.Setup.hidden,
+							ChatContextKeys.Setup.disabledInWorkspace,
+							ChatContextKeys.Setup.untrusted,
+							ChatContextKeys.Setup.completed.negate(),
+							ChatContextKeys.Entitlement.canSignUp
+						),
+						PatentIdeContextKeys.Mode.negate() // FlowLeap: hide the GitHub "Use AI Features with Copilot" setup command in Patent IDE mode
 					)
 				});
 			}
@@ -419,6 +424,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 							ContextKeyExpr.equals(`config.${ChatConfiguration.TitleBarSignInEnabled}`, true),
 							UpdateTitleBarEditorVisibleContext.negate(),
 							InEditorZenModeContext.negate(),
+							PatentIdeContextKeys.Mode.negate(), // FlowLeap: hide the GitHub title-bar Sign In in Patent IDE mode
 						),
 					}]
 				});
@@ -438,8 +444,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super(
 					ChatConfiguration.TitleBarSignInEnabled,
-					localize('toggle.chatSignIn', 'Copilot Sign In'),
-					localize('toggle.chatSignInDescription', "Toggle visibility of the Copilot Sign In button in title bar"),
+					localize('toggle.chatSignIn', 'FlowLeap Sign In'),
+					localize('toggle.chatSignInDescription', "Toggle visibility of the FlowLeap Sign In button in title bar"),
 					3,
 					ContextKeyExpr.and(
 						IsWebContext.negate(),
@@ -465,7 +471,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 						ContextKeyExpr.or(
 							ChatContextKeys.Entitlement.canSignUp,
 							ChatContextKeys.Entitlement.planFree
-						)
+						),
+						PatentIdeContextKeys.Mode.negate() // FlowLeap: GitHub plan-upgrade command, hidden in Patent IDE mode
 					),
 					menu: {
 						id: MenuId.ChatTitleBarMenu,
@@ -535,7 +542,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 							ChatContextKeys.Entitlement.planProPlus,
 							ChatContextKeys.Entitlement.planMax,
 							ChatContextKeys.Entitlement.planEdu,
-						)
+						),
+						PatentIdeContextKeys.Mode.negate() // FlowLeap: GitHub budget command, hidden in Patent IDE mode
 					),
 					menu: {
 						id: MenuId.ChatTitleBarMenu,
@@ -629,6 +637,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			ChatContextKeys.Setup.hidden.negate(),
 			ChatContextKeys.Setup.disabledInWorkspace.negate(),
 			ChatContextKeys.Setup.completed.negate(),
+			PatentIdeContextKeys.Mode.negate() // FlowLeap: hide the GitHub editor context-menu Explain/Fix/Code Review entries in Patent IDE mode
 		);
 
 		MenuRegistry.appendMenuItem(MenuId.EditorContext, {
