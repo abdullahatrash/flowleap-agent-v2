@@ -207,3 +207,5 @@ $C down                                                   # app; evidence stays 
 docker compose -f docker-compose.dev.yml stop postgres redis   # backend; data stays in the postgres_data volume
 # website: Ctrl-C in its terminal
 ```
+
+> Unit suite on a fresh worktree: run `pnpm run gulp copy-codicons` once before `./scripts/test.sh`; the codicon font is gitignored and a bare transpile leaves `out/` without it (seven font-dependent tests fail with a network error otherwise).

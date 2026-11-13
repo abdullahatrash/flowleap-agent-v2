@@ -1,0 +1,82 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/tools/clientToolSetsContribution.ts b/src/vs/workbench/contrib/chat/browser/tools/clientToolSetsContribution.ts
+index c020a9df482..079ee11be38 100644
+--- a/src/vs/workbench/contrib/chat/browser/tools/clientToolSetsContribution.ts
++++ b/src/vs/workbench/contrib/chat/browser/tools/clientToolSetsContribution.ts
+@@ -11,6 +11,7 @@ import { IWorkbenchContribution } from '../../../../common/contributions.js';
+ import { browserChatToolReferenceNames } from '../../../../../platform/browserView/common/browserChatToolReferenceNames.js';
+ import { IAICustomizationWorkspaceService } from '../../common/aiCustomizationWorkspaceService.js';
+ import { ILanguageModelToolsService, IToolData, ToolDataSource } from '../../common/tools/languageModelToolsService.js';
++import { patentChatToolReferenceNames } from '../../common/tools/patentChatToolReferenceNames.js';
+ 
+ /**
+  * Describes a tool set whose membership is resolved dynamically from a list of tool reference names.
+@@ -128,6 +129,16 @@ export class ClientToolSetsContribution extends Disposable implements IWorkbench
+ 			],
+ 		}));
+ 
++		// FlowLeap: lets agent-host sessions (Claude in the Agents Window) call the Patent Agent's tools.
++		this._register(this._registerDynamicToolSet(toolsService, {
++			id: 'flowleap-patent',
++			referenceName: 'patent',
++			icon: Codicon.law,
++			description: localize('clientToolSet.patent.description', "Patent Data"),
++			detail: localize('clientToolSet.patent.detail', "Search and read patents, citations, prosecution history, legal sources and academic literature."),
++			members: patentChatToolReferenceNames,
++		}));
++
+ 		if (!workspaceService.isSessionsWindow) {
+ 			this._register(this._registerDynamicToolSet(toolsService, {
+ 				id: 'vscode-notebooks',
+diff --git a/src/vs/workbench/contrib/chat/test/browser/tools/toolSetsContribution.test.ts b/src/vs/workbench/contrib/chat/test/browser/tools/toolSetsContribution.test.ts
+index 57d5b65d0a0..9eccf168195 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/tools/toolSetsContribution.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/tools/toolSetsContribution.test.ts
+@@ -15,6 +15,7 @@ import { LanguageModelToolsService } from '../../../browser/tools/languageModelT
+ import { createToolSetFileContents, deleteToolSetFromFileContents, getEnabledSelectionReferences } from '../../../browser/tools/toolSetsContribution.js';
+ import { IAICustomizationWorkspaceService } from '../../../common/aiCustomizationWorkspaceService.js';
+ import { IToolData, ToolDataSource, ToolAndToolSetEnablementMap } from '../../../common/tools/languageModelToolsService.js';
++import { patentChatToolReferenceNames } from '../../../common/tools/patentChatToolReferenceNames.js';
+ 
+ suite('ToolSetsContribution', () => {
+ 	const store = ensureNoDisposablesAreLeakedInTestSuite();
+@@ -136,6 +137,40 @@ suite('ToolSetsContribution', () => {
+ 		});
+ 	});
+ 
++	test('ClientToolSetsContribution groups the Patent Agent tools in both windows so agent hosts receive them', () => {
++		const makeTool = (name: string): IToolData => ({
++			id: `copilot_${name}`,
++			modelDescription: name,
++			displayName: name,
++			toolReferenceName: name,
++			source: ToolDataSource.Internal,
++		});
++		const createContribution = (isSessionsWindow: boolean) => {
++			const toolsService = createToolsService();
++			for (const tool of patentChatToolReferenceNames.map(makeTool)) {
++				store.add(toolsService.registerToolData(tool));
++			}
++			const workspaceService = new class extends mock<IAICustomizationWorkspaceService>() {
++				override readonly isSessionsWindow = isSessionsWindow;
++			}();
++			store.add(new ClientToolSetsContribution(toolsService, workspaceService));
++			return toolsService;
++		};
++
++		const sessionsSet = createContribution(true).getToolSet('flowleap-patent');
++		const coreSet = createContribution(false).getToolSet('flowleap-patent');
++
++		assert.deepStrictEqual({
++			sessionsMembers: Array.from(sessionsSet?.getTools() ?? [], tool => tool.toolReferenceName),
++			coreMembers: Array.from(coreSet?.getTools() ?? [], tool => tool.toolReferenceName),
++			deprecated: [sessionsSet?.deprecated ?? false, coreSet?.deprecated ?? false],
++		}, {
++			sessionsMembers: [...patentChatToolReferenceNames],
++			coreMembers: [...patentChatToolReferenceNames],
++			deprecated: [false, false],
++		});
++	});
++
+ 	test('getEnabledSelectionReferences keeps enabled tool set references and drops covered tools', () => {
+ 		const toolsService = createToolsService();
+ 

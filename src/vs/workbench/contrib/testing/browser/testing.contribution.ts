@@ -48,6 +48,7 @@ import { TestingDecorations, TestingDecorationService } from './testingDecoratio
 import { TestingExplorerView } from './testingExplorerView.js';
 import { CloseTestPeek, CollapsePeekStack, GoToNextMessageAction, GoToPreviousMessageAction, OpenMessageInEditorAction, TestingOutputPeekController, TestingPeekOpener, TestResultsView, ToggleTestingPeekHistory } from './testingOutputPeek.js';
 import { TestingProgressTrigger } from './testingProgressUiService.js';
+import { TestingUnattendedRestartParticipant } from './testingUnattendedRestart.js';
 import { TestingViewPaneContainer } from './testingViewPaneContainer.js';
 import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
@@ -141,6 +142,7 @@ registerAction2(ToggleTestingPeekHistory);
 registerAction2(CollapsePeekStack);
 
 registerWorkbenchContribution2(TestingContentProvider.ID, TestingContentProvider, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(TestingUnattendedRestartParticipant.ID, TestingUnattendedRestartParticipant, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(TestingPeekOpener.ID, TestingPeekOpener, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(TestingProgressTrigger.ID, TestingProgressTrigger, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(TestingChatAgentToolContribution.ID, TestingChatAgentToolContribution, WorkbenchPhase.Eventually);

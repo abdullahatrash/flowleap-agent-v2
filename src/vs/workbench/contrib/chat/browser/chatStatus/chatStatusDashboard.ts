@@ -42,7 +42,6 @@ import { EditorResourceAccessor, SideBySideEditor } from '../../../../common/edi
 import { IChatEntitlementService, ChatEntitlementService, ChatEntitlement, IQuotaSnapshot, getChatPlanName, getQuotaReset, getQuotaUsage, QuotaUsageKind } from '../../../../services/chat/common/chatEntitlementService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { isNewUser } from './chatStatus.js';
 import { IChatStatusItemService, ChatStatusEntry } from './chatStatusItemService.js';
 import { GitHubPaths, IDefaultAccountService } from '../../../../../platform/defaultAccount/common/defaultAccount.js';
@@ -108,21 +107,6 @@ export interface IChatStatusDashboardOptions {
 	ctaButtonsContainer?: HTMLElement;
 }
 
-/**
- * Context key (owned by the FlowLeap extension, PRD 0002 Issue 4) mirroring whether a FlowLeap
- * Session exists. Referenced here by string on purpose so core never becomes a second owner of it.
- */
-const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
-
-/** Set form for {@link IContextKeyService.onDidChangeContext} `affectsSome` checks. */
-const FLOWLEAP_SIGNED_IN_CONTEXT_KEYS = new Set([FLOWLEAP_SIGNED_IN_CONTEXT_KEY]);
-
-/**
- * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
- * Referenced here by string on purpose so core does not take a dependency on the extension.
- */
-const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
-
 export class ChatStatusDashboard extends DomWidget {
 
 	private static readonly QUICK_SETTINGS_COLLAPSED_KEY = 'chatStatusDashboard.quickSettingsCollapsed';
@@ -154,7 +138,6 @@ export class ChatStatusDashboard extends DomWidget {
 		@IStorageService private readonly storageService: IStorageService,
 		@IDefaultAccountService private readonly defaultAccountService: IDefaultAccountService,
 		@INotificationService private readonly notificationService: INotificationService,
-		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 	) {
 		super();
 
@@ -597,43 +580,23 @@ export class ChatStatusDashboard extends DomWidget {
 	}
 
 	private renderSetupSection(): void {
-		const container = this.element.appendChild($('div.setup-section'));
-		const sectionStore = this._store.add(new MutableDisposable<DisposableStore>());
-		const renderSection = () => {
-			container.textContent = '';
-			const store = new DisposableStore();
-			sectionStore.value = store;
-			this.renderSetupSectionContent(container, store);
-		};
-		renderSection();
-
-		// The FlowLeap Session can start or end while the dashboard is open.
-		this._store.add(this.contextKeyService.onDidChangeContext(e => {
-			if (e.affectsSome(FLOWLEAP_SIGNED_IN_CONTEXT_KEYS)) {
-				renderSection();
-			}
-		}));
-	}
-
-	private renderSetupSectionContent(container: HTMLElement, store: DisposableStore): void {
 		const hasByokModels = this.chatEntitlementService.hasByokModels;
 		const newUser = isNewUser(this.chatEntitlementService) && !hasByokModels;
 		const anonymousUser = this.chatEntitlementService.anonymous;
 		const disabled = this.chatEntitlementService.sentiment.disabled || this.chatEntitlementService.sentiment.untrusted;
-		// FlowLeap: the Copilot entitlement stays `Unknown` under BYOK, so it cannot tell a
-		// signed-in user from a signed-out one. Signed out means: no FlowLeap Session.
-		const signedOut = this.chatEntitlementService.entitlement === ChatEntitlement.Unknown
-			&& this.contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) !== true;
+		// Keep the Sign-in entry visible even when BYOK models are present so air-gapped
+		// users can still authenticate to unlock the full Copilot experience.
+		const signedOut = this.chatEntitlementService.entitlement === ChatEntitlement.Unknown;
 		if (!(newUser || signedOut || disabled)) {
 			return;
 		}
 
-		container.appendChild($('hr'));
+		this.element.appendChild($('hr'));
 
 		let descriptionText: string | MarkdownString;
 		let descriptionClass = '.description';
 		if (newUser && anonymousUser) {
-			descriptionText = new MarkdownString(localize({ key: 'activeDescriptionAnonymous', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0}, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3})", defaultChat.provider.default.name, defaultChat.provider.default.name, defaultChat.termsStatementUrl, defaultChat.privacyStatementUrl), { isTrusted: true });
+			descriptionText = new MarkdownString(localize({ key: 'activeDescriptionAnonymous', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0} Copilot, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3})", defaultChat.provider.default.name, defaultChat.provider.default.name, defaultChat.termsStatementUrl, defaultChat.privacyStatementUrl), { isTrusted: true });
 			descriptionClass = `${descriptionClass}.terms`;
 		} else if (newUser) {
 			descriptionText = localize('activateDescription', "Set up FlowLeap to use AI features.");
@@ -659,21 +622,19 @@ export class ChatStatusDashboard extends DomWidget {
 		let commandId: string;
 		if (newUser && anonymousUser) {
 			commandId = 'workbench.action.chat.triggerSetupAnonymousWithoutDialog';
-		} else if (newUser || disabled) {
-			commandId = 'workbench.action.chat.triggerSetup'; // set up or enable, not sign in
 		} else {
-			commandId = FLOWLEAP_SIGN_IN_COMMAND_ID; // FlowLeap sign-in (Clerk in the browser), never the GitHub setup dialog
+			commandId = 'workbench.action.chat.triggerSetup';
 		}
 
 		if (typeof descriptionText === 'string') {
-			container.appendChild($(`div${descriptionClass}`, undefined, descriptionText));
+			this.element.appendChild($(`div${descriptionClass}`, undefined, descriptionText));
 		} else {
-			container.appendChild($(`div${descriptionClass}`, undefined, store.add(this.markdownRendererService.render(descriptionText)).element));
+			this.element.appendChild($(`div${descriptionClass}`, undefined, this._store.add(this.markdownRendererService.render(descriptionText)).element));
 		}
 
-		const button = store.add(new Button(container, { ...defaultButtonStyles, hoverDelegate: nativeHoverDelegate }));
+		const button = this._store.add(new Button(this.element, { ...defaultButtonStyles, hoverDelegate: nativeHoverDelegate }));
 		button.label = buttonLabel;
-		store.add(button.onDidClick(() => this.runCommandAndClose(commandId)));
+		this._store.add(button.onDidClick(() => this.runCommandAndClose(commandId)));
 	}
 
 	private renderInlineSuggestionsContent(container: HTMLElement): void {

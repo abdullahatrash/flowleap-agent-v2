@@ -1,0 +1,37 @@
+diff --git a/package.json b/package.json
+index ebbe9e628ed..42542f58b73 100644
+--- a/package.json
++++ b/package.json
+@@ -110,7 +110,6 @@
+   "dependencies": {
+     "@anthropic-ai/sdk": "^0.82.0",
+     "@devcontainers/cli": "0.88.0",
+-    "@github/copilot": "^1.0.65",
+     "@github/copilot-sdk": "1.0.30-preview.0",
+     "@hpke/core": "^1.9.0",
+     "@microsoft/1ds-core-js": "^3.2.13",
+@@ -120,7 +119,6 @@
+     "@microsoft/dev-tunnels-management": "^1.3.61",
+     "@microsoft/dev-tunnels-ssh": "^3.12.22",
+     "@microsoft/dev-tunnels-ssh-tcp": "^3.12.22",
+-    "@microsoft/mxc-sdk": "0.8.0",
+     "@parcel/watcher": "^2.5.6",
+     "@types/semver": "^7.5.8",
+     "@vscode/codicons": "^0.0.46-49",
+diff --git a/remote/package.json b/remote/package.json
+index 16af7327118..1eb834dfa25 100644
+--- a/remote/package.json
++++ b/remote/package.json
+@@ -13,12 +13,10 @@
+   "private": true,
+   "dependencies": {
+     "@devcontainers/cli": "0.88.0",
+-    "@github/copilot": "^1.0.65",
+     "@github/copilot-sdk": "1.0.30-preview.0",
+     "@hpke/core": "^1.9.0",
+     "@microsoft/1ds-core-js": "^3.2.13",
+     "@microsoft/1ds-post-js": "^3.2.13",
+-    "@microsoft/mxc-sdk": "0.8.0",
+     "@parcel/watcher": "^2.5.6",
+     "@vscode/copilot-api": "^0.5.2",
+     "@vscode/deviceid": "^0.1.1",

@@ -58,7 +58,6 @@ const eslintConfigFile = /(^|\/)eslint\.config\.[cm]?[jt]s$/;
  */
 export const typeAwareLintFolders = [
 	'extensions/markdown-language-features/',
-	'extensions/media-preview/', // FlowLeap keeps this extension (core mediaPreview arrives with PRD 0027 PR B)
 	'extensions/mermaid-markdown-features/',
 	'extensions/simple-browser/',
 	'extensions/typescript-language-features/',

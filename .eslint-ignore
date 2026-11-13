@@ -60,3 +60,6 @@
 src/vs/base/common/lit-html/**
 src/vs/base/common/signals-core/**
 extensions/markdown-pdf/**
+
+# FlowLeap upstream-sync replay kits (throwaway tooling)
+build/upstream-sync/**

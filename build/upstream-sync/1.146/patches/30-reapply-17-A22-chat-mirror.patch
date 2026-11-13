@@ -1,0 +1,1030 @@
+diff --git a/src/vs/platform/agentHost/common/agent.ts b/src/vs/platform/agentHost/common/agent.ts
+index 90076fe3c3a..bff743694d0 100644
+--- a/src/vs/platform/agentHost/common/agent.ts
++++ b/src/vs/platform/agentHost/common/agent.ts
+@@ -1984,6 +1984,14 @@ export interface IAgentTurnModelResolution {
+ 	readonly notices: readonly string[];
+ }
+ 
++/** The titles a provider allows on disk and on the wire (see {@link IAgent.sessionTitlePolicy}). */
++export interface IAgentSessionTitlePolicy {
++	/** The neutral title the host may write to disk for `session`. */
++	persisted(session: URI): string;
++	/** The real title, held in memory by the provider, or `undefined` when it does not know it. */
++	live(session: URI): string | undefined;
++}
++
+ export interface IAgent {
+ 	/** Host-internal opt-in to client-backed, non-file working directories. */
+ 	readonly supportsVirtualWorkspaces?: true;
+@@ -2265,6 +2273,18 @@ export interface IAgent {
+ 
+ 	/** Provides chats that are ready to be registered as Agent Host sessions. */
+ 	readonly onDidDiscoverChats: Event<readonly IAgentDiscoveredChat[]>;
++	/**
++	 * FlowLeap (PRD 0018 C3): for a provider whose sessions mirror chats that live elsewhere
++	 * (`isMirroredSessionProvider`), whether it offers `session` now. The host lists only the
++	 * sessions it offers; their registrations and catalog rows stay.
++	 */
++	offersSession?(session: URI): boolean;
++	/**
++	 * FlowLeap (PRD 0018 C3): sessions this provider no longer offers (the window that owned them
++	 * stopped publishing). The host drops their live state and tells clients they are gone; it
++	 * does not delete them, so they come back when the provider offers them again.
++	 */
++	readonly onDidRetractSessions?: Event<readonly URI[]>;
+ 	/** Passive transcript changes from another client; these must not start host-side turn execution. */
+ 	readonly onDidChangeChatHistory?: Event<IAgentChatHistoryChange>;
+ 	/** Observe another client's persisted transcript while a host client subscribes to this chat. */
+@@ -2334,6 +2354,13 @@ export interface IAgent {
+ 
+ 	// ---- Metadata -----------------------------------------------------------
+ 
++	/**
++	 * FlowLeap (PRD 0018 C2, decision D1): keeps this provider's real session titles off disk.
++	 * When set, the host writes {@link IAgentSessionTitlePolicy.persisted} wherever it would store
++	 * a title, and lists sessions with {@link IAgentSessionTitlePolicy.live}.
++	 */
++	readonly sessionTitlePolicy?: IAgentSessionTitlePolicy;
++
+ 	/**
+ 	 * Optionally warms metadata for a burst of {@link getChatMetadata} calls; the expected count lets providers avoid bulk reads for small bursts.
+ 	 * Callers release the returned lease after the burst; providers may retain a bounded cache across bursts.
+diff --git a/src/vs/platform/agentHost/common/agentService.ts b/src/vs/platform/agentHost/common/agentService.ts
+index 8453075812c..9f6dd0f08da 100644
+--- a/src/vs/platform/agentHost/common/agentService.ts
++++ b/src/vs/platform/agentHost/common/agentService.ts
+@@ -4,6 +4,7 @@
+  *--------------------------------------------------------------------------------------------*/
+ 
+ import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from './remoteAccessHost.js';
++import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID, type ChatMirrorPublication } from './agentHostChatMirror.js';
+ import type { AgentChatMoveDestination } from './agentHostChatMove.js';
+ import type { IAgentHostManagedWorktree, IAgentHostWorktreeCleanupStatus } from './agentHostWorktreeCleanup.js';
+ import type { CancellationToken } from '../../../base/common/cancellation.js';
+@@ -320,6 +321,11 @@ export function affectsAgentHostProviderPreference(event: IConfigurationChangeEv
+ 
+ export function shouldSurfaceLocalAgentHostProvider(provider: AgentProvider, configurationService: IConfigurationService, isSessionsWindow: boolean): boolean {
+ 	switch (provider) {
++		// FlowLeap (PRD 0018 C3, spike gap 7): the Editor Chats this window already shows. Only a
++		// remote Viewer lists them, through the `remoteAgentHost` provider. Hiding the agent here
++		// also keeps its pseudo model out of this window's language models and model picker.
++		case FLOWLEAP_CHAT_AGENT_PROVIDER_ID:
++			return false;
+ 		case CLAUDE_AGENT_PROVIDER_ID:
+ 			return configurationService.getValue<boolean>(AgentHostClaudeAgentEnabledSettingId) !== false;
+ 		case CODEX_AGENT_PROVIDER_ID:
+@@ -882,6 +888,12 @@ export interface IConnectionTrackerService {
+ 
+ 	/** FlowLeap (PRD 0018 B3): the Remote Access Host transport's current status. */
+ 	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus>;
++
++	/**
++	 * A window publishes its editor chats to the `flowleap-chat` agent (PRD 0018 C1). The window
++	 * names its own client id, the id its MessagePort connection carries.
++	 */
++	publishChatMirror(publication: ChatMirrorPublication): Promise<void>;
+ }
+ 
+ /**
+@@ -1003,6 +1015,7 @@ export interface IAgentHostManagementService {
+ 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
+ 	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void>;
+ 	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus>;
++	publishChatMirror(publication: ChatMirrorPublication): Promise<void>;
+ }
+ 
+ // ---- Service interfaces -----------------------------------------------------
+@@ -1720,4 +1733,7 @@ export interface IAgentHostService extends IAgentConnection {
+ 
+ 	/** Remote Access (local agent host only): the Host transport's status. */
+ 	getRemoteAccessHostStatus?(): Promise<IRemoteAccessHostStatus>;
++
++	/** Remote Access (local agent host only): publish this window's editor chats (PRD 0018 C1). */
++	publishChatMirror?(publication: ChatMirrorPublication): Promise<void>;
+ }
+diff --git a/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts b/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts
+index 20a8848b700..401556dc892 100644
+--- a/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts
++++ b/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts
+@@ -32,6 +32,7 @@ import { AgentHostClientState, AgentHostProtocolClient } from '../browser/agentH
+ import { AhpJsonlLogger } from '../common/ahpJsonlLogger.js';
+ import { getSessionLogContent } from '../common/sessionLogContent.js';
+ import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from '../common/remoteAccessHost.js';
++import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostClientChatMirrorChannel, type ChatMirrorPublication } from '../common/agentHostChatMirror.js';
+ import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AgentHostClientByokLmChannel, NullAgentHostClientByokLmChannel } from '../common/agentHostClientByokLmChannel.js';
+ import { getAgentHostClientType } from '../common/agentHostClientInfo.js';
+ import { AGENT_HOST_CLIENT_PROXY_CHANNEL, AgentHostClientProxyChannel } from '../common/agentHostClientProxyChannel.js';
+@@ -878,6 +879,10 @@ export class LocalAgentHostServiceClient extends Disposable implements IAgentHos
+ 		return this._getManagementService().getRemoteAccessHostStatus();
+ 	}
+ 
++	publishChatMirror(publication: ChatMirrorPublication): Promise<void> {
++		return this._getManagementService().publishChatMirror(publication);
++	}
++
+ 	private _getManagementService(): IAgentHostManagementService {
+ 		return ProxyChannel.toService<IAgentHostManagementService>(
+ 			getDelayedChannel(this._managementConnection.client().then(client => client.getChannel(AgentHostIpcChannels.Management)))
+@@ -928,4 +933,12 @@ export function registerAgentHostClientChannels(
+ 		logService.warn(`${LOG_PREFIX} BYOK language-model bridge not registered for this window. ${error instanceof Error ? error.message : String(error)}`);
+ 		client.registerChannel(AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, new NullAgentHostClientByokLmChannel());
+ 	}
++
++	// FlowLeap (PRD 0018 C1): the editor chat mirror's commands. Only a window that registers the
++	// mirror source publishes chats, and the agent host calls only a window that published.
++	try {
++		client.registerChannel(AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, instantiationService.createInstance(AgentHostClientChatMirrorChannel));
++	} catch {
++		logService.trace(`${LOG_PREFIX} editor chat mirror not available in this window.`);
++	}
+ }
+diff --git a/src/vs/platform/agentHost/electron-main/electronAgentHostStarter.ts b/src/vs/platform/agentHost/electron-main/electronAgentHostStarter.ts
+index 74558dcaf2a..10e220057a9 100644
+--- a/src/vs/platform/agentHost/electron-main/electronAgentHostStarter.ts
++++ b/src/vs/platform/agentHost/electron-main/electronAgentHostStarter.ts
+@@ -25,6 +25,7 @@ import { NullTelemetryService } from '../../telemetry/common/telemetryUtils.js';
+ import { UtilityProcess } from '../../utilityProcess/electron-main/utilityProcess.js';
+ import { AgentHostStartError, IAgentHostConnection, IAgentHostShutdownRequest, IAgentHostStarter, IAgentHostStartRequest, isFatalAgentHostStartError, toFatalAgentHostStartError } from '../common/agent.js';
+ import { AgentHostExitMarker, AgentHostProcessExitDiagnosticsCollector, IAgentHostProcessMemorySample } from '../common/agentHostProcessExit.js';
++import { AGENT_HOST_MAIN_PROCESS_CLIENT_CTX } from '../common/agentHostChatMirror.js';
+ import { buildAgentHostTelemetryIdEnv, IAgentHostForwardedTelemetryIds } from '../common/agentHostTelemetryEnv.js';
+ import { AgentHostLaunchKind, AgentHostLaunchKindEnvVar, telemetryLevelToAgentHostValue } from '../common/agentHostTelemetry.js';
+ import { AgentHostAhpJsonlLoggingSettingId, AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentBinaryArgsSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostCodexAgentSdkRootSettingId, AgentHostCodexAgentCodexHomeSettingId, AgentHostIpcChannels, AgentHostOTelCaptureContentSettingId, AgentHostOTelCaptureIdentitySettingId, AgentHostOTelDbSpanExporterEnabledSettingId, AgentHostOTelEnabledSettingId, AgentHostOTelExporterTypeSettingId, AgentHostOTelOtlpEndpointSettingId, AgentHostOTelOutfileSettingId, AgentHostOTelPolicyIpcChannel, AgentHostOTelPolicyState, AgentHostRestartIpcChannel, AgentHostWillRestartIpcChannel, buildAgentHostOTelEnv, buildAgentSdkEnv, IAgentHostManagementService, IAgentHostOTelSettings, readAgentHostOTelPolicySettings } from '../common/agentService.js';
+@@ -230,7 +231,7 @@ export class ElectronAgentHostStarter extends Disposable implements IAgentHostSt
+ 			}
+ 
+ 			const port = utilityProcess.connect();
+-			const client = new MessagePortClient(port, 'agentHost');
++			const client = new MessagePortClient(port, AGENT_HOST_MAIN_PROCESS_CLIENT_CTX);
+ 			const managementService = ProxyChannel.toService<IAgentHostManagementService>(client.getChannel(AgentHostIpcChannels.Management));
+ 
+ 			const store = new DisposableStore();
+diff --git a/src/vs/platform/agentHost/node/agentHostCatalogSourceResolver.ts b/src/vs/platform/agentHost/node/agentHostCatalogSourceResolver.ts
+index 42f18076a07..a923a23b8f9 100644
+--- a/src/vs/platform/agentHost/node/agentHostCatalogSourceResolver.ts
++++ b/src/vs/platform/agentHost/node/agentHostCatalogSourceResolver.ts
+@@ -55,6 +55,8 @@ export interface ICatalogSourceState {
+ export interface IAgentHostCatalogSourceResolverDependencies {
+ 	readonly isUnpersistedChatBacking: (session: URI) => boolean;
+ 	readonly worktreeProjectFromRepositoryRoot: (repositoryRoot: string | undefined) => { readonly uri: URI; readonly displayName: string } | undefined;
++	/** FlowLeap (PRD 0018 D1): the only title the session may store on disk, when its provider keeps its titles off disk. */
++	readonly persistedTitle?: (session: URI) => string | undefined;
+ 	readonly reportMalformedArtifacts: (session: string, error: Error | undefined, dropped: number) => void;
+ 	readonly reportMalformedOrigin?: (session: string, error: unknown) => void;
+ }
+@@ -168,6 +170,7 @@ export class AgentHostCatalogSourceResolver {
+ 			? persistedTitle ?? state.title ?? ''
+ 			: metadataOverrides[SESSION_CUSTOM_TITLE_KEY] ?? state.title ?? '';
+ 		const titleSource = normalizeCatalogTitleSource(persistedTitleSource);
++		const diskTitle = this._dependencies.persistedTitle?.(session);
+ 		const persistedMultiRoot = sessionMetadata.multiRoot.read(metadata);
+ 		const multiRoot = preferPersistedMetadata
+ 			? (sessionMetadata.multiRoot.has(metadata) ? persistedMultiRoot : readSessionMultiRootMetadata(state.meta))
+@@ -282,7 +285,7 @@ export class AgentHostCatalogSourceResolver {
+ 		};
+ 		const data: AgentHostCatalogData = {
+ 			modifiedTime: state.modifiedTime,
+-			summary: toCatalogSummary(title),
++			summary: toCatalogSummary(diskTitle ?? title),
+ 			titleSource,
+ 			isRead,
+ 			isArchived,
+@@ -319,7 +322,7 @@ export class AgentHostCatalogSourceResolver {
+ 					uri: chat.uri,
+ 					order,
+ 					kind: chat.kind,
+-					summary: toCatalogSummary(summary),
++					summary: toCatalogSummary(diskTitle !== undefined && summary !== undefined ? diskTitle : summary),
+ 					titleSource: normalizeCatalogTitleSource(titleSource),
+ 					origin: toCatalogChatOrigin(chat.origin),
+ 					...(interactivity !== undefined ? { interactivity } : {}),
+@@ -374,8 +377,15 @@ export class AgentHostCatalogSourceResolver {
+ 		if (devContainerWorktree || sessionMetadata.devContainerWorktree.has(metadata)) {
+ 			legacyMetadata[AH_META_DEV_CONTAINER_WORKTREE_DB_KEY] = devContainerWorktree ? JSON.stringify(devContainerWorktree) : '';
+ 		}
++		if (diskTitle !== undefined) {
++			for (const key of Object.keys(legacyMetadata)) {
++				if (key.startsWith(customChatTitleMetadataKey(''))) {
++					legacyMetadata[key] = diskTitle;
++				}
++			}
++		}
+ 		if (metadataOverrides[SESSION_CUSTOM_TITLE_KEY] !== undefined || persisted[SESSION_CUSTOM_TITLE_KEY] !== undefined) {
+-			legacyMetadata[SESSION_CUSTOM_TITLE_KEY] = title;
++			legacyMetadata[SESSION_CUSTOM_TITLE_KEY] = diskTitle ?? title;
+ 			legacyMetadata[SESSION_CUSTOM_TITLE_SOURCE_KEY] = titleSource;
+ 		} else if (metadataOverrides[SESSION_CUSTOM_TITLE_SOURCE_KEY] !== undefined || persisted[SESSION_CUSTOM_TITLE_SOURCE_KEY] !== undefined) {
+ 			legacyMetadata[SESSION_CUSTOM_TITLE_SOURCE_KEY] = titleSource;
+diff --git a/src/vs/platform/agentHost/node/agentHostMain.ts b/src/vs/platform/agentHost/node/agentHostMain.ts
+index 31e0dab1657..bdd2413e273 100644
+--- a/src/vs/platform/agentHost/node/agentHostMain.ts
++++ b/src/vs/platform/agentHost/node/agentHostMain.ts
+@@ -60,6 +60,8 @@ import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, createAgentHostClientByokLmConnectio
+ import { IRemoteAccessHostConfig, IRemoteAccessHostStatus, REMOTE_ACCESS_STOPPED_STATUS } from '../common/remoteAccessHost.js';
+ import { SUPPORTED_PROTOCOL_VERSIONS } from '../common/state/protocol/version/registry.js';
+ import { RemoteAccessHostController } from './remoteAccessHostController.js';
++import { FlowLeapChatAgentRegistration, FlowLeapChatMirrorAgent } from './flowleapChatMirrorAgent.js';
++import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostChatMirrorRegistry, createAgentHostChatMirrorWindow, isRendererWindowConnection, type ChatMirrorPublication } from '../common/agentHostChatMirror.js';
+ import { AGENT_HOST_CLIENT_PROXY_CHANNEL, createAgentHostClientProxyConnection } from '../common/agentHostClientProxyChannel.js';
+ import { dirname, join } from '../../../base/common/path.js';
+ import { FileAccess } from '../../../base/common/network.js';
+@@ -153,6 +155,8 @@ async function startAgentHost(): Promise<void> {
+ 	// after the block) can forward agent-SDK download progress to clients.
+ 	let sdkDownloadProgress: Event<IAgentSdkDownloadProgress> | undefined;
+ 	let byokLmBridgeRegistry: ByokLmBridgeRegistry;
++	// FlowLeap (PRD 0018 C1/C2): the editor chats each window publishes while Remote Access is on.
++	const chatMirrorRegistry = disposables.add(new AgentHostChatMirrorRegistry());
+ 	let proxyResolver!: IAgentHostProxyResolver;
+ 	const hostLaunchKind = readAgentHostLaunchKind(process.env[AgentHostLaunchKindEnvVar]);
+ 	try {
+@@ -216,6 +220,15 @@ async function startAgentHost(): Promise<void> {
+ 		if (isAgentEnabled(process.env[AgentHostClaudeAgentEnabledEnvVar], true) && (!environmentService.isBuilt || agentSdkDownloader.isAvailable(ClaudeSdkPackage))) {
+ 			providerService.registerProvider(instantiationService.createInstance(ClaudeAgent));
+ 		}
++		// FlowLeap (PRD 0018 C2/C3): the editor chat bridge agent. It runs no model. It exists only
++		// while a window publishes, which a window does only while Remote Access is on (D5). The
++		// local Agents Window never shows it (`shouldSurfaceLocalAgentHostProvider`).
++		disposables.add(new FlowLeapChatAgentRegistration(
++			chatMirrorRegistry,
++			providerService,
++			() => instantiationService.createInstance(FlowLeapChatMirrorAgent, chatMirrorRegistry),
++			logService,
++		));
+ 		// Codex registration is one-way (register-on-enable): the env-var toggle
+ 		// or the renderer-forwarded `codexAgentEnabled` root config enables it.
+ 		// Disabling requires an agent host restart.
+@@ -328,6 +341,12 @@ async function startAgentHost(): Promise<void> {
+ 					const byokLmConnection = createAgentHostClientByokLmConnection(getChannel(AGENT_HOST_CLIENT_BYOK_LM_CHANNEL));
+ 					connectionStore.add(byokLmBridgeRegistry.register(clientId, byokLmConnection));
+ 				}
++				// FlowLeap (PRD 0018 C1): renderer windows only (spike gap 6): the main process has no
++				// chat view and no mirror channel. Lazy: the agent host calls a window's mirror channel
++				// only after it published.
++				if (isRendererWindowConnection(clientId)) {
++					connectionStore.add(chatMirrorRegistry.attachWindow(clientId, createAgentHostChatMirrorWindow(getChannel(AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL))));
++				}
+ 				authorityRegistrations.set(connection, connectionStore);
+ 			};
+ 			localDataPlaneDisposables.add(server.onDidAddConnection(registerConnection));
+@@ -550,6 +569,11 @@ async function startAgentHost(): Promise<void> {
+ 		async getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
+ 			return remoteAccessHost?.status ?? REMOTE_ACCESS_STOPPED_STATUS;
+ 		},
++		async publishChatMirror(publication: ChatMirrorPublication): Promise<void> {
++			if (!chatMirrorRegistry.publish(publication)) {
++				logService.trace(`[AgentHost] editor chat publication '${publication.kind}' from client ${publication.clientId} dropped`);
++			}
++		},
+ 	};
+ 	const missionControl = protocolIngressDisposables.add(instantiationService.createInstance(MissionControlHost, {
+ 		hostLaunchKind,
+diff --git a/src/vs/platform/agentHost/node/agentHostManagementService.ts b/src/vs/platform/agentHost/node/agentHostManagementService.ts
+index db435f33011..1340cebc925 100644
+--- a/src/vs/platform/agentHost/node/agentHostManagementService.ts
++++ b/src/vs/platform/agentHost/node/agentHostManagementService.ts
+@@ -12,6 +12,7 @@ import { IAgentHostInspectInfo, IAgentHostManagedSettingsDiagnostics, IAgentHost
+ import { sealMissionControlCredential } from './missionControl/missionControlAuthentication.js';
+ import { MissionControlEnvironment } from './missionControl/missionControlEnvironment.js';
+ import { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from '../common/remoteAccessHost.js';
++import type { ChatMirrorPublication } from '../common/agentHostChatMirror.js';
+ import { ISessionDataService } from '../common/sessionDataService.js';
+ import { IAgentHostMacAccessibilityTrustService } from './agentHostMacAccessibilityTrustService.js';
+ import { IAgentHostSystemWakeService } from './agentHostSystemWakeService.js';
+@@ -402,4 +403,8 @@ export class AgentHostManagementService implements IAgentHostManagementService {
+ 	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
+ 		return this._connectionTrackerService.getRemoteAccessHostStatus();
+ 	}
++
++	publishChatMirror(publication: ChatMirrorPublication): Promise<void> {
++		return this._connectionTrackerService.publishChatMirror(publication);
++	}
+ }
+diff --git a/src/vs/platform/agentHost/node/agentHostProviderService.ts b/src/vs/platform/agentHost/node/agentHostProviderService.ts
+index 9fcebf49a73..b6a8099ffe1 100644
+--- a/src/vs/platform/agentHost/node/agentHostProviderService.ts
++++ b/src/vs/platform/agentHost/node/agentHostProviderService.ts
+@@ -13,6 +13,7 @@ import { ILogService } from '../../log/common/log.js';
+ import { type AgentProvider, AgentSession, type AuthenticateParams, type AuthenticateResult, type IAgent, type IAgentHostNetworkEndpoint, type IMcpNotification } from '../common/agent.js';
+ import type { IAgentHostAuthenticationScope } from '../common/agentHostCredentials.js';
+ import type { IAgentHostManagedSettingsDiagnostics } from '../common/agentService.js';
++import { isMirroredSessionProvider } from '../common/agentHostChatMirror.js';
+ import { IAgentHostAuthenticationController } from './agentHostAuthenticationService.js';
+ import { parseMcpChannelUri } from './shared/mcpCustomizationController.js';
+ 
+@@ -31,6 +32,11 @@ export interface IAgentHostProviderService {
+ 
+ 	registerProviderInitializer(initializer: (provider: IAgent) => IDisposable): IDisposable;
+ 	registerProvider(provider: IAgent): void;
++	/**
++	 * FlowLeap (PRD 0018 C3): removes and disposes a provider that registered at runtime, such as
++	 * the `flowleap-chat` agent, which exists only while a window publishes. No-op when absent.
++	 */
++	unregisterProvider(provider: AgentProvider): void;
+ 	resolveProvider(provider?: AgentProvider): IAgent | undefined;
+ 	getProvider(provider: AgentProvider): IAgent | undefined;
+ 	getProviderForSession(session: URI | string): IAgent | undefined;
+@@ -109,7 +115,8 @@ export class AgentHostProviderService extends Disposable implements IAgentHostPr
+ 			for (const initializer of this._providerInitializers) {
+ 				registrations.add(initializer(provider));
+ 			}
+-			if (!this._defaultProvider) {
++			// FlowLeap (PRD 0018 C3): a mirror provider runs no session of its own; never the default.
++			if (!this._defaultProvider && !isMirroredSessionProvider(provider.id)) {
+ 				this._defaultProvider = provider.id;
+ 			}
+ 			this._agents.set([...this._providers.values()], undefined);
+@@ -130,6 +137,25 @@ export class AgentHostProviderService extends Disposable implements IAgentHostPr
+ 		});
+ 	}
+ 
++	unregisterProvider(provider: AgentProvider): void {
++		if (!this._providers.has(provider)) {
++			return;
++		}
++		this._logService.info(`Unregistering agent provider: ${provider}`);
++		this._authenticationReplays.delete(provider);
++		this._providerRegistrations.deleteAndDispose(provider);
++		this._providers.deleteAndDispose(provider);
++		for (const [session, owner] of this._sessionToProvider) {
++			if (owner === provider) {
++				this._sessionToProvider.delete(session);
++			}
++		}
++		if (this._defaultProvider === provider) {
++			this._defaultProvider = [...this._providers.keys()].find(id => !isMirroredSessionProvider(id));
++		}
++		this._agents.set([...this._providers.values()], undefined);
++	}
++
+ 	resolveProvider(provider?: AgentProvider): IAgent | undefined {
+ 		return provider ? this._providers.get(provider) : this._defaultProvider ? this._providers.get(this._defaultProvider) : undefined;
+ 	}
+diff --git a/src/vs/platform/agentHost/node/agentService.ts b/src/vs/platform/agentHost/node/agentService.ts
+index 9fd43bab59e..c53738ee37a 100644
+--- a/src/vs/platform/agentHost/node/agentService.ts
++++ b/src/vs/platform/agentHost/node/agentService.ts
+@@ -21,6 +21,7 @@ import { StopWatch } from '../../../base/common/stopwatch.js';
+ import { URI } from '../../../base/common/uri.js';
+ import { generateUuid } from '../../../base/common/uuid.js';
+ import { workspacelessChatsRoot } from '../common/workspacelessScratchDir.js';
++import { isMirroredSessionProvider } from '../common/agentHostChatMirror.js';
+ import { getTelemetryMigrationErrorMessage, getTelemetryMigrationSessionId } from '../common/agentTelemetryCorrelation.js';
+ import { localize } from '../../../nls.js';
+ import { INativeEnvironmentService } from '../../environment/common/environment.js';
+@@ -1332,6 +1333,7 @@ export class AgentService extends Disposable implements IAgentService {
+ 			reportMalformedOrigin: (session, error) => this._logService.warn(`[AgentService] Ignoring invalid origin for ${session}`, error),
+ 			isUnpersistedChatBacking: session => this._unpersistedChatBackings.has(session.toString()),
+ 			worktreeProjectFromRepositoryRoot,
++			persistedTitle: session => this._providerService.getProviderForSession(session)?.sessionTitlePolicy?.persisted(session),
+ 			reportMalformedArtifacts: (session, error, dropped) => {
+ 				if (error) {
+ 					this._logService.warn(`[AgentService] Failed to parse artifacts for ${session}: ${toErrorMessage(error)}`);
+@@ -2091,6 +2093,11 @@ export class AgentService extends Disposable implements IAgentService {
+ 					.then(() => this._migrateAndRegisterDiscoveredChats(provider, chats))
+ 					.then(() => { }, err => this._logService.warn(`[AgentService] registering discovered chats for provider ${provider.id} failed`, err));
+ 				this._providerDiscoveryRegistrations.set(provider.id, registration);
++				if (isMirroredSessionProvider(provider.id)) {
++					// FlowLeap (PRD 0018 C3): a mirrored chat offered again after a withdrawal is
++					// registered already, so registration announces nothing; announce it here.
++					void registration.then(() => this._announceMirroredSessions(provider, chats));
++				}
+ 				void registration.finally(() => {
+ 					if (this._providerDiscoveryRegistrations.get(provider.id) === registration) {
+ 						this._providerDiscoveryRegistrations.delete(provider.id);
+@@ -2107,6 +2114,9 @@ export class AgentService extends Disposable implements IAgentService {
+ 				}));
+ 			}
+ 			subscriptions.add(provider.onDidSpawnChat(e => this._onChatSpawned(e)));
++			if (provider.onDidRetractSessions) {
++				subscriptions.add(provider.onDidRetractSessions(sessions => this._retractMirroredSessions(sessions)));
++			}
+ 			this._providerSubscriptions.set(provider.id, subscriptions);
+ 			return toDisposable(() => {
+ 				this._providerSubscriptions.deleteAndDispose(provider.id);
+@@ -2121,6 +2131,44 @@ export class AgentService extends Disposable implements IAgentService {
+ 		}
+ 	}
+ 
++	/**
++	 * FlowLeap (PRD 0018 C3): whether the listing hides a registered session because it mirrors a
++	 * chat that no window offers now (the provider is not registered, or does not offer it).
++	 */
++	private _isWithdrawnMirroredSession(session: URI, provider: AgentProvider): boolean {
++		return isMirroredSessionProvider(provider) && this._providerService.getProvider(provider)?.offersSession?.(session) !== true;
++	}
++
++	/** FlowLeap (PRD 0018 C3): drops withdrawn mirrored sessions from live state and from clients' lists. */
++	private _retractMirroredSessions(sessions: readonly URI[]): void {
++		for (const session of sessions) {
++			const key = session.toString();
++			this._stateManager.deleteSession(key);
++			this._stateManager.retractSurfacedSession(key);
++			this._announcedSurfacedKeys.delete(key);
++		}
++		if (sessions.length > 0) {
++			this._invalidateSessionList();
++			this._logService.info(`[AgentService] retracted ${sessions.length} mirrored session(s)`);
++		}
++	}
++
++	/** FlowLeap (PRD 0018 C3): tells clients about mirrored sessions that are offered again. */
++	private async _announceMirroredSessions(provider: IAgent, chats: readonly IAgentDiscoveredChat[]): Promise<void> {
++		this._invalidateSessionList();
++		for (const { external: _external, session, ...metadata } of chats) {
++			const sessionMetadata = this._toSessionMetadata(metadata, session, provider.id);
++			if (this._providerService.getProvider(provider.id) !== provider || !provider.offersSession?.(sessionMetadata.session)) {
++				continue;
++			}
++			try {
++				await this._announceSurfacedSession(sessionMetadata, provider.id);
++			} catch (error) {
++				this._logService.warn(`[AgentService] announcing a mirrored session failed`, error);
++			}
++		}
++	}
++
+ 	private _setupChatDiscoveryForProvider(provider: IAgent): void {
+ 		if (this._migrateLegacyEnabledSnapshot === true && provider.ensureChatAdopted) {
+ 			this._startChatDiscovery(provider, 'legacy chat migration is enabled');
+@@ -5598,9 +5646,9 @@ export class AgentService extends Disposable implements IAgentService {
+ 		const hiddenExternal = this._hidesAllExternalSessions(mode)
+ 			? new Set(allRegistered.filter(entry => entry.external).map(entry => entry.session.toString()))
+ 			: new Set<string>();
+-		const registered = hiddenExternal.size > 0
+-			? allRegistered.filter(entry => !hiddenExternal.has(entry.session.toString()))
+-			: allRegistered;
++		const registered = allRegistered.filter(entry => !hiddenExternal.has(entry.session.toString())
++			// FlowLeap (PRD 0018 C3): a mirrored chat lists only while a window offers it.
++			&& !this._isWithdrawnMirroredSession(entry.session, entry.provider));
+ 		const providersWithRegistrations = new Set(allRegistered.map(entry => entry.provider));
+ 		this._retryInitialProviderMigrationsInBackground(provider => !providersWithRegistrations.has(provider));
+ 		const catalogCandidates = (await Promise.all(registered.map(async registeredSession => {
+@@ -5754,9 +5802,12 @@ export class AgentService extends Disposable implements IAgentService {
+ 				? this._withLiveSessionMetadata(s, liveSummary, false, !this._stateManager.getSurfacedSessionSummary(s.session.toString()))
+ 				: s;
+ 			const persistedTitle = persistedFallbackTitles.get(s.session.toString());
+-			return persistedTitle && !this._stateManager.getSessionState(s.session.toString())
++			const listed = persistedTitle && !this._stateManager.getSessionState(s.session.toString())
+ 				? { ...metadata, summary: persistedTitle }
+ 				: metadata;
++			// FlowLeap (PRD 0018 D1): a provider that keeps its titles off disk lists the live one.
++			const liveTitle = this._providerService.getProviderForSession(s.session)?.sessionTitlePolicy?.live(s.session);
++			return liveTitle ? { ...listed, summary: liveTitle } : listed;
+ 		});
+ 
+ 		// Overlay any session known to state but missing from the providers'
+diff --git a/src/vs/platform/agentHost/node/flowleapChatMirrorAgent.ts b/src/vs/platform/agentHost/node/flowleapChatMirrorAgent.ts
+index ac648c24ec2..2cd9eb120aa 100644
+--- a/src/vs/platform/agentHost/node/flowleapChatMirrorAgent.ts
++++ b/src/vs/platform/agentHost/node/flowleapChatMirrorAgent.ts
+@@ -24,7 +24,7 @@ import { observableValue } from '../../../base/common/observable.js';
+ import { URI } from '../../../base/common/uri.js';
+ import { localize } from '../../../nls.js';
+ import { ILogService } from '../../log/common/log.js';
+-import { AgentSession, resolveAgentChatContext, type AgentChatMigrationResult, type AgentSignal, type IActiveClient, type IAgent, type IAgentChatContext, type IAgentChatHistoryChange, type IAgentChatMetadata, type IAgentChats, type IAgentCreateChatResult, type IAgentDescriptor, type IAgentDiscoveredChat, type IAgentModelInfo, type IAgentPermissionResponseContext, type IAgentSessionProjectInfo, type IAgentSessionTitlePolicy } from '../common/agent.js';
++import { AgentPermissionKind, AgentSession, resolveAgentChatContext, type AgentChatMigrationResult, type AgentSignal, type IActiveClient, type IAgent, type IAgentChatContext, type IAgentChatHistoryChange, type IAgentChatMetadata, type IAgentChats, type IAgentCreateChatResult, type IAgentDescriptor, type IAgentDiscoveredChat, type IAgentModelInfo, type IAgentPermissionResponseContext, type IAgentSessionProjectInfo, type IAgentSessionTitlePolicy } from '../common/agent.js';
+ import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID, type AgentHostChatMirrorRegistry, type IAgentHostChatMirrorWindow, type IChatMirrorPublisher, type IMirroredActiveTurn, type IMirroredChatSummary, type IMirroredChatUpdate } from '../common/agentHostChatMirror.js';
+ import type { ResolveSessionConfigResult, SessionConfigCompletionsResult } from '../common/state/protocol/commands.js';
+ import type { ProtectedResourceMetadata } from '../common/state/protocol/state.js';
+@@ -154,9 +154,8 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
+ 
+ 	/** The chat id of a session or chat channel URI of this agent. */
+ 	private _chatId(uri: URI): string | undefined {
+-		const parsed = parseChatUri(uri);
+-		const session = parsed ? URI.parse(parsed.session) : uri;
+-		if (AgentSession.provider(session) !== this.id) {
++		const session = parseChatUri(uri) ? this._sessionOfChatUri(uri) : uri;
++		if (!session || AgentSession.provider(session) !== this.id) {
+ 			return undefined;
+ 		}
+ 		try {
+@@ -166,6 +165,23 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
+ 		}
+ 	}
+ 
++	/**
++	 * The session a chat channel URI of this agent was minted for. The agent mints its chat URIs
++	 * with `buildDefaultChatUri`, which writes the session into the path; the host's `parseChatUri`
++	 * no longer exposes it (1.146 opaque chat URIs), so read the agent's own shape back here.
++	 */
++	private _sessionOfChatUri(chat: URI): URI | undefined {
++		const encoded = chat.path.replace(/^\//, '').split('/')[0];
++		if (!encoded) {
++			return undefined;
++		}
++		try {
++			return URI.parse(decodeBase64(encoded).toString());
++		} catch {
++			return undefined;
++		}
++	}
++
+ 	private _window(chatId: string): IAgentHostChatMirrorWindow | undefined {
+ 		const chat = this._chats.get(chatId);
+ 		return chat ? this._registry.getPublisher(chat.clientId)?.window : undefined;
+@@ -215,7 +231,7 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
+ 			this._chats.set(summary.id, { clientId: publisher.clientId, summary });
+ 			if (!previous || previous.clientId !== publisher.clientId || previous.summary.title !== summary.title || previous.summary.modifiedAt !== summary.modifiedAt) {
+ 				// Not external: the host's external-session filter (hidden by default) must not hide them.
+-				discovered.push({ ...this._metadata(summary), external: false });
++				discovered.push({ ...this._metadata(summary), session: this._sessionUri(summary.id), external: false });
+ 			}
+ 		}
+ 		this._logService.info(`${LOG_PREFIX} client ${publisher.clientId} publishes ${publisher.chats.length} editor chat(s), ${discovered.length} new or changed`);
+@@ -441,7 +457,7 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
+ 			kind: 'pending_confirmation',
+ 			chat: this._chatUri(chatId),
+ 			state: toolCall,
+-			permissionKind: 'custom-tool',
++			permissionKind: AgentPermissionKind.CustomTool,
+ 			managedApprovalRequired: true,
+ 		});
+ 		this._logService.info(`${LOG_PREFIX} tool confirmation ${toolCall.toolCallId} published`);
+@@ -616,7 +632,7 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
+ 	}
+ 
+ 	async getChatMetadata(chat: URI, context: URI | IAgentChatContext): Promise<IAgentChatMetadata | undefined> {
+-		const chatId = this._chatId(resolveAgentChatContext(context, chat).configurationResource) ?? this._chatId(chat);
++		const chatId = this._chatId(resolveAgentChatContext(context, chat).owner.get()) ?? this._chatId(chat);
+ 		const published = chatId ? this._chats.get(chatId) : undefined;
+ 		return published ? { ...this._metadata(published.summary), chat } : undefined;
+ 	}
+diff --git a/src/vs/platform/agentHost/test/common/agentService.test.ts b/src/vs/platform/agentHost/test/common/agentService.test.ts
+index 9cf02dc8229..8799c88a4f3 100644
+--- a/src/vs/platform/agentHost/test/common/agentService.test.ts
++++ b/src/vs/platform/agentHost/test/common/agentService.test.ts
+@@ -8,6 +8,7 @@ import { URI } from '../../../../base/common/uri.js';
+ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+ import { ConfigurationTarget, IConfigurationChangeEvent, IConfigurationService } from '../../../configuration/common/configuration.js';
+ import { COPILOT_TEMPORARY_ALLOW_LOCAL_HARNESS_KEY, thirdPartyAgentEnabledValue } from '../../../policy/common/copilotManagedSettings.js';
++import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID } from '../../common/agentHostChatMirror.js';
+ import { AgentSession, GITHUB_COPILOT_PROTECTED_RESOURCE, GITHUB_REPO_PROTECTED_RESOURCE, protectedResourcesRequireGitHubCopilotSignIn } from '../../common/agent.js';
+ import { affectsAgentHostProviderPreference, AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostOTelEnvVars, AgentHostOTelPolicyState, buildAgentHostOTelEnv, CodexPreferAgentHostEditorSettingId, isAgentEnabled, isCopilotAgentEnabled, readAgentHostOTelPolicySettings, sanitizeAgentHostOTelPolicySettings, shouldSurfaceLocalAgentHostProvider } from '../../common/agentService.js';
+ import type { ProtectedResourceMetadata } from '../../common/state/protocol/state.js';
+@@ -113,6 +114,18 @@ suite('shouldSurfaceLocalAgentHostProvider', () => {
+ 
+ 	ensureNoDisposablesAreLeakedInTestSuite();
+ 
++	test('never surfaces the flowleap-chat agent in a local window (PRD 0018 C3)', () => {
++		const configurationService = new TestConfigurationService();
++
++		assert.deepStrictEqual({
++			agentsWindow: shouldSurfaceLocalAgentHostProvider(FLOWLEAP_CHAT_AGENT_PROVIDER_ID, configurationService, true),
++			editorWindow: shouldSurfaceLocalAgentHostProvider(FLOWLEAP_CHAT_AGENT_PROVIDER_ID, configurationService, false),
++		}, {
++			agentsWindow: false,
++			editorWindow: false,
++		});
++	});
++
+ 	test('surfaces enabled providers and uses window-specific Codex settings', () => {
+ 		const configurationService = new TestConfigurationService({
+ 			[AgentHostClaudeAgentEnabledSettingId]: true,
+diff --git a/src/vs/platform/agentHost/test/electron-browser/localAgentHostService.test.ts b/src/vs/platform/agentHost/test/electron-browser/localAgentHostService.test.ts
+index 3ff8427f141..6f8738d7ef7 100644
+--- a/src/vs/platform/agentHost/test/electron-browser/localAgentHostService.test.ts
++++ b/src/vs/platform/agentHost/test/electron-browser/localAgentHostService.test.ts
+@@ -26,6 +26,7 @@ import { AgentHostClientState, AgentHostProtocolClient } from '../../browser/age
+ import { IMcpNotification, isFatalAgentHostStartError, toFatalAgentHostStartError } from '../../common/agent.js';
+ import { AGENT_HOST_CLIENT_PROXY_CHANNEL } from '../../common/agentHostClientProxyChannel.js';
+ import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AgentHostClientByokLmChannel } from '../../common/agentHostClientByokLmChannel.js';
++import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostClientChatMirrorChannel } from '../../common/agentHostChatMirror.js';
+ import { AgentHostClientType, editorWindowAgentHostClientInfo } from '../../common/agentHostClientInfo.js';
+ import { AgentHostStartupTelemetry } from '../../common/agentHostStartupTelemetry.js';
+ import { AgentHostClientConnectionKind } from '../../common/agentHostTelemetry.js';
+@@ -398,20 +399,29 @@ suite('registerAgentHostClientChannels', () => {
+ 	 * BYOK channel when `byokHandlerMissing`, mirroring the strict "UNKNOWN
+ 	 * service agentHostByokLmHandler" failure in windows without the handler.
+ 	 */
+-	function fakeInstantiationService(byokHandlerMissing: boolean): IInstantiationService {
++	function fakeInstantiationService(byokHandlerMissing: boolean, chatMirrorSourceMissing = false): IInstantiationService {
+ 		return {
+ 			createInstance: (ctor: unknown) => {
+ 				if (ctor === AgentHostClientByokLmChannel && byokHandlerMissing) {
+ 					throw new Error('[createInstance] AgentHostClientByokLmChannel depends on UNKNOWN service agentHostByokLmHandler.');
+ 				}
++				if (ctor === AgentHostClientChatMirrorChannel && chatMirrorSourceMissing) {
++					throw new Error('[createInstance] AgentHostClientChatMirrorChannel depends on UNKNOWN service agentHostChatMirrorSource.');
++				}
+ 				return {};
+ 			},
+ 		} as unknown as IInstantiationService;
+ 	}
+ 
+-	test('registers both channels when the BYOK handler is available', () => {
++	test('registers every channel when the BYOK handler and the chat mirror source are available', () => {
+ 		const { server, registered } = fakeChannelServer();
+ 		registerAgentHostClientChannels(server, fakeInstantiationService(false), new NullLogService());
++		assert.deepStrictEqual(registered, [AGENT_HOST_CLIENT_PROXY_CHANNEL, AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL]);
++	});
++
++	test('leaves the chat mirror channel out when the window has no mirror source', () => {
++		const { server, registered } = fakeChannelServer();
++		registerAgentHostClientChannels(server, fakeInstantiationService(false, true), new NullLogService());
+ 		assert.deepStrictEqual(registered, [AGENT_HOST_CLIENT_PROXY_CHANNEL, AGENT_HOST_CLIENT_BYOK_LM_CHANNEL]);
+ 	});
+ 
+@@ -528,7 +538,7 @@ suite('registerAgentHostClientChannels', () => {
+ 	test('registers a null BYOK channel when the handler is missing', () => {
+ 		const { server, registered } = fakeChannelServer();
+ 		registerAgentHostClientChannels(server, fakeInstantiationService(true), new NullLogService());
+-		assert.deepStrictEqual(registered, [AGENT_HOST_CLIENT_PROXY_CHANNEL, AGENT_HOST_CLIENT_BYOK_LM_CHANNEL]);
++		assert.deepStrictEqual(registered, [AGENT_HOST_CLIENT_PROXY_CHANNEL, AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL]);
+ 	});
+ });
+ 
+diff --git a/src/vs/platform/agentHost/test/node/testAgentHostProviderService.ts b/src/vs/platform/agentHost/test/node/testAgentHostProviderService.ts
+index c9bfc7fd7c7..4668ae37461 100644
+--- a/src/vs/platform/agentHost/test/node/testAgentHostProviderService.ts
++++ b/src/vs/platform/agentHost/test/node/testAgentHostProviderService.ts
+@@ -19,6 +19,7 @@ export function createTestAgentHostProviderService(getProviderForSession: (sessi
+ 		onMcpNotification: Event.None,
+ 		registerProviderInitializer: () => Disposable.None,
+ 		registerProvider: () => { throw new Error('Not implemented'); },
++		unregisterProvider: () => { },
+ 		resolveProvider: () => undefined,
+ 		getProvider: () => undefined,
+ 		getProviderForSession,
+diff --git a/src/vs/workbench/contrib/chat/browser/agentSessions/agentHost/importLocalConversationToAgentSession.ts b/src/vs/workbench/contrib/chat/browser/agentSessions/agentHost/importLocalConversationToAgentSession.ts
+index 42cc2eebed9..d52da86873e 100644
+--- a/src/vs/workbench/contrib/chat/browser/agentSessions/agentHost/importLocalConversationToAgentSession.ts
++++ b/src/vs/workbench/contrib/chat/browser/agentSessions/agentHost/importLocalConversationToAgentSession.ts
+@@ -20,9 +20,11 @@ import { IRange } from '../../../../../../editor/common/core/range.js';
+ import { isLocation, type Location } from '../../../../../../editor/common/languages.js';
+ import { localize } from '../../../../../../nls.js';
+ import { identityAgentHostResourceUriMapper, type IAgentHostResourceUriMapper } from '../../../../../../platform/agentHost/common/agentHostUri.js';
++import type { IMirroredActiveTurn, IMirroredChat } from '../../../../../../platform/agentHost/common/agentHostChatMirror.js';
++import { toToolCallMeta } from '../../../../../../platform/agentHost/common/meta/agentToolCallMeta.js';
+ import type { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
+-import { MessageAttachmentKind, MessageKind, readUsageInfoMeta, ResponsePartKind, ToolCallCancellationReason, ToolCallConfirmationReason, ToolCallStatus, ToolResultContentType, TurnState, type AgentSelection, type ErrorInfo, type ITurnTokenTotal, type MessageAttachment, type ModelSelection, type ResponsePart, type StringOrMarkdown, type ToolCallCancelledState, type ToolCallCompletedState, type ToolResultContent, type Turn, type UsageInfo } from '../../../../../../platform/agentHost/common/state/sessionState.js';
+-import { ElicitationState, IChatToolInvocation, isLegacyChatTerminalToolInvocationData, ToolConfirmKind, type IChatCodeCitation, type IChatConfirmation, type IChatContentInlineReference, type IChatContentReference, type IChatElicitationRequest, type IChatElicitationRequestSerialized, type IChatInfoMessage, type IChatMultiDiffData, type IChatMultiDiffDataSerialized, type IChatMultiDiffInnerData, type IChatQuestion, type IChatQuestionAnswerValue, type IChatQuestionCarousel, type IChatToolInvocationSerialized, type IChatWarningMessage, type IToolResultOutputDetailsSerialized, type ToolDeniedReason } from '../../../common/chatService/chatService.js';
++import { MessageAttachmentKind, MessageKind, readUsageInfoMeta, ResponsePartKind, ToolCallCancellationReason, ToolCallConfirmationReason, ToolCallStatus, ToolResultContentType, TurnState, type AgentSelection, type ErrorInfo, type ITurnTokenTotal, type MessageAttachment, type ModelSelection, type ResponsePart, type StringOrMarkdown, type ToolCallCancelledState, type ToolCallCompletedState, type ToolCallState, type ToolResultContent, type Turn, type UsageInfo } from '../../../../../../platform/agentHost/common/state/sessionState.js';
++import { ElicitationState, IChatToolInvocation, isLegacyChatTerminalToolInvocationData, ToolConfirmKind, type ConfirmedReason, type IChatCodeCitation, type IChatConfirmation, type IChatContentInlineReference, type IChatContentReference, type IChatElicitationRequest, type IChatElicitationRequestSerialized, type IChatInfoMessage, type IChatMultiDiffData, type IChatMultiDiffDataSerialized, type IChatMultiDiffInnerData, type IChatQuestion, type IChatQuestionAnswerValue, type IChatQuestionCarousel, type IChatTerminalToolInvocationData, type IChatToolInvocationSerialized, type IChatWarningMessage, type ILegacyChatTerminalToolInvocationData, type IToolResultOutputDetailsSerialized, type ToolDeniedReason } from '../../../common/chatService/chatService.js';
+ import { isImageVariableEntry, type IChatRequestVariableEntry } from '../../../common/attachments/chatVariableEntries.js';
+ import { coerceImageBuffer } from '../../../common/chatImageExtraction.js';
+ import { LanguageModelPartAudience, type ILanguageModelsService } from '../../../common/languageModels.js';
+@@ -330,6 +332,15 @@ function toolCallConfirmation(part: IChatToolInvocation | IChatToolInvocationSer
+  * Phase presentations retain their textual output without a child-chat identity.
+  */
+ function toolCallResponsePart(part: IChatToolInvocation | IChatToolInvocationSerialized, resourceUris: IAgentHostResourceUriMapper, stats: IImportedConversationStats | undefined): ResponsePart {
++	return { kind: ResponsePartKind.ToolCall, toolCall: toolCallState(part, resourceUris, stats) };
++}
++
++/**
++ * The completed or cancelled agent-host state of a tool invocation (see
++ * {@link toolCallResponsePart}). The mirror (PRD 0018 C1) passes its own stable
++ * `toolCallId`; the import mints one when the invocation has none.
++ */
++function toolCallState(part: IChatToolInvocation | IChatToolInvocationSerialized, resourceUris: IAgentHostResourceUriMapper, stats: IImportedConversationStats | undefined, toolCallId: string = part.toolCallId || generateUuid()): ToolCallCompletedState | ToolCallCancelledState {
+ 	const invocationMessage = toolMessage(part.invocationMessage, resourceUris);
+ 	const resultDetails = IChatToolInvocation.resultDetails(part);
+ 	const subagentData = part.toolSpecificData?.kind === 'subagent' ? part.toolSpecificData : undefined;
+@@ -377,24 +388,20 @@ function toolCallResponsePart(part: IChatToolInvocation | IChatToolInvocationSer
+ 	// A data result (e.g. an image) records no input, so it gets an empty input
+ 	// object; otherwise its output would not be shown.
+ 	const toolInput = recordedInput || (outputContent.length ? '{}' : '');
+-	const toolCallId = part.toolCallId || generateUuid();
+ 	const displayName = subagentData?.agentName || part.toolId;
+ 	const shownInvocationMessage = invocationMessage ?? stringifyChatMessage(subagentData?.description);
+ 	const confirmation = toolCallConfirmation(part);
+ 	if (confirmation.cancelled) {
+ 		return {
+-			kind: ResponsePartKind.ToolCall,
+-			toolCall: {
+-				status: ToolCallStatus.Cancelled,
+-				toolCallId,
+-				toolName: part.toolId,
+-				displayName,
+-				invocationMessage: shownInvocationMessage,
+-				toolInput,
+-				reason: confirmation.cancelled,
+-				...(confirmation.reasonMessage ? { reasonMessage: confirmation.reasonMessage } : {}),
+-			} satisfies ToolCallCancelledState,
+-		};
++			status: ToolCallStatus.Cancelled,
++			toolCallId,
++			toolName: part.toolId,
++			displayName,
++			invocationMessage: shownInvocationMessage,
++			toolInput,
++			reason: confirmation.cancelled,
++			...(confirmation.reasonMessage ? { reasonMessage: confirmation.reasonMessage } : {}),
++		} satisfies ToolCallCancelledState;
+ 	}
+ 
+ 	const content: ToolResultContent[] = [];
+@@ -417,26 +424,23 @@ function toolCallResponsePart(part: IChatToolInvocation | IChatToolInvocationSer
+ 	}
+ 
+ 	return {
+-		kind: ResponsePartKind.ToolCall,
+-		toolCall: {
+-			status: ToolCallStatus.Completed,
+-			toolCallId,
+-			toolName: part.toolId,
+-			displayName,
+-			invocationMessage: shownInvocationMessage,
+-			toolInput,
+-			success: !isError,
+-			pastTenseMessage: toolMessage(part.pastTenseMessage, resourceUris) ?? shownInvocationMessage,
+-			confirmed: confirmation.confirmed,
+-			...(content.length ? { content } : {}),
+-			...(isError ? {
+-				error: {
+-					message: outputText || localize('chat.importConversation.toolFailed', "Tool failed."),
+-					...(phaseStatus === 'cancelled' ? { code: 'cancelled' } : {}),
+-				}
+-			} : {}),
+-		} satisfies ToolCallCompletedState,
+-	};
++		status: ToolCallStatus.Completed,
++		toolCallId,
++		toolName: part.toolId,
++		displayName,
++		invocationMessage: shownInvocationMessage,
++		toolInput,
++		success: !isError,
++		pastTenseMessage: toolMessage(part.pastTenseMessage, resourceUris) ?? shownInvocationMessage,
++		confirmed: confirmation.confirmed,
++		...(content.length ? { content } : {}),
++		...(isError ? {
++			error: {
++				message: outputText || localize('chat.importConversation.toolFailed', "Tool failed."),
++				...(phaseStatus === 'cancelled' ? { code: 'cancelled' } : {}),
++			}
++		} : {}),
++	} satisfies ToolCallCompletedState;
+ }
+ 
+ /**
+@@ -1093,3 +1097,269 @@ export function importedTurnsFromChatModel(model: IChatModel, options?: IImporte
+ 	}
+ 	return turns;
+ }
++
++// ---- Editor chat mirror (FlowLeap PRD 0018 C1) -------------------------------------------------
++//
++// The live editor chat mirror reads the same chat models as the import above, but needs part ids
++// stable across updates (`<requestId>:<index>`), live tool-call states (pending confirmation,
++// running), every response part kind at least as readable text, turns hidden in the editor left
++// out, and system-initiated requests as agent turns of their own (the mirror cannot change a turn
++// it already published). The import output above does not change.
++
++/** A markdown link to a file, labelled with its basename. */
++function fileLink(uri: URI): string {
++	return `[${basename(uri)}](${uri.toString()})`;
++}
++
++function confirmationReason(reason: ConfirmedReason): ToolCallConfirmationReason {
++	switch (reason.type) {
++		case ToolConfirmKind.UserAction: return ToolCallConfirmationReason.UserAction;
++		case ToolConfirmKind.Setting:
++		case ToolConfirmKind.LmServicePerTool: return ToolCallConfirmationReason.Setting;
++		default: return ToolCallConfirmationReason.NotNeeded;
++	}
++}
++
++/** The command an editor terminal tool runs, as the chat view shows it; `undefined` for other tools. */
++function terminalCommand(part: IChatToolInvocation | IChatToolInvocationSerialized): string | undefined {
++	const data = terminalData(part);
++	if (!data) {
++		return undefined;
++	}
++	if (isLegacyChatTerminalToolInvocationData(data)) {
++		return data.command;
++	}
++	const { forDisplay, toolEdited, userEdited, original } = data.commandLine;
++	return forDisplay ?? toolEdited ?? userEdited ?? original;
++}
++
++function terminalData(part: IChatToolInvocation | IChatToolInvocationSerialized): IChatTerminalToolInvocationData | ILegacyChatTerminalToolInvocationData | undefined {
++	return part.toolSpecificData?.kind === 'terminal' ? part.toolSpecificData : undefined;
++}
++
++/**
++ * Marks an editor terminal tool as a terminal tool call (mirror only, PRD 0018 C3), as the agent
++ * host's own agents do: `_meta.toolKind` and the command as the input. Without it a Viewer renders
++ * the tool as a generic confirmation, which it hides once the tool completes. The command output
++ * becomes the result text when the tool has none.
++ */
++function withTerminalKind(state: ToolCallState, part: IChatToolInvocation | IChatToolInvocationSerialized): ToolCallState {
++	const command = terminalCommand(part);
++	if (command === undefined || state.status === ToolCallStatus.Streaming) {
++		return state;
++	}
++	const marked = { ...state, toolInput: JSON.stringify({ command }), _meta: { ...state._meta, ...toToolCallMeta({ toolKind: 'terminal' }) } };
++	if (marked.status !== ToolCallStatus.Completed) {
++		return marked;
++	}
++	const data = terminalData(part);
++	const output = data && !isLegacyChatTerminalToolInvocationData(data) ? data.terminalCommandOutput?.text : undefined;
++	if (!output || marked.content?.some(content => content.type === ToolResultContentType.Text)) {
++		return marked;
++	}
++	return { ...marked, content: [...(marked.content ?? []), { type: ToolResultContentType.Text, text: output }] };
++}
++
++/**
++ * Maps a tool invocation to its live agent-host state (mirror only). A tool that still streams
++ * its input has no state yet. A result that waits for approval stays `running`: the Viewer cannot
++ * approve a result (Remote Access v1), the editor user does.
++ */
++function liveToolCall(part: IChatToolInvocation | IChatToolInvocationSerialized, toolCallId: string): ToolCallState | undefined {
++	const state = liveToolCallState(part, toolCallId);
++	return state && withTerminalKind(state, part);
++}
++
++function liveToolCallState(part: IChatToolInvocation | IChatToolInvocationSerialized, toolCallId: string): ToolCallState | undefined {
++	if (part.kind === 'toolInvocationSerialized') {
++		return toolCallState(part, identityAgentHostResourceUriMapper, undefined, toolCallId);
++	}
++	const base = {
++		toolCallId,
++		toolName: part.toolId,
++		displayName: part.toolSpecificData?.kind === 'subagent' && part.toolSpecificData.agentName || part.toolId,
++		invocationMessage: stringifyChatMessage(part.invocationMessage),
++		toolInput: part.toolSpecificData?.kind === 'input' ? stringifyToolInput(part.toolSpecificData.rawInput) : '',
++	};
++	const state = part.state.get();
++	switch (state.type) {
++		case IChatToolInvocation.StateKind.Streaming:
++			return undefined;
++		case IChatToolInvocation.StateKind.WaitingForConfirmation:
++			return {
++				...base,
++				status: ToolCallStatus.PendingConfirmation,
++				confirmationTitle: stringifyChatMessage(state.confirmationMessages?.title) || base.invocationMessage,
++			};
++		case IChatToolInvocation.StateKind.Executing:
++		case IChatToolInvocation.StateKind.WaitingForAuthentication:
++		case IChatToolInvocation.StateKind.WaitingForPostApproval:
++			return { ...base, status: ToolCallStatus.Running, confirmed: confirmationReason(state.confirmed) };
++		case IChatToolInvocation.StateKind.Cancelled:
++			return {
++				...base,
++				status: ToolCallStatus.Cancelled,
++				reason: state.reason === ToolConfirmKind.Skipped ? ToolCallCancellationReason.Skipped : ToolCallCancellationReason.Denied,
++				...(state.reasonMessage ? { reasonMessage: stringifyChatMessage(state.reasonMessage) } : {}),
++			};
++		case IChatToolInvocation.StateKind.Completed:
++			return toolCallState(part, identityAgentHostResourceUriMapper, undefined, toolCallId);
++	}
++}
++
++/**
++ * The readable text of a part kind that has no protocol counterpart, for the mirror. Kinds that
++ * only drive the editor UI (undo stops, code block URIs, buttons, progress lines) give nothing.
++ */
++function mirrorPlaceholder(part: IChatProgressResponseContent): string | undefined {
++	switch (part.kind) {
++		case 'markdownVuln':
++		case 'info':
++			return part.content.value;
++		case 'warning':
++			return localize('chatMirror.warning', "Warning: {0}", part.content.value);
++		case 'progressTask':
++		case 'progressTaskSerialized':
++			return part.content.value;
++		case 'textEditGroup':
++		case 'notebookEditGroup':
++			return localize('chatMirror.editedFile', "Edited {0}", fileLink(part.uri));
++		case 'workspaceEdit':
++			return localize('chatMirror.editedFiles', "Edited {0} files", part.edits.length);
++		case 'multiDiffData':
++			return localize('chatMirror.changedFiles', "Changed {0} files", multiDiffFiles(part).length);
++		case 'confirmation':
++			return part.isUsed
++				? localize('chatMirror.confirmationAnswered', "{0} (answered on the Host)", part.title)
++				: localize('chatMirror.confirmationOpen', "{0}: answer this in FlowLeap on the Host.", part.title);
++		case 'elicitation2':
++		case 'elicitationSerialized':
++			return localize('chatMirror.elicitation', "{0}: answer this in FlowLeap on the Host.", stringifyChatMessage(part.title));
++		case 'questionCarousel':
++			return part.isUsed
++				? localize('chatMirror.questionsAnswered', "The Patent Agent asked questions (answered on the Host).")
++				: localize('chatMirror.questionsOpen', "The Patent Agent asks questions: answer them in FlowLeap on the Host.");
++		case 'planReview':
++			return localize('chatMirror.planReview', "{0}: review the plan in FlowLeap on the Host.", part.title);
++		default:
++			return undefined;
++	}
++}
++
++/** The response's used references as one markdown line (mirror only, once the response is complete). */
++function referencesMarkdown(references: ReadonlyArray<IChatContentReference>): string | undefined {
++	const links: string[] = [];
++	for (const { reference } of references) {
++		const location = typeof reference === 'object' && !URI.isUri(reference) ? reference as { uri?: unknown } : undefined;
++		const uri = URI.isUri(reference) ? reference : URI.isUri(location?.uri) ? location.uri : undefined;
++		if (uri) {
++			links.push(fileLink(uri));
++		}
++	}
++	return links.length ? localize('chatMirror.references', "Used references: {0}", links.join(', ')) : undefined;
++}
++
++/**
++ * Collects a request's response stream into mirrored {@link ResponsePart}s, in stream order, with
++ * ids stable across updates: markdown, reasoning and inline references as the import maps them,
++ * tool invocations as live tool calls, and every other part kind the mirror can read as markdown
++ * text (see {@link mirrorPlaceholder}).
++ */
++function mirroredResponsePartsFromRequest(request: IChatRequestModel): ResponsePart[] {
++	const responseParts: ResponsePart[] = [];
++	const response = request.response;
++	if (!response) {
++		return responseParts;
++	}
++	const partId = (index: number | string) => `${request.id}:${index}`;
++	response.entireResponse.value.forEach((part, index) => {
++		if (part.kind === 'markdownContent') {
++			const content = part.content.value;
++			if (content) {
++				responseParts.push({ kind: ResponsePartKind.Markdown, id: partId(index), content });
++			}
++		} else if (part.kind === 'thinking') {
++			const content = Array.isArray(part.value) ? part.value.join('') : (part.value ?? '');
++			if (content) {
++				responseParts.push({ kind: ResponsePartKind.Reasoning, id: partId(index), content });
++			}
++		} else if (part.kind === 'inlineReference') {
++			const content = inlineReferenceToMarkdown(part.inlineReference, part.name, identityAgentHostResourceUriMapper);
++			if (content) {
++				responseParts.push({ kind: ResponsePartKind.Markdown, id: partId(index), content });
++			}
++		} else if (part.kind === 'toolInvocation' || part.kind === 'toolInvocationSerialized') {
++			const toolCall = liveToolCall(part, part.toolCallId || partId(index));
++			if (toolCall) {
++				responseParts.push({ kind: ResponsePartKind.ToolCall, toolCall });
++			}
++		} else {
++			const content = mirrorPlaceholder(part);
++			if (content) {
++				responseParts.push({ kind: ResponsePartKind.Markdown, id: partId(index), content });
++			}
++		}
++	});
++	if (response.isComplete) {
++		const content = referencesMarkdown(response.contentReferences);
++		if (content) {
++			responseParts.push({ kind: ResponsePartKind.Markdown, id: partId('references'), content });
++		}
++	}
++	return responseParts;
++}
++
++/** The user message of a request. A system-initiated request in the mirror is the agent's own. */
++function mirroredTurnMessage(request: IChatRequestModel): Turn['message'] {
++	return { text: request.message.text, origin: { kind: request.isSystemInitiated ? MessageKind.Agent : MessageKind.User } };
++}
++
++/** Whether the request still runs: its response has not completed. */
++export function isActiveChatRequest(request: IChatRequestModel): boolean {
++	return !!request.response && !request.response.isComplete;
++}
++
++/** The requests of a chat that the mirror shows, in order: turns hidden in the editor stay out. */
++export function mirroredRequests(model: IChatModel): IChatRequestModel[] {
++	return model.getRequests().filter(request => !request.isHiddenFromTranscript);
++}
++
++/** Maps one finished request to its mirrored turn; the turn id is the request id. */
++export function mirroredTurnFromRequest(request: IChatRequestModel): Turn {
++	const responseParts = mirroredResponsePartsFromRequest(request);
++	const outcome = turnOutcomeFromRequest(request);
++	if (outcome.error) {
++		responseParts.push({ kind: ResponsePartKind.Error, error: outcome.error });
++	}
++	return {
++		id: request.id,
++		message: mirroredTurnMessage(request),
++		responseParts,
++		usage: undefined,
++		state: outcome.state,
++	};
++}
++
++/** Maps the running request to the mirror's active turn. */
++export function mirroredActiveTurnFromRequest(request: IChatRequestModel): IMirroredActiveTurn {
++	return {
++		turnId: request.id,
++		startedAt: request.timestamp,
++		message: mirroredTurnMessage(request),
++		responseParts: mirroredResponsePartsFromRequest(request),
++	};
++}
++
++/** The full mirrored state of a chat: its finished turns and the request that runs now. */
++export function mirroredChatFromModel(id: string, model: IChatModel): IMirroredChat {
++	const turns: Turn[] = [];
++	let activeTurn: IMirroredActiveTurn | undefined;
++	for (const request of mirroredRequests(model)) {
++		if (isActiveChatRequest(request)) {
++			activeTurn = mirroredActiveTurnFromRequest(request);
++		} else {
++			turns.push(mirroredTurnFromRequest(request));
++		}
++	}
++	return { id, turns, ...(activeTurn ? { activeTurn } : {}) };
++}

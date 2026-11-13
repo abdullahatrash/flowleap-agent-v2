@@ -11,7 +11,7 @@ import { INativeHostService } from '../../../../platform/native/common/native.js
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IRemoteAccessService, RemoteAccessSettingId } from '../../../../workbench/contrib/chat/common/remoteAccess/remoteAccess.js';
-import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { ISessionsManagementService } from '../../../../workbench/contrib/sessions/common/sessionsManagement.js';
 import { RemoteAccessKeepAwakeController } from '../browser/remoteAccessKeepAwake.js';
 
 /**

@@ -1,0 +1,109 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagement.contribution.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagement.contribution.ts
+index 413bb88565f..9953269f50b 100644
+--- a/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagement.contribution.ts
++++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagement.contribution.ts
+@@ -909,7 +909,9 @@ class AICustomizationManagementActionsContribution extends Disposable implements
+ 				const preserveFocus = typeof target !== 'string' && target?.preserveFocus;
+ 				const pane = await editorService.openEditor(input, { pinned: true, preserveFocus });
+ 				if (pane instanceof AICustomizationManagementEditor) {
+-					const section = typeof target === 'string' ? target : target?.section ?? AICustomizationManagementSection.McpServers;
++					// FlowLeap: default to the Plugins section (Skill Packs), the destination of the
++					// Skills section's Browse action.
++					const section = typeof target === 'string' ? target : target?.section ?? AICustomizationManagementSection.Plugins;
+ 					if (typeof target !== 'string' && target?.mcpServer) {
+ 						await pane.showMcpMarketplaceDetail(target.mcpServer.name, target.mcpServer.registryUrl, preserveFocus);
+ 					} else if (typeof target !== 'string' && target?.connectorName) {
+diff --git a/src/vs/workbench/contrib/chat/common/plugins/marketplaceReference.ts b/src/vs/workbench/contrib/chat/common/plugins/marketplaceReference.ts
+index e72e18f220c..ad1fac2df63 100644
+--- a/src/vs/workbench/contrib/chat/common/plugins/marketplaceReference.ts
++++ b/src/vs/workbench/contrib/chat/common/plugins/marketplaceReference.ts
+@@ -15,7 +15,13 @@ import { ChatConfiguration } from '../constants.js';
+ 
+ export { extraKnownMarketplacesToConfigDict } from '../../../../../base/common/managedSettings.js';
+ 
+-export const DEFAULT_PLUGIN_MARKETPLACE = 'github/awesome-copilot#marketplace';
++/**
++ * The FlowLeap plugin marketplace shipped as the app's out-of-box default source for
++ * {@link ChatConfiguration.PluginMarketplaces}. It is first-party curated content, so it
++ * is implicitly trusted (see {@link isDefaultMarketplaceReference}); marketplaces the user
++ * adds keep the standard trust-confirmation flow.
++ */
++export const DEFAULT_PLUGIN_MARKETPLACE = 'flowleap-ai/flowleap-plugins';
+ 
+ export const enum MarketplaceReferenceKind {
+ 	GitHubShorthand = 'githubShorthand',
+@@ -470,3 +476,13 @@ export function validatePluginCacheUri(cacheRoot: URI, resource: URI): URI {
+ 	}
+ 	return directory;
+ }
++
++/**
++ * Whether a marketplace reference resolves to the app's product-default marketplace
++ * ({@link DEFAULT_PLUGIN_MARKETPLACE}). The default marketplace is first-party curated
++ * content and is implicitly trusted, so installing from it skips the "plugins can run code"
++ * confirmation. This checks against the shipped default and never writes storage.
++ */
++export function isDefaultMarketplaceReference(reference: IMarketplaceReference): boolean {
++	return reference.canonicalId === parseMarketplaceReference(DEFAULT_PLUGIN_MARKETPLACE)?.canonicalId;
++}
+diff --git a/src/vs/workbench/contrib/chat/common/plugins/pluginMarketplaceService.ts b/src/vs/workbench/contrib/chat/common/plugins/pluginMarketplaceService.ts
+index 299dd3382d0..721b074935d 100644
+--- a/src/vs/workbench/contrib/chat/common/plugins/pluginMarketplaceService.ts
++++ b/src/vs/workbench/contrib/chat/common/plugins/pluginMarketplaceService.ts
+@@ -39,11 +39,11 @@ import { FileBackedInstalledPluginsStore, IStoredInstalledPlugin } from './fileB
+ import { IWorkspacePluginSettingsService } from './workspacePluginSettingsService.js';
+ import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
+ import { readAgentPluginManifest } from '../../../../../platform/agentPlugins/common/agentPluginParser.js';
+-import { type IMarketplaceReference, deduplicateMarketplaceReferences, getGitUrlCacheSegments, gitRevisionCacheSuffix, MarketplaceReferenceKind, parseMarketplaceObjectEntry, parseMarketplaceReference, parseMarketplaceReferences, readConfiguredMarketplaces } from './marketplaceReference.js';
++import { type IMarketplaceReference, deduplicateMarketplaceReferences, getGitUrlCacheSegments, gitRevisionCacheSuffix, isDefaultMarketplaceReference, MarketplaceReferenceKind, parseMarketplaceObjectEntry, parseMarketplaceReference, parseMarketplaceReferences, readConfiguredMarketplaces } from './marketplaceReference.js';
+ import { getStrictKnownMarketplaces, isMarketplaceReferenceAllowed } from './strictKnownMarketplaces.js';
+ 
+ // Re-export marketplace reference types for downstream consumers.
+-export { deduplicateMarketplaceReferences, extraKnownMarketplacesToConfigDict, MarketplaceReferenceKind, parseMarketplaceReference, parseMarketplaceReferences, readConfiguredMarketplaces } from './marketplaceReference.js';
++export { deduplicateMarketplaceReferences, extraKnownMarketplacesToConfigDict, isDefaultMarketplaceReference, MarketplaceReferenceKind, parseMarketplaceReference, parseMarketplaceReferences, readConfiguredMarketplaces } from './marketplaceReference.js';
+ export type { IConfiguredMarketplaces, IMarketplaceReference } from './marketplaceReference.js';
+ 
+ export const enum MarketplaceType {
+@@ -910,6 +910,11 @@ export class PluginMarketplaceService extends Disposable implements IPluginMarke
+ 		if (allowlist !== undefined) {
+ 			return isMarketplaceReferenceAllowed(allowlist, ref);
+ 		}
++		// FlowLeap: the product-default marketplace is first-party curated content and is
++		// implicitly trusted; marketplaces the user adds keep the confirmation flow.
++		if (isDefaultMarketplaceReference(ref)) {
++			return true;
++		}
+ 		return this._trustedMarketplacesStore.get().includes(ref.canonicalId);
+ 	}
+ 
+diff --git a/src/vs/workbench/contrib/chat/test/common/plugins/pluginMarketplaceService.test.ts b/src/vs/workbench/contrib/chat/test/common/plugins/pluginMarketplaceService.test.ts
+index d3781d94b44..5c895d01033 100644
+--- a/src/vs/workbench/contrib/chat/test/common/plugins/pluginMarketplaceService.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/plugins/pluginMarketplaceService.test.ts
+@@ -34,7 +34,7 @@ import { ContributionEnablementState } from '../../../common/enablement.js';
+ import { AgentPluginEnablementService } from '../../../common/plugins/agentPluginEnablement.js';
+ import { IAgentPluginRepositoryService } from '../../../common/plugins/agentPluginRepositoryService.js';
+ import { IAgentPluginEnablementService } from '../../../common/plugins/agentPluginService.js';
+-import { getPluginCacheUri, parseMarketplaceObjectEntry, validatePluginCacheUri } from '../../../common/plugins/marketplaceReference.js';
++import { DEFAULT_PLUGIN_MARKETPLACE, getPluginCacheUri, parseMarketplaceObjectEntry, validatePluginCacheUri } from '../../../common/plugins/marketplaceReference.js';
+ import { IMarketplacePlugin, IMarketplaceReference, IPluginSourceDescriptor, MarketplaceReferenceKind, MarketplaceType, PluginMarketplaceService, PluginSourceKind, extraKnownMarketplacesToConfigDict, getGitHubRepositorySourceUri, getGitHubRepositoryUri, getMarketplacePluginRepositoryUri, getMarketplacePluginSourceUri, getPluginSourceLabel, parseMarketplaceReference, parseMarketplaceReferences, parsePluginSource, readConfiguredMarketplaces } from '../../../common/plugins/pluginMarketplaceService.js';
+ import { IWorkspacePluginSettingsService } from '../../../common/plugins/workspacePluginSettingsService.js';
+ import { StrictKnownMarketplaces } from '../../../common/plugins/strictKnownMarketplaces.js';
+@@ -877,6 +877,17 @@ suite('PluginMarketplaceService - getMarketplacePluginMetadata', () => {
+ 		assert.deepStrictEqual(result, plugin);
+ 	});
+ 
++	test('pre-trusts only the product-default marketplace', () => {
++		const service = createService();
++		assert.deepStrictEqual({
++			productDefault: service.isMarketplaceTrusted(parseMarketplaceReference(DEFAULT_PLUGIN_MARKETPLACE)!),
++			userAdded: service.isMarketplaceTrusted(marketplaceRef),
++		}, {
++			productDefault: true,
++			userAdded: false,
++		});
++	});
++
+ 	test('returns undefined for a URI that is not installed', () => {
+ 		const service = createService();
+ 		const result = service.getMarketplacePluginMetadata(URI.file('/some/other/path'));

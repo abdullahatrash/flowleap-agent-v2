@@ -24,7 +24,7 @@ import { observableValue } from '../../../base/common/observable.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
 import { ILogService } from '../../log/common/log.js';
-import { AgentSession, resolveAgentChatContext, type AgentChatMigrationResult, type AgentSignal, type IActiveClient, type IAgent, type IAgentChatContext, type IAgentChatHistoryChange, type IAgentChatMetadata, type IAgentChats, type IAgentCreateChatResult, type IAgentDescriptor, type IAgentDiscoveredChat, type IAgentModelInfo, type IAgentPermissionResponseContext, type IAgentSessionProjectInfo, type IAgentSessionTitlePolicy } from '../common/agent.js';
+import { AgentPermissionKind, AgentSession, resolveAgentChatContext, type AgentChatMigrationResult, type AgentSignal, type IActiveClient, type IAgent, type IAgentChatContext, type IAgentChatHistoryChange, type IAgentChatMetadata, type IAgentChats, type IAgentCreateChatResult, type IAgentDescriptor, type IAgentDiscoveredChat, type IAgentModelInfo, type IAgentPermissionResponseContext, type IAgentSessionProjectInfo, type IAgentSessionTitlePolicy } from '../common/agent.js';
 import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID, type AgentHostChatMirrorRegistry, type IAgentHostChatMirrorWindow, type IChatMirrorPublisher, type IMirroredActiveTurn, type IMirroredChatSummary, type IMirroredChatUpdate } from '../common/agentHostChatMirror.js';
 import type { ResolveSessionConfigResult, SessionConfigCompletionsResult } from '../common/state/protocol/commands.js';
 import type { ProtectedResourceMetadata } from '../common/state/protocol/state.js';
@@ -154,13 +154,29 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
 
 	/** The chat id of a session or chat channel URI of this agent. */
 	private _chatId(uri: URI): string | undefined {
-		const parsed = parseChatUri(uri);
-		const session = parsed ? URI.parse(parsed.session) : uri;
-		if (AgentSession.provider(session) !== this.id) {
+		const session = parseChatUri(uri) ? this._sessionOfChatUri(uri) : uri;
+		if (!session || AgentSession.provider(session) !== this.id) {
 			return undefined;
 		}
 		try {
 			return decodeBase64(AgentSession.id(session)).toString();
+		} catch {
+			return undefined;
+		}
+	}
+
+	/**
+	 * The session a chat channel URI of this agent was minted for. The agent mints its chat URIs
+	 * with `buildDefaultChatUri`, which writes the session into the path; the host's `parseChatUri`
+	 * no longer exposes it (1.146 opaque chat URIs), so read the agent's own shape back here.
+	 */
+	private _sessionOfChatUri(chat: URI): URI | undefined {
+		const encoded = chat.path.replace(/^\//, '').split('/')[0];
+		if (!encoded) {
+			return undefined;
+		}
+		try {
+			return URI.parse(decodeBase64(encoded).toString());
 		} catch {
 			return undefined;
 		}
@@ -215,7 +231,7 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
 			this._chats.set(summary.id, { clientId: publisher.clientId, summary });
 			if (!previous || previous.clientId !== publisher.clientId || previous.summary.title !== summary.title || previous.summary.modifiedAt !== summary.modifiedAt) {
 				// Not external: the host's external-session filter (hidden by default) must not hide them.
-				discovered.push({ ...this._metadata(summary), external: false });
+				discovered.push({ ...this._metadata(summary), session: this._sessionUri(summary.id), external: false });
 			}
 		}
 		this._logService.info(`${LOG_PREFIX} client ${publisher.clientId} publishes ${publisher.chats.length} editor chat(s), ${discovered.length} new or changed`);
@@ -441,7 +457,7 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
 			kind: 'pending_confirmation',
 			chat: this._chatUri(chatId),
 			state: toolCall,
-			permissionKind: 'custom-tool',
+			permissionKind: AgentPermissionKind.CustomTool,
 			managedApprovalRequired: true,
 		});
 		this._logService.info(`${LOG_PREFIX} tool confirmation ${toolCall.toolCallId} published`);
@@ -616,7 +632,7 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
 	}
 
 	async getChatMetadata(chat: URI, context: URI | IAgentChatContext): Promise<IAgentChatMetadata | undefined> {
-		const chatId = this._chatId(resolveAgentChatContext(context, chat).configurationResource) ?? this._chatId(chat);
+		const chatId = this._chatId(resolveAgentChatContext(context, chat).owner.get()) ?? this._chatId(chat);
 		const published = chatId ? this._chats.get(chatId) : undefined;
 		return published ? { ...this._metadata(published.summary), chat } : undefined;
 	}

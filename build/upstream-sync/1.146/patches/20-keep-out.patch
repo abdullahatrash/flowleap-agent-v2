@@ -1,0 +1,328 @@
+diff --git a/src/vs/sessions/sessions.common.main.ts b/src/vs/sessions/sessions.common.main.ts
+index c009042d65d..1949e9edc0e 100644
+--- a/src/vs/sessions/sessions.common.main.ts
++++ b/src/vs/sessions/sessions.common.main.ts
+@@ -16,7 +16,7 @@ import '../workbench/contrib/modernUI/browser/media/notificationsDialogs.css';
+ import '../workbench/contrib/modernUI/browser/media/suggestWidget.css';
+ import { agentsPanelBackground } from '../workbench/contrib/sessions/common/theme.js';
+ import './common/sizes.js';
+-import './contrib/providers/remoteAgentHost/browser/connectionDiagnostics.contribution.js';
++// FlowLeap keep-out: remote agent host connection diagnostics (remote hosts stay out, PRD 0017/0027)
+ 
+ getColorRegistry().updateDefaultColor(PANEL_BACKGROUND, agentsPanelBackground);
+ getColorRegistry().updateDefaultColor(TERMINAL_BACKGROUND_COLOR, agentsPanelBackground);
+@@ -490,14 +490,14 @@ import './contrib/providers/agentHost/browser/agentHostSessionConfigPicker.contr
+ import './contrib/providers/agentHost/browser/agentHostPolicyContinuationPresenter.contribution.js';
+ import './contrib/providers/agentHost/browser/agentHostForkActions.js';
+ import './contrib/chat/browser/customizationsDebugLog.contribution.js';
+-import './contrib/providers/copilotChatSessions/browser/copilotChatSessions.contribution.js';
++// FlowLeap keep-out: the Copilot Cloud / Sandbox provider needs GitHub sign-in and the GitHub service (PRD 0017).
++// Local agent host provider (PRD 0018 A1, ADR 0009) is registered from sessions.desktop.main.ts.
+ import './contrib/sessions/browser/sessions.contribution.js';
+ import './contrib/canvases/browser/pinnedCanvases.contribution.js';
+ import './contrib/sessions/browser/customizationsToolbar.contribution.js';
+ import './contrib/changes/browser/changes.contribution.js';
+-import './contrib/codeReview/browser/codeReview.contributions.js';
++// FlowLeap keep-out: codeReview and github contributions (PR/CI/review UI); their services come from keptOutServices below.
+ import './contrib/files/browser/files.contribution.js';
+-import './contrib/github/browser/github.contribution.js';
+ import './contrib/applyCommitsToParentRepo/browser/applyChangesToParentRepo.js';
+ import './contrib/fileTreeView/browser/fileTreeView.contribution.js'; // view registration disabled; filesystem provider still needed
+ import './contrib/configuration/browser/configuration.contribution.js';
+@@ -509,18 +509,24 @@ import './contrib/terminal/browser/sessionsTerminalContribution.js';
+ import './contrib/chatDebug/browser/chatDebug.contribution.js';
+ import './contrib/workspace/browser/workspace.contribution.js';
+ import './contrib/aquarium/browser/aquarium.contribution.js';
+-import './contrib/policyBlocked/browser/policyBlocked.contribution.js';
++// FlowLeap keep-out: policyBlocked (Copilot policy UI), automations (entry points; services in keptOutServices), remoteSessions (PRD 0017/0027)
+ import '../workbench/services/policies/browser/managedSettingsUpdate.contribution.js';
+-import './contrib/automations/browser/automations.contribution.js';
++// Canvases: the window canvas service is injected by core parts (sessions service, navigation, new session); canvas
++// content is gated off by `chat.canvases.enabled` (default false). Inbox One: its notifications service is injected by
++// the sessions list; the Inbox itself is off (`chat.agentSessions.inbox.enabled` default false, not included).
+ import './contrib/canvases/browser/windowCanvases.contribution.js';
+ import './contrib/inboxOne/browser/inboxOne.contribution.js';
+-import './contrib/remoteSessions/browser/remoteSessions.contribution.js';
+ import './contrib/customViewTest/browser/customViewTest.contribution.js';
+ 
+ // Onboarding: the engine + spotlight presentation (from the workbench layer) and
+ // the Agents window scenario data.
+ import '../workbench/contrib/onboarding/browser/onboarding.contribution.js';
+-import '../workbench/contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
++// FlowLeap keep-out: services of the kept-out github/codeReview/automations contribs that core parts inject (PRD 0017)
++import './contrib/keptOutServices/browser/keptOutServices.contribution.js';
++// FlowLeap keep-out: services of the kept-out remote agent host / Mission Control contribution that core parts inject (PRD 0027)
++import '../workbench/contrib/sessions/browser/keptOutRemoteAgentHostServices.contribution.js';
++// FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
++// import '../workbench/contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
+ import '../workbench/contrib/codeEditor/browser/diffEditorTryout.contribution.js';
+ import './contrib/onboardingTours/browser/onboardingTours.contribution.js';
+ import './contrib/getStarted/browser/getStarted.contribution.js';
+diff --git a/src/vs/sessions/sessions.desktop.main.ts b/src/vs/sessions/sessions.desktop.main.ts
+index ed1532ca33c..a3e7cb50627 100644
+--- a/src/vs/sessions/sessions.desktop.main.ts
++++ b/src/vs/sessions/sessions.desktop.main.ts
+@@ -28,7 +28,7 @@ registerOpenAgentsWindowCommand();
+ // Per-session layout controller (desktop / web desktop layout).
+ import './contrib/layout/browser/sessions.layout.contribution.js';
+ import './contrib/canvases/electron-browser/sessionCanvases.contribution.js';
+-import './contrib/inboxOne/electron-browser/inboxCanvasHost.js';
++// FlowLeap keep-out: the Inbox One canvas host (GitHub feed); the browser-side Unsupported host stays registered (PRD 0027)
+ import './contrib/sessionInputBanners/electron-browser/sessionDiskSpace.contribution.js';
+ 
+ //#endregion
+@@ -117,6 +117,10 @@ import { IRemoteAgentHostLocationPreferenceService } from '../platform/agentHost
+ import { RemoteAgentHostLocationPreferenceService } from '../platform/agentHost/browser/remoteAgentHostLocationPreferenceService.js';
+ import { ISSHHostKeyTrustService } from '../platform/agentHost/common/sshHostKeyTrust.js';
+ import { SSHHostKeyTrustService } from '../platform/agentHost/browser/sshHostKeyTrustService.js';
++import { ISSHRemoteAgentHostService } from '../platform/agentHost/common/sshRemoteAgentHost.js';
++import { NullSSHRemoteAgentHostService } from '../platform/agentHost/browser/nullSshRemoteAgentHostService.js';
++import { IWSLRemoteAgentHostService } from '../platform/agentHost/common/wslRemoteAgentHost.js';
++import { NullWSLRemoteAgentHostService } from '../platform/agentHost/browser/nullWslRemoteAgentHostService.js';
+ import { registerSharedProcessRemoteService } from '../platform/ipc/electron-browser/services.js';
+ import { IPluginGitService } from '../workbench/contrib/chat/common/plugins/pluginGitService.js';
+ import { NativePluginGitCommandService } from '../workbench/contrib/chat/electron-browser/pluginGitCommandService.js';
+@@ -130,6 +134,9 @@ registerSingleton(IUserDataInitializationService, new SyncDescriptor(UserDataIni
+ registerSingleton(IPluginGitService, NativePluginGitCommandService, InstantiationType.Delayed);
+ registerSingleton(IRemoteAgentHostService, AgentsWindowRemoteAgentHostService, InstantiationType.Delayed);
+ registerSingleton(IRemoteAgentHostLocationPreferenceService, RemoteAgentHostLocationPreferenceService, InstantiationType.Delayed);
++// FlowLeap: no SSH/WSL agent host transports (PRD 0017 keep-out). The local agent host process runs (PRD 0018 A1, ADR 0009).
++registerSingleton(ISSHRemoteAgentHostService, NullSSHRemoteAgentHostService, InstantiationType.Delayed);
++registerSingleton(IWSLRemoteAgentHostService, NullWSLRemoteAgentHostService, InstantiationType.Delayed);
+ registerSingleton(ISSHHostKeyTrustService, SSHHostKeyTrustService, InstantiationType.Delayed);
+ registerSharedProcessRemoteService(ILocalGitService, 'localGit');
+ 
+@@ -235,8 +242,7 @@ import '../workbench/contrib/policyExport/electron-browser/policyExport.contribu
+ // Keybindings Export
+ import '../workbench/contrib/keybindingsExport/electron-browser/keybindingsExport.contribution.js';
+ 
+-// Computer Use setup: drag Copilot Computer Use into System Settings
+-import '../workbench/contrib/chat/electron-browser/agentSessions/computerUseHelperApp.contribution.js';
++// FlowLeap keep-out: Computer Use helper app setup (Copilot local sessions only; `chat.agentHost.computerUse.enabled` default false)
+ 
+ //#endregion
+ 
+@@ -249,31 +255,21 @@ import './contrib/openAgentsWindow/electron-browser/openAgentsWindowKeybindingTi
+ 
+ // Remote Agent Host
+ import '../workbench/services/agentHost/electron-browser/agentHostService.js';
+-import '../platform/agentHost/electron-browser/sshRemoteAgentHostService.js';
+-import '../platform/agentHost/electron-browser/wslRemoteAgentHostService.js';
++// FlowLeap keep-out: the remote agent host providers (SSH, WSL, tunnels, dev containers, WebSocket hosts, Remotes
++// UI, Copilot cloud sandboxes) stay out (PRD 0017/0027). What stays is what core still injects:
++// LocalAgentHostSessionsProvider injects IDevContainerAgentHostService (inert without a stored dev container host);
++// the Agents Window chat contribution injects IRemoteWorkspaceHandoffService, which injects ITunnelAgentHostService
++// (a delayed shared-process proxy; it does nothing until a remote workspace is handed off).
+ import './contrib/providers/remoteAgentHost/electron-browser/tunnelAgentHostService.js';
+-import './contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js';
+-import './contrib/providers/remoteAgentHost/browser/remoteAgentHostTerminal.contribution.js';
+-import './contrib/providers/remoteAgentHost/browser/tunnelAgentHost.contribution.js';
+-import './contrib/providers/remoteAgentHost/browser/wslAgentHost.contribution.js';
+-import './contrib/providers/remoteAgentHost/browser/sshAgentHost.contribution.js';
+-import './contrib/providers/remoteAgentHost/browser/webSocketAgentHost.contribution.js';
+ import './contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.contribution.js';
+ import './contrib/providers/remoteAgentHost/browser/remoteWorkspaceHandoffService.js';
+-import './contrib/providers/remoteAgentHost/electron-browser/devContainerAgentHostConnector.contribution.js';
+-import './contrib/providers/remoteAgentHost/electron-browser/remotes.contribution.js';
+-// Change Preferred Remote Agent Location (Chat: ... command)
+-import './contrib/providers/remoteAgentHost/electron-browser/remoteAgentHostLocationPreferenceCommand.js';
+-import './contrib/providers/remoteAgentHost/electron-browser/forgetSSHHostKeyCommand.js';
+-// Copilot cloud sandbox connections (copilot-developer-cli) over a Web PubSub AHP relay
+-import './contrib/providers/remoteAgentHost/browser/cloudSandboxAgentHost.contribution.js';
+ // Chat
+ import './contrib/agentFeedback/browser/agentFeedback.contribution.js';
+ import './contrib/chat/electron-browser/chat.contribution.js';
+ 
+ // Local Agent Host
+ import './contrib/providers/agentHost/browser/localAgentHost.contribution.js';
+-import './contrib/providers/agentHost/browser/codexContinuation.contribution.js';
++// FlowLeap keep-out: Codex continuation (offers to continue Codex chats with GitHub Copilot; Codex is hidden, PRD 0018 A3.2)
+ import './contrib/providers/agentHost/electron-browser/localAgentHostLifecycle.contribution.js';
+ import './contrib/providers/agentHost/browser/agentSessionSettings.contribution.js';
+ import './contrib/providers/agentHost/browser/agentHostSettings.contribution.js';
+@@ -283,8 +279,7 @@ import './contrib/providers/agentHost/browser/agentHostSkillButtons.contribution
+ import './contrib/providers/agentHost/browser/openSubagentChat.contribution.js';
+ import './contrib/providers/agentHost/electron-browser/agentHost.contribution.js';
+ 
+-// Tunnel Host (allow remote connections to local agent host)
+-import './contrib/tunnelHost/electron-browser/tunnelHost.contribution.js';
++// FlowLeap keep-out: Tunnel Host (remote connections to the local agent host through Dev Tunnels / GitHub environments)
+ 
+ // Sessions (desktop only)
+ import './contrib/sessions/electron-browser/sessions.contribution.js';
+diff --git a/src/vs/sessions/sessions.web.main.ts b/src/vs/sessions/sessions.web.main.ts
+index 6c84c705945..141cf239d13 100644
+--- a/src/vs/sessions/sessions.web.main.ts
++++ b/src/vs/sessions/sessions.web.main.ts
+@@ -157,48 +157,10 @@ import '../workbench/contrib/preferences/browser/keyboardLayoutPicker.js';
+ import '../workbench/contrib/debug/browser/extensionHostDebugService.js';
+ import '../workbench/contrib/welcomeBanner/browser/welcomeBanner.contribution.js';
+ 
+-// Web tunnel agent host — discovers tunnels via Dev Tunnels REST API and connects via relay
+-import './contrib/providers/remoteAgentHost/browser/webTunnelAgentHostService.contribution.js';
+-
+-// Tunnel agent host — reconciles discovered tunnels into session providers
+-import './contrib/providers/remoteAgentHost/browser/tunnelAgentHost.contribution.js';
+-
+-// WSL agent host — reconciles cached WSL distros into session providers
+-import './contrib/providers/remoteAgentHost/browser/wslAgentHost.contribution.js';
+-
+-// WebSocket agent host — reconciles configured WebSocket hosts into session providers
+-import './contrib/providers/remoteAgentHost/browser/webSocketAgentHost.contribution.js';
+-
+-// Remote agent host terminal profiles — registers terminal profiles for connected agent hosts
+-import './contrib/providers/remoteAgentHost/browser/remoteAgentHostTerminal.contribution.js';
+-
+-// Remote agent host session provider — discovers agents and registers sessions
+-import './contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js';
+-import './contrib/providers/remoteAgentHost/browser/remoteAgentHostActions.js';
+-// Copilot cloud sandbox connections (copilot-developer-cli) over a Web PubSub AHP relay
+-import './contrib/providers/remoteAgentHost/browser/cloudSandboxAgentHost.contribution.js';
+-import './contrib/providers/agentHost/browser/agentSessionSettings.contribution.js';
+-import './contrib/providers/agentHost/browser/agentHostSettings.contribution.js';
+-import './contrib/providers/agentHost/browser/agentHostSessionBranchActions.js';
+-import './contrib/providers/agentHost/browser/agentMergeActions.js';
+-import './contrib/providers/agentHost/browser/agentHostSkillButtons.contribution.js';
+-import './contrib/providers/agentHost/browser/openSubagentChat.contribution.js';
+-
+-// Host filter dropdown in the titlebar (scopes the sessions list to a host)
+-import './contrib/providers/remoteAgentHost/browser/hostFilter.contribution.js';
+-
+-// Mobile chat-input config picker (combined mode + model bottom sheet
+-// on phone). Web-only because phones never run on the Electron desktop
+-// build. The desktop mode + model pickers are gated off on phone via
+-// `when: IsPhoneLayoutContext.negate()`, so the two registrations are
+-// mutually exclusive at the action-menu level.
+-import './contrib/providers/agentHost/browser/mobile/mobileChatInputConfigPicker.contribution.js';
+-
+-// Phone-only presenter for the workbench `ChatInputPart`'s Mode + Model
+-// pickers. Replaces the desktop popups with the same bottom-sheet
+-// experience used by the empty new-chat input, applied to the
+-// already-opened chat input. Web-only for the same reason as above.
+-import './contrib/providers/agentHost/browser/mobile/mobileChatPhoneInputPresenter.contribution.js';
++// FlowLeap keep-out (PRD 0017/0027): the plain web Agents Window has no agent host. The remote agent host
++// providers (Dev Tunnels, WSL, WebSocket hosts, Copilot cloud sandboxes, host filter), the agent host
++// session actions and the phone chat-input pickers stay out here. The Remote Access Viewer entry
++// (`sessions.viewer.main.ts`) adds the WebSocket-kind provider and the pickers it needs on top of this file.
+ 
+ // TODO: support agent feedback in web
+ import './contrib/agentFeedback/browser/nullAgentFeedbackService.contribution.js';
+diff --git a/src/vs/workbench/contrib/sessions/browser/keptOutRemoteAgentHostServices.contribution.ts b/src/vs/workbench/contrib/sessions/browser/keptOutRemoteAgentHostServices.contribution.ts
+new file mode 100644
+index 00000000000..af79079c492
+--- /dev/null
++++ b/src/vs/workbench/contrib/sessions/browser/keptOutRemoteAgentHostServices.contribution.ts
+@@ -0,0 +1,40 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++// FlowLeap (PRD 0027 keep-out): upstream's `chat/browser/remoteAgentHost/remoteAgentHost.contribution.ts`
++// registers the remote agent host connection, the Copilot cloud sandbox and the Mission Control (GitHub
++// environments) services and contributions in one file. The product ships none of those surfaces, so that
++// file is not imported. Core code still injects three of its services:
++// - `IRemoteAgentHostConnectionCustomizationService` (the local agent host provider's artifact integrations),
++// - `IAgentHostAdvertisedAuthenticationResolver` (the window's remote agent host service),
++// - `IMissionControlEnvironmentService` (the session environment picker).
++// The first two are upstream's own implementations, which are inert without a registered customization or
++// an advertised remote host. The third is a null object: no Mission Control account, no hosts.
++
++import { CancellationToken } from '../../../../base/common/cancellation.js';
++import { constObservable, IObservable } from '../../../../base/common/observable.js';
++import { IAgentHostAdvertisedAuthenticationResolver } from '../../../../platform/agentHost/common/agentHostAdvertisedAuthentication.js';
++import { IMissionControlEnvironmentService, IMissionControlHost } from '../../../../platform/agentHost/common/missionControlEnvironment.js';
++import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
++import { RemoteAgentHostAuthenticationResolver } from '../../chat/browser/remoteAgentHost/remoteAgentHostAuthenticationResolver.js';
++import { IRemoteAgentHostConnectionCustomizationService, RemoteAgentHostConnectionCustomizationService } from '../../chat/browser/remoteAgentHost/remoteAgentHostConnectionCustomization.js';
++
++class NullMissionControlEnvironmentService implements IMissionControlEnvironmentService {
++	declare readonly _serviceBrand: undefined;
++	readonly hosts: IObservable<readonly IMissionControlHost[]> = constObservable([]);
++	readonly ownEnvironmentId: IObservable<string | undefined> = constObservable(undefined);
++	readonly accountKey = undefined;
++	readonly enabled = false;
++	async initialize(): Promise<void> { }
++	async refresh(_token: CancellationToken): Promise<void> { }
++	async connect(_id: string, _token: CancellationToken): Promise<void> { }
++	async disconnect(_id: string): Promise<void> { }
++	async delete(_id: string, _token: CancellationToken): Promise<void> { }
++	setDisplayName(_id: string, _name: string | undefined): void { }
++}
++
++registerSingleton(IRemoteAgentHostConnectionCustomizationService, RemoteAgentHostConnectionCustomizationService, InstantiationType.Delayed);
++registerSingleton(IAgentHostAdvertisedAuthenticationResolver, RemoteAgentHostAuthenticationResolver, InstantiationType.Delayed);
++registerSingleton(IMissionControlEnvironmentService, NullMissionControlEnvironmentService, InstantiationType.Delayed);
+diff --git a/src/vs/workbench/workbench.common.main.ts b/src/vs/workbench/workbench.common.main.ts
+index ea647deaeae..30130855932 100644
+--- a/src/vs/workbench/workbench.common.main.ts
++++ b/src/vs/workbench/workbench.common.main.ts
+@@ -230,7 +230,9 @@ import './contrib/speech/browser/speech.contribution.js';
+ import './contrib/chat/browser/chat.shared.contribution.js';
+ import './contrib/chat/browser/chat.contribution.js';
+ import './contrib/chat/browser/agentSessions/agentHost/agentHost.contribution.js';
+-import './contrib/chat/browser/remoteAgentHost/remoteAgentHost.contribution.js';
++// FlowLeap keep-out: remote agent hosts, Copilot cloud sandboxes and Mission Control (GitHub environments) stay out;
++// the services core still injects come from the kept-out services contribution (PRD 0027).
++import './contrib/sessions/browser/keptOutRemoteAgentHostServices.contribution.js';
+ import './contrib/chat/browser/chat.view.contribution.js';
+ import './contrib/inlineChat/browser/inlineChat.contribution.js';
+ 
+@@ -242,6 +244,10 @@ import './contrib/chat/browser/chatSessions/chatSessions.contribution.js';
+ import './contrib/chat/browser/contextContrib/chatContext.contribution.js';
+ import './contrib/imageCarousel/browser/imageCarousel.contribution.js';
+ 
++// FlowLeap (Patent)
++import './contrib/patent/browser/patentAuth.contribution.js';
++import './contrib/patent/browser/patentWalkthrough.contribution.js';
++
+ // Interactive
+ import './contrib/interactive/browser/interactive.contribution.js';
+ 
+@@ -281,7 +287,7 @@ import './contrib/sash/browser/sash.contribution.js';
+ 
+ // Git
+ import './contrib/git/browser/git.contributions.js';
+-import './contrib/github/browser/githubLinkPresentation.contribution.js';
++// FlowLeap keep-out: GitHub rich link presentation (needs the GitHub account client) (PRD 0027)
+ 
+ // SCM
+ import './contrib/scm/browser/scm.contribution.js';
+@@ -404,8 +410,9 @@ import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
+ 
+ // Onboarding (scenario engine)
+ import './contrib/onboarding/browser/onboarding.contribution.js';
+-import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
+-import './contrib/chat/browser/onboarding/chatInputSpotlightTour.js';
++// FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
++// import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
++// FlowLeap keep-out: the chat input spotlight tour introduces the Copilot harness (PRD 0027)
+ import './contrib/codeEditor/browser/diffEditorTryout.contribution.js';
+ 
+ // Call Hierarchy
+diff --git a/src/vs/workbench/workbench.desktop.main.ts b/src/vs/workbench/workbench.desktop.main.ts
+index 63b42074071..efb2527837d 100644
+--- a/src/vs/workbench/workbench.desktop.main.ts
++++ b/src/vs/workbench/workbench.desktop.main.ts
+@@ -194,7 +194,8 @@ import './contrib/remoteTunnel/electron-browser/remoteTunnel.contribution.js';
+ 
+ // Chat
+ import './contrib/chat/electron-browser/chat.contribution.js';
+-import './contrib/chat/electron-browser/tunnelHost.contribution.js';
++// FlowLeap keep-out: Tunnel Host (remote connections to the local agent host through Dev Tunnels / GitHub environments)
++import './contrib/chat/electron-browser/remoteAccess/remoteAccess.contribution.js';
+ 
+ // Copilot Voice
+ import './contrib/agentsVoice/electron-browser/agentsVoiceNativeCommands.js';
+diff --git a/src/vs/workbench/workbench.web.main.ts b/src/vs/workbench/workbench.web.main.ts
+index ae70f3428ee..f1ab9628074 100644
+--- a/src/vs/workbench/workbench.web.main.ts
++++ b/src/vs/workbench/workbench.web.main.ts
+@@ -190,4 +190,7 @@ import './contrib/processExplorer/browser/processExplorer.web.contribution.js';
+ // Browser View
+ import './contrib/browserView/browser/browserView.contribution.js';
+ 
++// FlowLeap Hosted Workspace single sign-in (#548)
++import './contrib/patent/browser/patentHostedSession.web.contribution.js';
++
+ //#endregion

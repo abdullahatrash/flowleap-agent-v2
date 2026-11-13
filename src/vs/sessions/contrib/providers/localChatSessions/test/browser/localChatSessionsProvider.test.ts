@@ -26,7 +26,7 @@ import { ILanguageModelsService } from '../../../../../../workbench/contrib/chat
 import { ILanguageModelToolsService } from '../../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IGitService } from '../../../../../../workbench/contrib/git/common/gitService.js';
 import { IFileService } from '../../../../../../platform/files/common/files.js';
-import { ISession, SessionStatus } from '../../../../../services/sessions/common/session.js';
+import { ISession, SessionStatus } from '../../../../../../workbench/services/sessions/common/session.js';
 import { LocalChatSessionsProvider, LocalSessionType, LOCAL_SESSION_ENABLED_SETTING } from '../../browser/localChatSessionsProvider.js';
 
 // ---- Mock chat service ----------------------------------------------------

@@ -24,6 +24,7 @@ import { ChatQuotaResumeState, ChatStatusBarEntry, computeQuotaResumeState } fro
 import { IChatStatusItemService } from '../../browser/chatStatus/chatStatusItemService.js';
 import { ChatStatusPromo } from '../../browser/chatStatus/chatStatusPromo.js';
 import { UpdateTitleBarChatInProgressContext, UpdateTitleBarContext, UpdateTitleBarEditorVisibleContext } from '../../../update/common/update.js';
+import { CHAT_SETUP_ACTION_ID } from '../../browser/actions/chatActions.js';
 
 type Quotas = IChatEntitlementService['quotas'];
 
@@ -125,7 +126,7 @@ suite('ChatStatusBarEntry', () => {
 		};
 	}
 
-	function createEntry(opts: { quotas?: Quotas; entitlement?: ChatEntitlement; persisted?: ChatQuotaResumeState; updateTitleBar?: boolean; updateTitleBarChatInProgress?: boolean; inDebugMode?: boolean; inZenMode?: boolean; sentiment?: IChatSentiment; snoozed?: boolean; promo?: boolean; flowLeapSignedIn?: boolean }) {
+	function createEntry(opts: { quotas?: Quotas; entitlement?: ChatEntitlement; persisted?: ChatQuotaResumeState; updateTitleBar?: boolean; updateTitleBarChatInProgress?: boolean; inDebugMode?: boolean; inZenMode?: boolean; sentiment?: IChatSentiment; snoozed?: boolean; promo?: boolean }) {
 		const instantiationService = workbenchInstantiationService({
 			contextKeyService: () => new TestContextKeyService(),
 		}, store);
@@ -182,9 +183,6 @@ suite('ChatStatusBarEntry', () => {
 		InEditorZenModeContext.bindTo(contextKeyService).set(opts.inZenMode ?? false);
 		// The entry hides itself in Patent IDE mode (the product default); these tests exercise the entry, so opt out.
 		PatentIdeContextKeys.Mode.bindTo(contextKeyService).set(false);
-		if (opts.flowLeapSignedIn !== undefined) {
-			contextKeyService.createKey<boolean>('flowleap.signedIn', opts.flowLeapSignedIn);
-		}
 
 		const storageService = instantiationService.get(IStorageService);
 		if (opts.persisted) {
@@ -276,16 +274,13 @@ suite('ChatStatusBarEntry', () => {
 	test('toggles the dashboard while preserving the sign-in command', () => {
 		const signedIn = createEntry({ entitlement: ChatEntitlement.Free, quotas: { premiumChat: available } });
 		const signedOut = createEntry({ entitlement: ChatEntitlement.Unknown });
-		const flowLeapSignedIn = createEntry({ entitlement: ChatEntitlement.Unknown, flowLeapSignedIn: true });
 
 		assert.deepStrictEqual({
 			signedIn: signedIn.statusbar.current?.command,
 			signedOut: signedOut.statusbar.current?.command,
-			flowLeapSignedIn: flowLeapSignedIn.statusbar.current?.command,
 		}, {
 			signedIn: ToggleTooltipCommand,
-			signedOut: 'flowleap.signIn',
-			flowLeapSignedIn: ToggleTooltipCommand,
+			signedOut: CHAT_SETUP_ACTION_ID,
 		});
 	});
 

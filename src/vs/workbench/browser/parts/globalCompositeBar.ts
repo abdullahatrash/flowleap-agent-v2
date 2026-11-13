@@ -6,7 +6,7 @@
 import './media/globalCompositeBar.css';
 import { localize } from '../../../nls.js';
 import { ActionBar, ActionsOrientation } from '../../../base/browser/ui/actionbar/actionbar.js';
-import { ACCOUNTS_ACTIVITY_ID, GLOBAL_ACTIVITY_ID } from '../../common/activity.js';
+import { ACCOUNTS_ACTIVITY_ID, ACCOUNTS_SHARED_SIGN_IN_GROUP, GLOBAL_ACTIVITY_ID } from '../../common/activity.js';
 import { IActivityService } from '../../services/activity/common/activity.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { DisposableStore, Disposable } from '../../../base/common/lifecycle.js';
@@ -56,10 +56,7 @@ import { createCodexAccountMenuActions, ICodexAccountService, shouldShowCodexAcc
 const COMMAND_PALETTE_ACTIVITY_ID = 'workbench.actions.activityBarCommandPalette';
 /** The command opened when the activity-bar Command Palette icon is clicked (same as the Command Palette keybinding). */
 const SHOW_COMMANDS_COMMAND_ID = 'workbench.action.showCommands';
-/**
- * Id of the authentication provider (owned by the FlowLeap extension) that holds the FlowLeap Session.
- * Referenced here by string on purpose so core never becomes a second owner of it.
- */
+// FlowLeap (B17): the FlowLeap (Clerk) authentication provider id, whose session picture is the account avatar.
 const FLOWLEAP_AUTH_PROVIDER_ID = 'flowleap';
 
 export class GlobalCompositeBar extends Disposable {
@@ -466,6 +463,11 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 	}
 
 	private async doInitialize(): Promise<void> {
+		// Resolve extension-host-backed GitHub state before exposing agent-specific accounts.
+		await this.defaultAccountService.getDefaultAccount();
+		if (this._store.isDisposed) {
+			return;
+		}
 		const providerIds = this.authenticationService.getProviderIds();
 		const results = await Promise.allSettled(providerIds.map(providerId => this.addAccountsFromProvider(providerId)));
 
@@ -532,13 +534,10 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 		}
 	}
 
-	/**
-	 * The avatar of the default account. When there is no default account (FlowLeap never sets one),
-	 * the avatar of the FlowLeap Session account is used instead.
-	 */
 	private getDefaultAccountAvatarIcon(): URI | undefined {
 		const currentDefaultAccount = this.defaultAccountService.currentDefaultAccount;
 		if (!currentDefaultAccount) {
+			// FlowLeap: without a default account, the FlowLeap (Clerk) session picture is the avatar.
 			return this.groupedAccounts.get(FLOWLEAP_AUTH_PROVIDER_ID)?.find(account => account.icon)?.icon;
 		}
 
@@ -559,9 +558,9 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 		const dynamicProviders = providers.filter(providerId => this.authenticationService.isDynamicAuthenticationProvider(providerId));
 
 		if (!this.initialized) {
-			const noAccountsAvailableAction = disposables.add(new Action('noAccountsAvailable', localize('loading', "Loading..."), undefined, false));
-			menus.push(noAccountsAvailableAction);
+			menus.push(disposables.add(new Action('noAccountsAvailable', localize('loading', "Loading..."), undefined, false)));
 		} else {
+
 			for (const providerId of registeredProviders) {
 				const provider = this.authenticationService.getProvider(providerId);
 				const accounts = this.groupedAccounts.get(providerId);
@@ -677,7 +676,21 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 			}
 		}
 
-		const codexAccountActions = createCodexAccountMenuActions(this.codexAccountService, shouldShowCodexAccount(this.configurationService, false));
+		const sharedAccountCommandGroups = otherCommands.filter(([group]) => group === ACCOUNTS_SHARED_SIGN_IN_GROUP);
+		const remainingCommandGroups = otherCommands.filter(([group]) => group !== ACCOUNTS_SHARED_SIGN_IN_GROUP);
+		const appendCommandGroups = (groups: typeof otherCommands) => {
+			for (const [, actions] of groups) {
+				if (menus.length && actions.length) {
+					menus.push(new Separator());
+				}
+				menus = menus.concat(actions);
+			}
+		};
+		appendCommandGroups(sharedAccountCommandGroups);
+
+		const codexAccountActions = this.initialized
+			? createCodexAccountMenuActions(this.codexAccountService, shouldShowCodexAccount(this.configurationService, false))
+			: [];
 		if (codexAccountActions.length) {
 			if (menus.length) {
 				menus.push(new Separator());
@@ -687,17 +700,7 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 			}
 		}
 
-		if (menus.length && otherCommands.length) {
-			menus.push(new Separator());
-		}
-
-		otherCommands.forEach((group, i) => {
-			const actions = group[1];
-			menus = menus.concat(actions);
-			if (i !== otherCommands.length - 1) {
-				menus.push(new Separator());
-			}
-		});
+		appendCommandGroups(remainingCommandGroups);
 
 		return menus;
 	}
@@ -733,16 +736,13 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 			canSignOut = false;
 		}
 
-		// Match by id first: a provider can relabel the same account (e.g. a placeholder
-		// label replaced once the user profile resolves). The label is only a fallback.
-		const existingAccount = accounts.find(a => a.id === account.id) ?? accounts.find(a => a.label === account.label);
+		const existingAccount = accounts.find(a => a.label === account.label);
 		if (existingAccount) {
 			// if we have an existing account and we discover that we
 			// can't sign out of it, update the account to mark it as "can't sign out"
 			if (!canSignOut) {
 				existingAccount.canSignOut = canSignOut;
 			}
-			existingAccount.label = account.label;
 			existingAccount.icon = account.icon;
 		} else {
 			accounts.push({ ...account, canSignOut });

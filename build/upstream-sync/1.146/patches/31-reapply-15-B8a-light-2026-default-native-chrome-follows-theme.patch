@@ -1,0 +1,26 @@
+diff --git a/src/vs/workbench/services/themes/common/themeConfiguration.ts b/src/vs/workbench/services/themes/common/themeConfiguration.ts
+index 98c5d5b608c..e87fac550de 100644
+--- a/src/vs/workbench/services/themes/common/themeConfiguration.ts
++++ b/src/vs/workbench/services/themes/common/themeConfiguration.ts
+@@ -35,7 +35,7 @@ export const COLOR_THEME_CONFIGURATION_SETTINGS_TAG = 'colorThemeConfiguration';
+ const colorThemeSettingSchema: IConfigurationPropertySchema = {
+ 	type: 'string',
+ 	markdownDescription: nls.localize({ key: 'colorTheme', comment: ['{0} will become a link to another setting.'] }, "Specifies the color theme used in the workbench when {0} is not enabled.", formatSettingAsLink(ThemeSettings.DETECT_COLOR_SCHEME)),
+-	default: isWeb ? ThemeSettingDefaults.COLOR_THEME_LIGHT : ThemeSettingDefaults.COLOR_THEME_DARK,
++	default: ThemeSettingDefaults.COLOR_THEME_LIGHT, // FlowLeap: Light 2026 on every platform
+ 	tags: [COLOR_THEME_CONFIGURATION_SETTINGS_TAG],
+ 	enum: colorThemeSettingEnum,
+ 	enumDescriptions: colorThemeSettingEnumDescriptions,
+diff --git a/src/vs/workbench/services/themes/electron-browser/themes.contribution.ts b/src/vs/workbench/services/themes/electron-browser/themes.contribution.ts
+index a373c15e619..3fd8bc9b2f0 100644
+--- a/src/vs/workbench/services/themes/electron-browser/themes.contribution.ts
++++ b/src/vs/workbench/services/themes/electron-browser/themes.contribution.ts
+@@ -23,7 +23,7 @@ configurationRegistry.registerConfiguration({
+ 				localize('window.systemColorTheme.dark', "Use dark native widget colors."),
+ 			],
+ 			markdownDescription: localize({ key: 'window.systemColorTheme', comment: ['{0} and {1} will become links to other settings.'] }, "Set the color mode for native UI elements such as native dialogs, menus and title bar. Even if your OS is configured in light color mode, you can select a dark system color theme for the window. You can also configure to automatically adjust based on the {0} setting.\n\nNote: This setting is ignored when {1} is enabled.", formatSettingAsLink(ThemeSettings.COLOR_THEME), formatSettingAsLink(ThemeSettings.DETECT_COLOR_SCHEME)),
+-			default: 'default',
++			default: 'auto', // FlowLeap: native chrome follows the workbench theme
+ 			included: !isLinux,
+ 			scope: ConfigurationScope.APPLICATION,
+ 			tags: [COLOR_THEME_CONFIGURATION_SETTINGS_TAG],

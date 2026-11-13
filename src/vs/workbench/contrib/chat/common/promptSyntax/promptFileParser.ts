@@ -73,6 +73,7 @@ export namespace PromptHeaderAttributes {
 	export const agent = 'agent';
 	export const mode = 'mode';
 	export const model = 'model';
+	export const modelPolicy = 'model-policy';
 	export const reasoningEffort = 'reasoning-effort';
 	export const applyTo = 'applyTo';
 	export const paths = 'paths';
@@ -91,6 +92,10 @@ export namespace PromptHeaderAttributes {
 	export const disableModelInvocation = 'disable-model-invocation';
 	export const hooks = 'hooks';
 	export const context = 'context';
+	export const skills = 'skills';
+	export const deferredToolLoading = 'deferred-tool-loading';
+	export const strictToolsList = 'strict-tools-list';
+	export const includeCustomInstructions = 'include-custom-instructions';
 }
 
 export class PromptHeader {
@@ -185,6 +190,15 @@ export class PromptHeader {
 
 	public get model(): readonly string[] | undefined {
 		return this.getStringOrStringArrayAttribute(PromptHeaderAttributes.model);
+	}
+
+	public get reasoningEffort(): string | undefined {
+		return this.getStringAttribute(PromptHeaderAttributes.reasoningEffort);
+	}
+
+	public get modelPolicy(): 'preferred' | 'required' | undefined {
+		const policy = this.getStringAttribute(PromptHeaderAttributes.modelPolicy);
+		return policy === 'preferred' || policy === 'required' ? policy : undefined;
 	}
 
 	public get applyTo(): string | undefined {
@@ -407,6 +421,7 @@ export type IValue = IScalarValue | ISequenceValue | IMapValue;
 interface ParsedBody {
 	readonly fileReferences: readonly IBodyFileReference[];
 	readonly variableReferences: readonly IBodyVariableReference[];
+	readonly placeholderReferences: readonly IBodyPlaceholderReference[];
 	readonly bodyOffset: number;
 }
 
@@ -424,6 +439,10 @@ export class PromptBody {
 		return this.getParsedBody().variableReferences;
 	}
 
+	public get placeholderReferences(): readonly IBodyPlaceholderReference[] {
+		return this.getParsedBody().placeholderReferences;
+	}
+
 	public get offset(): number {
 		return this.getParsedBody().bodyOffset;
 	}
@@ -433,6 +452,7 @@ export class PromptBody {
 			const markdownLinkRanges: Range[] = [];
 			const fileReferences: IBodyFileReference[] = [];
 			const variableReferences: IBodyVariableReference[] = [];
+			const placeholderReferences: IBodyPlaceholderReference[] = [];
 			const bodyOffset = Iterable.reduce(Iterable.slice(this.linesWithEOL, 0, this.range.startLineNumber - 1), (len, line) => line.length + len, 0);
 			let inFencedCodeBlock = false;
 			let fencedCodeBlockFenceChar: string | undefined;
@@ -526,9 +546,18 @@ export class PromptBody {
 						variableReferences.push({ name: match.groups?.['toolName'], range, offset: lineStartOffset + match.index, fullLength: fullMatch.length });
 					}
 				}
+				for (const match of line.matchAll(/\{\{(?<placeholder>[a-zA-Z][a-zA-Z0-9]*)\}\}/g)) {
+					if (isInsideInlineCode(match.index)) {
+						continue;
+					}
+					placeholderReferences.push({
+						name: match.groups!.placeholder,
+						range: new Range(i + 1, match.index + 1, i + 1, match.index + match[0].length + 1),
+					});
+				}
 				lineStartOffset += line.length;
 			}
-			this._parsed = { fileReferences: fileReferences.sort((a, b) => Range.compareRangesUsingStarts(a.range, b.range)), variableReferences, bodyOffset };
+			this._parsed = { fileReferences: fileReferences.sort((a, b) => Range.compareRangesUsingStarts(a.range, b.range)), variableReferences, placeholderReferences, bodyOffset };
 		}
 		return this._parsed;
 	}
@@ -568,6 +597,11 @@ export interface IBodyVariableReference {
 	readonly fullLength: number;
 }
 
+export interface IBodyPlaceholderReference {
+	readonly name: string;
+	readonly range: Range;
+}
+
 /**
  * Parses a comma-separated list of values into an array of strings.
  * Values can be unquoted or quoted (single or double quotes).
@@ -603,7 +637,18 @@ export function parseCommaSeparatedList(stringValue: IScalarValue): ISequenceVal
 			const quote = char;
 			pos++; // Skip opening quote
 
-			while (pos < input.length && input[pos] !== quote) {
+			while (pos < input.length) {
+				if (input[pos] === quote) {
+					if (quote === '\'' && input[pos + 1] === quote) {
+						value += quote;
+						pos += 2;
+						continue;
+					}
+					break;
+				}
+				if (quote === '"' && input[pos] === '\\' && (input[pos + 1] === quote || input[pos + 1] === '\\')) {
+					pos++;
+				}
 				value += input[pos];
 				pos++;
 			}

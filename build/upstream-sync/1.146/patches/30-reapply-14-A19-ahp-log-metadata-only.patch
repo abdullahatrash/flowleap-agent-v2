@@ -1,0 +1,520 @@
+diff --git a/src/vs/platform/agentHost/browser/remoteAgentHostServiceImpl.ts b/src/vs/platform/agentHost/browser/remoteAgentHostServiceImpl.ts
+index f52875e9f61..3eae9f639b9 100644
+--- a/src/vs/platform/agentHost/browser/remoteAgentHostServiceImpl.ts
++++ b/src/vs/platform/agentHost/browser/remoteAgentHostServiceImpl.ts
+@@ -24,6 +24,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../storage/comm
+ import { hasKey } from '../../../base/common/types.js';
+ 
+ import { AgentHostAhpJsonlLoggingSettingId, type IAgentConnection } from '../common/agentService.js';
++import { getSessionLogContent } from '../common/sessionLogContent.js';
+ import {
+ 	IRemoteAgentHostService,
+ 	RemoteAgentHostConnectionStatus,
+@@ -139,7 +140,7 @@ class WebSocketConnectionFactory extends Disposable implements IRemoteAgentHostC
+ 			address,
+ 			entry.connectionToken,
+ 			ahpLoggingEnabled
+-				? { logsHome: this._environmentService.logsHome, logId: address, connectionId: address, transport: 'websocket' }
++				? { logsHome: this._environmentService.logsHome, logId: address, connectionId: address, transport: 'websocket', content: getSessionLogContent(this._configurationService) }
+ 				: undefined,
+ 		);
+ 		const authentication = this._authenticationResolver.createResolver(address);
+diff --git a/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts b/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
+index a92a47c7d59..2ad2e441c80 100644
+--- a/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
++++ b/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
+@@ -65,6 +65,7 @@ import { artifactToolsConfigurationProperties } from './artifactToolsConfigurati
+ import { chatMoveConfigurationProperties } from './chatMoveConfiguration.js';
+ import { titleGenerationConfigurationProperties } from './titleGenerationConfiguration.js';
+ import { isAhpJsonlLoggingEnabled } from './ahpJsonlLogger.js';
++import { AgentHostAhpJsonlLoggingIncludeContentSettingId } from './sessionLogContent.js';
+ import { ModelRouterEnabledConfigKey, ModelRouterEnabledSettingId } from './modelRouterConfig.js';
+ 
+ // Settings consumed by the agent host starter (`electronAgentHostStarter.ts`
+@@ -151,6 +152,13 @@ configurationRegistry.registerConfiguration({
+ 			tags: ['experimental', 'advanced'],
+ 			agentHost: { key: AgentHostAhpJsonlLoggingEnabledConfigKey, scope: AgentHostConfigurationSyncScope.Local },
+ 		},
++		// FlowLeap (PRD 0018 A4): AHP logs hold metadata only unless this developer setting is on.
++		[AgentHostAhpJsonlLoggingIncludeContentSettingId]: {
++			type: 'boolean',
++			markdownDescription: nls.localize('chat.agentHost.ahpJsonlLoggingIncludeContent', "Developer setting. When enabled together with `#{0}#`, the AHP JSONL logs keep the full message content: your prompts, model responses, tool input and output, and file content. Leave this off unless you are debugging the agent host protocol. Exported debug logs then include that content.", AgentHostAhpJsonlLoggingSettingId),
++			default: false,
++			tags: ['experimental', 'advanced'],
++		},
+ 		[AgentMergeSettingId.Enabled]: {
+ 			type: 'boolean',
+ 			markdownDescription: nls.localize('chat.agentMerge.enabled', "Enables the experimental Agent Merge controller and its commands. Agent Merge can monitor an agent session's pull request, ask the agent to address selected blockers, and optionally merge the pull request when it is ready. It is paused while `#chat.artifactIntegrations.enabled#` is enabled; its saved choices are preserved."),
+diff --git a/src/vs/platform/agentHost/common/ahpJsonlLogger.ts b/src/vs/platform/agentHost/common/ahpJsonlLogger.ts
+index 1e23e05f132..d8a35ae259d 100644
+--- a/src/vs/platform/agentHost/common/ahpJsonlLogger.ts
++++ b/src/vs/platform/agentHost/common/ahpJsonlLogger.ts
+@@ -16,6 +16,7 @@ import { FileOperationResult, IFileService, IFileStatWithMetadata, toFileOperati
+ import { ILogService } from '../../log/common/log.js';
+ import { AHP_CANVAS_SCHEME } from './canvasUri.js';
+ import { redactAgentPermissionFeedback } from './meta/agentPermissionResponseMeta.js';
++import { SessionLogContent, toSessionLogMetadata } from './sessionLogContent.js';
+ 
+ export type AhpLogDirection = 'c2s' | 's2c';
+ 
+@@ -44,6 +45,12 @@ export interface IAhpJsonlLoggerOptions {
+ 	readonly maxTotalSizeBytes?: number;
+ 	/** Checked before serializing each message so host capture can follow live configuration. */
+ 	readonly isEnabled?: () => boolean;
++	/**
++	 * How much of each message reaches the file. Defaults to `metadata`: no
++	 * user text, model text, tool input or output, or file content is written.
++	 * `full` restores the upstream full-message log for developers.
++	 */
++	readonly content?: SessionLogContent;
+ }
+ 
+ export const AgentHostAhpJsonlLoggingEnvVar = 'VSCODE_AGENT_HOST_AHP_JSONL_LOGGING';
+@@ -182,7 +189,7 @@ export class AhpJsonlLogger extends Disposable {
+ 			transport: this._options.transport,
+ 			...(typeof byteLength === 'number' ? { byteLength } : {}),
+ 		};
+-		const entry = { ...message, _ahpLog: meta };
++		const entry = { ...(this._options.content === 'full' ? message : toSessionLogMetadata(message)), _ahpLog: meta };
+ 		// Fast path: serialize once. The vast majority of messages are small, so
+ 		// we only pay a single stringify and use its length to decide whether the
+ 		// rare oversized-message path below is needed. When the caller already
+diff --git a/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts b/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts
+index 132c0a0b1fe..aeacf2fb507 100644
+--- a/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts
++++ b/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts
+@@ -30,6 +30,7 @@ import type { IMcpServerConfiguration } from '../../mcp/common/mcpPlatformTypes.
+ import { AgentHostIpcChannelTransport } from '../browser/agentHostIpcChannelTransport.js';
+ import { AgentHostClientState, AgentHostProtocolClient } from '../browser/agentHostProtocolClient.js';
+ import { AhpJsonlLogger } from '../common/ahpJsonlLogger.js';
++import { getSessionLogContent } from '../common/sessionLogContent.js';
+ import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AgentHostClientByokLmChannel, NullAgentHostClientByokLmChannel } from '../common/agentHostClientByokLmChannel.js';
+ import { getAgentHostClientType } from '../common/agentHostClientInfo.js';
+ import { AGENT_HOST_CLIENT_PROXY_CHANNEL, AgentHostClientProxyChannel } from '../common/agentHostClientProxyChannel.js';
+@@ -261,6 +262,7 @@ export class LocalAgentHostServiceClient extends Disposable implements IAgentHos
+ 				logId: this.clientId,
+ 				connectionId: this.clientId,
+ 				transport: 'local',
++				content: getSessionLogContent(this._configurationService),
+ 			}))
+ 			: undefined;
+ 
+diff --git a/src/vs/platform/agentHost/electron-browser/sshRemoteAgentHostServiceImpl.ts b/src/vs/platform/agentHost/electron-browser/sshRemoteAgentHostServiceImpl.ts
+index ee3391835d3..eb626847d1a 100644
+--- a/src/vs/platform/agentHost/electron-browser/sshRemoteAgentHostServiceImpl.ts
++++ b/src/vs/platform/agentHost/electron-browser/sshRemoteAgentHostServiceImpl.ts
+@@ -24,6 +24,7 @@ import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus, RemoteAgentHo
+ import { createDecorator, IInstantiationService } from '../../instantiation/common/instantiation.js';
+ import { IQuickInputService } from '../../quickinput/common/quickInput.js';
+ import { AhpJsonlLogger } from '../common/ahpJsonlLogger.js';
++import { getSessionLogContent } from '../common/sessionLogContent.js';
+ import { AgentHostAhpJsonlLoggingSettingId } from '../common/agentService.js';
+ import type { AgentHostServerType } from '../common/agentHostEndpointRegistry.js';
+ import { AgentHostClientConnectionKind } from '../common/agentHostTelemetry.js';
+@@ -139,7 +140,7 @@ export class SSHRelayClientFactory implements ISSHRelayClientFactory {
+ 		return this._instantiationService.createInstance(AgentHostProtocolClient, address, () => {
+ 			const createLogger = (activeConnectionId: string) => ahpLoggingEnabled ? this._instantiationService.createInstance(
+ 				AhpJsonlLogger,
+-				{ logsHome: this._environmentService.logsHome, logId: address, connectionId: activeConnectionId, transport: 'ssh' },
++				{ logsHome: this._environmentService.logsHome, logId: address, connectionId: activeConnectionId, transport: 'ssh', content: getSessionLogContent(this._configurationService) },
+ 			) : undefined;
+ 			return new ReconnectingRelayTransport(
+ 				establish,
+diff --git a/src/vs/platform/agentHost/electron-browser/wslRemoteAgentHostServiceImpl.ts b/src/vs/platform/agentHost/electron-browser/wslRemoteAgentHostServiceImpl.ts
+index 0d6952d22aa..8eb5720a882 100644
+--- a/src/vs/platform/agentHost/electron-browser/wslRemoteAgentHostServiceImpl.ts
++++ b/src/vs/platform/agentHost/electron-browser/wslRemoteAgentHostServiceImpl.ts
+@@ -17,6 +17,7 @@ import { ProxyChannel } from '../../../base/parts/ipc/common/ipc.js';
+ import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus, RemoteAgentHostEntryType, RemoteAgentHostsEnabledSettingId, getEntryAddress, type IRemoteAgentHostConnectOptions, type IRemoteAgentHostConnectionFactory, type IRemoteAgentHostCreatedConnection, type IRemoteAgentHostEntry } from '../common/remoteAgentHostService.js';
+ import { createDecorator, IInstantiationService } from '../../instantiation/common/instantiation.js';
+ import { AhpJsonlLogger } from '../common/ahpJsonlLogger.js';
++import { getSessionLogContent } from '../common/sessionLogContent.js';
+ import { AgentHostAhpJsonlLoggingSettingId } from '../common/agentService.js';
+ import { AgentHostClientConnectionKind } from '../common/agentHostTelemetry.js';
+ import { ReconnectingRelayTransport } from '../common/relayTransport.js';
+@@ -118,7 +119,7 @@ export class WSLRelayClientFactory implements IWSLRelayClientFactory {
+ 			const ahpLoggingEnabled = !!this._configurationService.getValue<boolean>(AgentHostAhpJsonlLoggingSettingId);
+ 			const createLogger = (activeConnectionId: string) => ahpLoggingEnabled ? this._instantiationService.createInstance(
+ 				AhpJsonlLogger,
+-				{ logsHome: this._environmentService.logsHome, logId: address, connectionId: activeConnectionId, transport: 'wsl' },
++				{ logsHome: this._environmentService.logsHome, logId: address, connectionId: activeConnectionId, transport: 'wsl', content: getSessionLogContent(this._configurationService) },
+ 			) : undefined;
+ 			return this._instantiationService.createInstance(
+ 				ReconnectingRelayTransport,
+diff --git a/src/vs/platform/agentHost/node/claude/claudeMapSessionEvents.ts b/src/vs/platform/agentHost/node/claude/claudeMapSessionEvents.ts
+index 671c0b34558..3c2333607ba 100644
+--- a/src/vs/platform/agentHost/node/claude/claudeMapSessionEvents.ts
++++ b/src/vs/platform/agentHost/node/claude/claudeMapSessionEvents.ts
+@@ -18,6 +18,7 @@ import { claudeToolDenialCode } from './claudeToolDenial.js';
+ import { ClaudeToolCallRegistry } from './claudeToolCallRegistry.js';
+ import { ToolCallConfirmationReason, ToolCallContributorKind, type StringOrMarkdown } from '../../common/state/protocol/state.js';
+ import type { SessionClientToolsModel } from './clientTools/claudeSessionClientToolsModel.js';
++import { toSessionLogMetadata } from '../../common/sessionLogContent.js';
+ 
+ /**
+  * Cross-call state for {@link mapSDKMessageToAgentSignals}. One instance
+@@ -259,7 +260,10 @@ export function mapSDKMessageToAgentSignals(
+ ): AgentSignal[] {
+ 	if (logService.getLevel() <= LogLevel.Trace) {
+ 		try {
+-			const snippet = JSON.stringify(message, (k, v) => typeof v === 'string' && v.length > 200 ? v.slice(0, 200) + '…' : v);
++			// FlowLeap fork (PRD 0018 A4): metadata only. Upstream logged the first
++			// 200 characters of every string, which put prompts and model text in
++			// the agent host log file (and in exported debug logs).
++			const snippet = JSON.stringify(toSessionLogMetadata(message));
+ 			logService.trace(`[claudeMapSessionEvents] SDK message type=${message.type}: ${snippet?.slice(0, 2000) ?? '<unserializable>'}`);
+ 		} catch {
+ 			logService.trace(`[claudeMapSessionEvents] SDK message type=${message.type} (unserializable)`);
+diff --git a/src/vs/platform/agentHost/test/browser/agentHostIpcChannelTransport.test.ts b/src/vs/platform/agentHost/test/browser/agentHostIpcChannelTransport.test.ts
+index 05157fa4275..91e4c93affa 100644
+--- a/src/vs/platform/agentHost/test/browser/agentHostIpcChannelTransport.test.ts
++++ b/src/vs/platform/agentHost/test/browser/agentHostIpcChannelTransport.test.ts
+@@ -159,7 +159,7 @@ suite('AgentHostIpcChannelTransport', () => {
+ 		const channel = ds.add(new FakeChannel());
+ 		const fileService = createInMemoryFileService(ds, Schemas.file);
+ 		const logger = ds.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'local-client', connectionId: 'local-client', transport: 'local' },
++			{ logsHome: URI.file('/logs'), logId: 'local-client', connectionId: 'local-client', transport: 'local', content: 'full' },
+ 			fileService,
+ 			new NullLogService(),
+ 		));
+diff --git a/src/vs/platform/agentHost/test/browser/webPubSubRelayTransport.test.ts b/src/vs/platform/agentHost/test/browser/webPubSubRelayTransport.test.ts
+index 312479fadd0..8451ce7f6d0 100644
+--- a/src/vs/platform/agentHost/test/browser/webPubSubRelayTransport.test.ts
++++ b/src/vs/platform/agentHost/test/browser/webPubSubRelayTransport.test.ts
+@@ -647,7 +647,7 @@ suite('WebPubSubRelayTransport', () => {
+ 			logsHome: URI.from({ scheme: Schemas.inMemory, path: '/logs' }),
+ 			logId: 'cloudsandbox:env-1',
+ 			connectionId: 'cloud-client',
+-			transport: 'webpubsub',
++			transport: 'webpubsub', content: 'full',
+ 		}, fileService, logService));
+ 		const fake = new FakeWebSocket();
+ 		const transport = createTransport(fake, { ahpLogger: logger });
+@@ -924,7 +924,7 @@ suite('WebPubSubRelayTransport', () => {
+ 	test('redacts sealed authentication from the WPS transcript without changing wire messages', async () => {
+ 		const fileService = createInMemoryFileService(store, Schemas.file);
+ 		const logger = store.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'relay', connectionId: 'client', transport: 'webpubsub' },
++			{ logsHome: URI.file('/logs'), logId: 'relay', connectionId: 'client', transport: 'webpubsub', content: 'full' },
+ 			fileService, new NullLogService(),
+ 		));
+ 		const socket = new FakeWebSocket();
+diff --git a/src/vs/platform/agentHost/test/common/ahpJsonlLogger.test.ts b/src/vs/platform/agentHost/test/common/ahpJsonlLogger.test.ts
+index 7015a6e41bd..5272f499d91 100644
+--- a/src/vs/platform/agentHost/test/common/ahpJsonlLogger.test.ts
++++ b/src/vs/platform/agentHost/test/common/ahpJsonlLogger.test.ts
+@@ -15,6 +15,8 @@ import { InMemoryFileSystemProvider } from '../../../files/common/inMemoryFilesy
+ import { createInMemoryFileService } from '../../../files/test/common/inMemoryFileService.js';
+ import { NullLogService } from '../../../log/common/log.js';
+ import { AhpJsonlLogger, AhpJsonlLogRetention, getAhpLogByteLength, isAhpJsonlLoggingEnabled, isAhpLogFileFor, stringifyAhpLogEntry } from '../../common/ahpJsonlLogger.js';
++import { TestConfigurationService } from '../../../configuration/test/common/testConfigurationService.js';
++import { AgentHostAhpJsonlLoggingIncludeContentSettingId, getSessionLogContent } from '../../common/sessionLogContent.js';
+ 
+ suite('AhpJsonlLogger', () => {
+ 
+@@ -32,7 +34,7 @@ suite('AhpJsonlLogger', () => {
+ 	test('does not record inspection of its own logs or log-only file-watch changes', async () => {
+ 		const files = createInMemoryFileService(store, Schemas.file);
+ 		const logger = store.add(new AhpJsonlLogger({
+-			logsHome: URI.file('/inspection-logs'), logId: 'host', connectionId: 'client', transport: 'mission-control',
++			logsHome: URI.file('/inspection-logs'), logId: 'host', connectionId: 'client', transport: 'mission-control', content: 'full',
+ 		}, files, new NullLogService()));
+ 		let inspectedPayloads = 0;
+ 		for (const [index, method] of ['resourceRead', 'resourceResolve', 'resourceList', 'resourceRequest', 'createResourceWatch'].entries()) {
+@@ -56,7 +58,7 @@ suite('AhpJsonlLogger', () => {
+ 		let enabled = false;
+ 		let serializations = 0;
+ 		const logger = store.add(new AhpJsonlLogger({
+-			logsHome: URI.file('/live-budget'), logId: 'host', connectionId: 'client', transport: 'mission-control',
++			logsHome: URI.file('/live-budget'), logId: 'host', connectionId: 'client', transport: 'mission-control', content: 'full',
+ 			maxTotalSizeBytes: 500, isEnabled: () => enabled,
+ 		}, files, new NullLogService()));
+ 		const message = { get result() { serializations++; return 'captured'; } };
+@@ -108,7 +110,7 @@ suite('AhpJsonlLogger', () => {
+ 		const loggers: AhpJsonlLogger[] = [];
+ 		for (let generation = 0; generation < 20; generation++) {
+ 			const logger = store.add(new AhpJsonlLogger({
+-				logsHome, logId: `host-${generation}`, connectionId: `connection-${generation}`, transport: 'websocket',
++				logsHome, logId: `host-${generation}`, connectionId: `connection-${generation}`, transport: 'websocket', content: 'full',
+ 				maxTotalSizeBytes, maxFileSizeBytes: 1, maxFiles: 2,
+ 			}, files, log));
+ 			for (let id = 0; id < 3; id++) {
+@@ -125,7 +127,7 @@ suite('AhpJsonlLogger', () => {
+ 		const writtenBytes = provider.writtenBytes;
+ 		let serializations = 0;
+ 		const reconnected = store.add(new AhpJsonlLogger({
+-			logsHome, logId: 'reconnected', connectionId: 'new', transport: 'local',
++			logsHome, logId: 'reconnected', connectionId: 'new', transport: 'local', content: 'full',
+ 		}, files, log));
+ 		reconnected.log({ get result() { serializations++; return 'must not serialize'; } }, 's2c');
+ 		await reconnected.flush();
+@@ -149,7 +151,7 @@ suite('AhpJsonlLogger', () => {
+ 			_ahpLog: { ts: new Date().toISOString(), dir: 's2c', connectionId: 'client', transport: 'local' },
+ 		})}\n`).byteLength;
+ 		const logger = store.add(new AhpJsonlLogger({
+-			logsHome: URI.file('/exact-budget'), logId: 'host', connectionId: 'client', transport: 'local',
++			logsHome: URI.file('/exact-budget'), logId: 'host', connectionId: 'client', transport: 'local', content: 'full',
+ 			maxTotalSizeBytes, maxPendingBytes: 1,
+ 		}, files, log));
+ 		logger.log(message, 's2c');
+@@ -169,7 +171,7 @@ suite('AhpJsonlLogger', () => {
+ 		const provider = store.add(new RecordingInMemoryFileSystemProvider());
+ 		store.add(files.registerProvider('file', provider));
+ 		const logger = store.add(new AhpJsonlLogger({
+-			logsHome: URI.file('/oversized-budget'), logId: 'host', connectionId: 'client', transport: 'local',
++			logsHome: URI.file('/oversized-budget'), logId: 'host', connectionId: 'client', transport: 'local', content: 'full',
+ 			maxTotalSizeBytes: 1,
+ 		}, files, new NullLogService()));
+ 		logger.log({ id: 1 }, 's2c');
+@@ -184,7 +186,7 @@ suite('AhpJsonlLogger', () => {
+ 		const fileService = createInMemoryFileService(store, Schemas.file);
+ 
+ 		const logger = store.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket' },
++			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket', content: 'full' },
+ 			fileService,
+ 			new NullLogService(),
+ 		));
+@@ -280,7 +282,7 @@ suite('AhpJsonlLogger', () => {
+ 		const fileService = createInMemoryFileService(store, Schemas.file);
+ 
+ 		const logger = store.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'rotating', transport: 'websocket', maxFileSizeBytes: 1, maxFiles: 2 },
++			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'rotating', transport: 'websocket', content: 'full', maxFileSizeBytes: 1, maxFiles: 2 },
+ 			fileService,
+ 			new NullLogService(),
+ 		));
+@@ -316,7 +318,7 @@ suite('AhpJsonlLogger', () => {
+ 	test('redacts authentication tokens without mutating live requests, including oversized entries', async () => {
+ 		const fileService = createInMemoryFileService(store, Schemas.file);
+ 		const logger = store.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'authentication', connectionId: 'client', transport: 'mission-control' },
++			{ logsHome: URI.file('/logs'), logId: 'authentication', connectionId: 'client', transport: 'mission-control', content: 'full' },
+ 			fileService, new NullLogService(),
+ 		));
+ 		const request = { jsonrpc: '2.0', id: 1, method: 'authenticate', params: { resource: 'https://api.github.com', token: 'private-token', scopes: ['copilot'] } };
+@@ -349,7 +351,7 @@ suite('AhpJsonlLogger', () => {
+ 		const loggers: AhpJsonlLogger[] = [];
+ 		for (let generation = 0; generation < 12; generation++) {
+ 			const logger = store.add(new AhpJsonlLogger({
+-				logsHome, logId: 'relay', connectionId: `mobile-${generation}`, transport: 'mission-control', retention,
++				logsHome, logId: 'relay', connectionId: `mobile-${generation}`, transport: 'mission-control', content: 'full', retention,
+ 			}, files, log));
+ 			logger.log({ id: generation, method: 'initialize' }, 'c2s');
+ 			await logger.flush();
+@@ -360,7 +362,7 @@ suite('AhpJsonlLogger', () => {
+ 		loggers.length = 0;
+ 		for (let generation = 0; generation < 12; generation++) {
+ 			const logger = store.add(new AhpJsonlLogger({
+-				logsHome, logId: 'relay', connectionId: `concurrent-${generation}`, transport: 'mission-control', retention, maxFileSizeBytes: 500,
++				logsHome, logId: 'relay', connectionId: `concurrent-${generation}`, transport: 'mission-control', content: 'full', retention, maxFileSizeBytes: 500,
+ 			}, files, log));
+ 			logger.log({ id: 99, result: 'new activity' }, 's2c');
+ 			loggers.push(logger);
+@@ -394,7 +396,7 @@ suite('AhpJsonlLogger', () => {
+ 		const retention = new AhpJsonlLogRetention({ logsHome, logId: 'relay', maxFiles: 10, maxSizeBytes: 500 }, files, log);
+ 		for (let generation = 0; generation < 4; generation++) {
+ 			const logger = store.add(new AhpJsonlLogger({
+-				logsHome, logId: 'relay', connectionId: `mobile-${generation}`, transport: 'mission-control',
++				logsHome, logId: 'relay', connectionId: `mobile-${generation}`, transport: 'mission-control', content: 'full',
+ 				retention, maxFileSizeBytes: 1,
+ 			}, files, log));
+ 			for (let id = 0; id < 3; id++) {
+@@ -442,7 +444,7 @@ suite('AhpJsonlLogger', () => {
+ 		store.add(fileService.registerProvider('file', provider));
+ 
+ 		const logger = store.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'batched', connectionId: 'batched', transport: 'websocket' },
++			{ logsHome: URI.file('/logs'), logId: 'batched', connectionId: 'batched', transport: 'websocket', content: 'full' },
+ 			fileService,
+ 			new NullLogService(),
+ 		));
+@@ -474,7 +476,7 @@ suite('AhpJsonlLogger', () => {
+ 		const fileService = createInMemoryFileService(store, Schemas.file);
+ 
+ 		const logger = store.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'bounded', connectionId: 'bounded', transport: 'websocket', maxPendingBytes: 1 },
++			{ logsHome: URI.file('/logs'), logId: 'bounded', connectionId: 'bounded', transport: 'websocket', content: 'full', maxPendingBytes: 1 },
+ 			fileService,
+ 			new NullLogService(),
+ 		));
+@@ -497,7 +499,7 @@ suite('AhpJsonlLogger', () => {
+ 	test('redacts canvas URLs in actions and snapshots without mutating live state', async () => {
+ 		const fileService = createInMemoryFileService(store, Schemas.file);
+ 		const logger = store.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'canvas-source', connectionId: 'canvas-source', transport: 'websocket' },
++			{ logsHome: URI.file('/logs'), logId: 'canvas-source', connectionId: 'canvas-source', transport: 'websocket', content: 'full' },
+ 			fileService,
+ 			new NullLogService(),
+ 		));
+@@ -518,7 +520,7 @@ suite('AhpJsonlLogger', () => {
+ 	test('redacts replayed canvas actions and incomplete canvas state fail closed', async () => {
+ 		const fileService = createInMemoryFileService(store, Schemas.file);
+ 		const logger = store.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'canvas-source-saturated', connectionId: 'canvas-source-saturated', transport: 'websocket' },
++			{ logsHome: URI.file('/logs'), logId: 'canvas-source-saturated', connectionId: 'canvas-source-saturated', transport: 'websocket', content: 'full' },
+ 			fileService,
+ 			new NullLogService(),
+ 		));
+@@ -546,7 +548,7 @@ suite('AhpJsonlLogger', () => {
+ 		const fileService = createInMemoryFileService(store, Schemas.file);
+ 
+ 		const logger = store.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'flush-order', connectionId: 'flush-order', transport: 'websocket' },
++			{ logsHome: URI.file('/logs'), logId: 'flush-order', connectionId: 'flush-order', transport: 'websocket', content: 'full' },
+ 			fileService,
+ 			new NullLogService(),
+ 		));
+@@ -570,7 +572,7 @@ suite('AhpJsonlLogger', () => {
+ 		const fileService = createInMemoryFileService(store, Schemas.file);
+ 
+ 		const logger = store.add(new AhpJsonlLogger(
+-			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket' },
++			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket', content: 'full' },
+ 			fileService,
+ 			new NullLogService(),
+ 		));
+@@ -602,6 +604,64 @@ suite('AhpJsonlLogger', () => {
+ 		assert.ok(lines[2].length < 1024 * 1024);
+ 	});
+ 
++	suite('session content (PRD 0018 A4)', () => {
++
++		const MARKER = 'FLOWLEAP-A4-MARKER-7f3c';
++
++		/** One turn of a session as it crosses the protocol, with the marker in every content field. */
++		function sessionFrames(): object[] {
++			return [
++				{ jsonrpc: '2.0', id: 7, method: 'dispatchAction', params: { channel: 'ahp-session:/s-1', action: { type: 'session/turnStarted', session: 'claude:/s-1', turnId: 't-1', userMessage: { text: `Find prior art for ${MARKER}`, attachments: [{ uri: URI.file(`/work/${MARKER}.pdf`), label: MARKER }] } } } },
++				{ jsonrpc: '2.0', method: 'action', params: { channel: 'ahp-session:/s-1', serverSeq: 3, action: { type: 'session/responsePart', session: 'claude:/s-1', turnId: 't-1', part: { kind: 'markdown', content: `Model says ${MARKER}` } } } },
++				{ jsonrpc: '2.0', method: 'action', params: { channel: 'ahp-session:/s-1', action: { type: 'session/toolCallComplete', session: 'claude:/s-1', toolCallId: 'tc-1', toolName: 'Bash', toolInput: { command: `grep ${MARKER}`, code: `print("${MARKER}")` }, result: { content: [{ type: 'text', text: `output ${MARKER}` }], diff: { before: MARKER, after: `${MARKER}!` } } } } },
++				{ jsonrpc: '2.0', id: 8, result: { title: MARKER, usage: { inputTokens: 1200, outputTokens: 80, durationMs: 950 } } },
++				{ jsonrpc: '2.0', id: 9, error: { code: -32001, message: `Failed on ${MARKER}`, data: { prompt: MARKER } } },
++			];
++		}
++
++		async function writeSession(configuration: TestConfigurationService): Promise<string> {
++			const fileService = store.add(new FileService(new NullLogService()));
++			store.add(fileService.registerProvider('file', store.add(new InMemoryFileSystemProvider())));
++			const logger = store.add(new AhpJsonlLogger(
++				{ logsHome: URI.file('/logs'), logId: 'a4', connectionId: 'a4', transport: 'local', content: getSessionLogContent(configuration) },
++				fileService,
++				new NullLogService(),
++			));
++			for (const frame of sessionFrames()) {
++				logger.log(frame, 's2c');
++			}
++			await logger.flush();
++			return (await fileService.readFile(logger.resource)).value.toString();
++		}
++
++		test('the default policy writes metadata and never the message text', async () => {
++			const content = await writeSession(new TestConfigurationService());
++
++			assert.deepStrictEqual({
++				markerWritten: content.includes(MARKER),
++				entries: content.split('\n').filter(Boolean).map(line => {
++					const { _ahpLog, ...rest } = JSON.parse(line);
++					return rest;
++				}),
++			}, {
++				markerWritten: false,
++				entries: [
++					{ jsonrpc: '2.0', id: 7, method: 'dispatchAction', params: { channel: 'ahp-session:/s-1', action: { type: 'session/turnStarted', session: 'claude:/s-1', turnId: 't-1' } } },
++					{ jsonrpc: '2.0', method: 'action', params: { channel: 'ahp-session:/s-1', serverSeq: 3, action: { type: 'session/responsePart', session: 'claude:/s-1', turnId: 't-1', part: { kind: 'markdown' } } } },
++					{ jsonrpc: '2.0', method: 'action', params: { channel: 'ahp-session:/s-1', action: { type: 'session/toolCallComplete', session: 'claude:/s-1', toolCallId: 'tc-1', toolName: 'Bash', result: { content: [{ type: 'text' }] } } } },
++					{ jsonrpc: '2.0', id: 8, result: { usage: { inputTokens: 1200, outputTokens: 80, durationMs: 950 } } },
++					{ jsonrpc: '2.0', id: 9, error: { code: -32001 } },
++				],
++			});
++		});
++
++		test('the developer setting restores the full message content', async () => {
++			const content = await writeSession(new TestConfigurationService({ [AgentHostAhpJsonlLoggingIncludeContentSettingId]: true }));
++
++			assert.deepStrictEqual(content.split('\n').filter(Boolean).map(line => line.split(MARKER).length - 1), [3, 1, 5, 1, 2]);
++		});
++	});
++
+ 	suite('stringifyAhpLogEntry', () => {
+ 		test('redacts proxy authorization results without changing the live value', () => {
+ 			const result = { jsonrpc: '2.0', id: 1, result: { authorization: 'Negotiate private-ticket' } };
+diff --git a/src/vs/platform/agentHost/test/node/agentHostDebugLogs.test.ts b/src/vs/platform/agentHost/test/node/agentHostDebugLogs.test.ts
+index 97ff29ba2a7..e5ed20e3ebb 100644
+--- a/src/vs/platform/agentHost/test/node/agentHostDebugLogs.test.ts
++++ b/src/vs/platform/agentHost/test/node/agentHostDebugLogs.test.ts
+@@ -174,7 +174,7 @@ suite('AgentHostDebugLogsCollector', () => {
+ 			const files = disposables.add(new FileService(log));
+ 			disposables.add(files.registerProvider('file', disposables.add(new DiskFileSystemProvider(log))));
+ 			const logger = disposables.add(new AhpJsonlLogger({
+-				logsHome, logId: MISSION_CONTROL_AHP_LOG_ID, connectionId: 'mobile-client', transport: 'mission-control', maxFileSizeBytes: 1,
++				logsHome, logId: MISSION_CONTROL_AHP_LOG_ID, connectionId: 'mobile-client', transport: 'mission-control', content: 'full', maxFileSizeBytes: 1,
+ 			}, files, log));
+ 			const first = logger.resource;
+ 			const request = { jsonrpc: '2.0', id: 7, method: 'authenticate', params: { resource: 'https://api.github.com', token: 'private-token' } };
+diff --git a/src/vs/platform/agentHost/test/node/missionControlProtocolServer.test.ts b/src/vs/platform/agentHost/test/node/missionControlProtocolServer.test.ts
+index 18c0415fbf0..9f0e450a5fe 100644
+--- a/src/vs/platform/agentHost/test/node/missionControlProtocolServer.test.ts
++++ b/src/vs/platform/agentHost/test/node/missionControlProtocolServer.test.ts
+@@ -857,7 +857,7 @@ suite('Mission Control WPS', () => {
+ 				const connectionId = `${clientId}-${generation}`;
+ 				generations.push(connectionId);
+ 				const logger = new AhpJsonlLogger({
+-					logsHome: URI.file('/logs'), logId: MISSION_CONTROL_AHP_LOG_ID, connectionId, transport: 'mission-control',
++					logsHome: URI.file('/logs'), logId: MISSION_CONTROL_AHP_LOG_ID, connectionId, transport: 'mission-control', content: 'full',
+ 				}, files, log);
+ 				const dispose = sinon.spy(logger, 'dispose');
+ 				disposals.push(dispose);
+diff --git a/src/vs/workbench/contrib/chat/browser/actions/exportAgentHostDebugLogsAction.ts b/src/vs/workbench/contrib/chat/browser/actions/exportAgentHostDebugLogsAction.ts
+index 27bfaa73707..af6f7243b66 100644
+--- a/src/vs/workbench/contrib/chat/browser/actions/exportAgentHostDebugLogsAction.ts
++++ b/src/vs/workbench/contrib/chat/browser/actions/exportAgentHostDebugLogsAction.ts
+@@ -23,6 +23,7 @@ import { AGENT_HOST_ENABLED_CONTEXT_KEY } from '../../../../../platform/agentHos
+ import { isAhpLogFileFor } from '../../../../../platform/agentHost/common/ahpJsonlLogger.js';
+ import { AGENT_HOST_DEBUG_LOGS_CHUNK_BYTES, AGENT_HOST_DEBUG_LOGS_MAX_ENTRIES, IAgentHostService, type AgentHostDebugLogsArtifactKind, type IAgentConnection, type IAgentHostDebugLogsArtifact, type IAgentHostDebugLogsChunk } from '../../../../../platform/agentHost/common/agentService.js';
+ import { IRemoteAgentHostService, remoteAgentHostLogOutputChannelId } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
++import { AgentHostAhpJsonlLoggingIncludeContentSettingId, getSessionLogContent } from '../../../../../platform/agentHost/common/sessionLogContent.js';
+ import { DEFAULT_CHAT_ID, getSessionChatResource, StateComponents, type SessionState } from '../../../../../platform/agentHost/common/state/sessionState.js';
+ import { JsonRpcErrorCodes, ProtocolError } from '../../../../../platform/agentHost/common/state/sessionProtocol.js';
+ import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+@@ -568,6 +569,7 @@ export async function exportAgentHostDebugLogs(
+ 	const fileService = accessor.get(IFileService);
+ 	const logService = accessor.get(ILogService);
+ 	const progressService = accessor.get(IProgressService);
++	const includesSessionContent = getSessionLogContent(accessor.get(IConfigurationService)) === 'full';
+ 	let hostArtifact: IAgentHostDebugLogsArtifact | undefined;
+ 	let committing = false;
+ 	const disposables = new DisposableStore();
+@@ -645,7 +647,7 @@ export async function exportAgentHostDebugLogs(
+ 					} else if (saveResult?.hostSaveError) {
+ 						notificationService.warn(localize('exportDebugLogs.partialSave', "Agent Host logs were not fully exported: {0}", saveResult.hostSaveError));
+ 					}
+-					notifyAgentHostDebugLogsExported(notificationService, clipboardService, chatEntitlementService.isInternal, destination);
++					notifyAgentHostDebugLogsExported(notificationService, clipboardService, chatEntitlementService.isInternal, destination, includesSessionContent);
+ 				} catch (error) {
+ 					if (isCancellationError(error) || options.token.isCancellationRequested) {
+ 						throw new CancellationError();
+@@ -692,13 +694,19 @@ export function notifyAgentHostDebugLogsExported(
+ 	clipboardService: IClipboardService,
+ 	isInternal: boolean,
+ 	savedResource: URI,
++	includesSessionContent = false,
+ ): void {
+ 	const savedPath = savedResource.scheme === Schemas.file ? savedResource.fsPath : savedResource.toString(true);
+ 	notificationService.notify({
+ 		severity: Severity.Warning,
+-		message: isInternal
+-			? localize('exportDebugLogs.privacyWarning.internal', "Note: This log may contain personal information such as auth tokens, file contents, or terminal output. It MUST be shared privately via Slack or in an issue filed on the microsoft/vscode-internalbacklog repo.")
+-			: localize('exportDebugLogs.privacyWarning', "Note: This log may contain personal information such as auth tokens, file contents, or terminal output. Please consider sharing privately or reviewing the contents carefully before sharing."),
++		// FlowLeap fork (PRD 0018 A4): AHP logs hold only metadata by default. When
++		// the developer content setting is on, say plainly that the export holds
++		// the session itself.
++		message: includesSessionContent
++			? localize('exportDebugLogs.sessionContentWarning', "Note: This export includes full agent session content (your prompts, model responses, tool input and output, and file content) because {0} is enabled. Share it only privately, or turn the setting off and export again.", AgentHostAhpJsonlLoggingIncludeContentSettingId)
++			: isInternal
++				? localize('exportDebugLogs.privacyWarning.internal', "Note: This log may contain personal information such as auth tokens, file contents, or terminal output. It MUST be shared privately via Slack or in an issue filed on the microsoft/vscode-internalbacklog repo.")
++				: localize('exportDebugLogs.privacyWarning', "Note: This log may contain personal information such as auth tokens, file contents, or terminal output. Please consider sharing privately or reviewing the contents carefully before sharing."),
+ 		actions: {
+ 			primary: [
+ 				new Action('copyAgentHostDebugLogsPath', localize('exportDebugLogs.copyPath', "Copy Path"), undefined, true, () => clipboardService.writeText(savedPath)),

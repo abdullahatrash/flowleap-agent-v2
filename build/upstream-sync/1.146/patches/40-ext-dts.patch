@@ -1,0 +1,17 @@
+diff --git a/src/vscode-dts/vscode.proposed.chatParticipantAdditions.d.ts b/src/vscode-dts/vscode.proposed.chatParticipantAdditions.d.ts
+index 7deef5e2420..375dcc5e7c5 100644
+--- a/src/vscode-dts/vscode.proposed.chatParticipantAdditions.d.ts
++++ b/src/vscode-dts/vscode.proposed.chatParticipantAdditions.d.ts
+@@ -323,6 +323,12 @@ declare module 'vscode' {
+ 		 */
+ 		description?: string;
+ 
++		/**
++		 * A human-readable name for the subagent type, shown in the subagent's header.
++		 * When it is missing, the header falls back to {@link agentName}.
++		 */
++		agentDisplayName?: string;
++
+ 		/**
+ 		 * The name of the subagent being invoked.
+ 		 */

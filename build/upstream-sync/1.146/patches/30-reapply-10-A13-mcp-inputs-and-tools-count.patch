@@ -1,0 +1,63 @@
+diff --git a/src/vs/sessions/services/configuration/browser/configurationService.ts b/src/vs/sessions/services/configuration/browser/configurationService.ts
+index 5b80c1cd174..066c0429357 100644
+--- a/src/vs/sessions/services/configuration/browser/configurationService.ts
++++ b/src/vs/sessions/services/configuration/browser/configurationService.ts
+@@ -124,7 +124,12 @@ export class ConfigurationService extends Disposable implements IWorkbenchConfig
+ 		await this.defaultConfiguration.initialize();
+ 		const [, userModel] = await Promise.all([
+ 			this.policyConfiguration.initialize(),
+-			this.userConfiguration.initialize(),
++			// FlowLeap: `reload()` (not `initialize()`) so the profile's standalone
++			// tasks.json and mcp.json are parsed and watched from the start. mcp.json
++			// carries the `inputs` that `${input:...}` variables in MCP server env
++			// resolve against; without it, starting a gallery-installed server in
++			// this window throws "Variable '...' must be defined in an 'inputs' section".
++			this.userConfiguration.reload(),
+ 			this.workspaceConfiguration.initialize(workspaceIdentifier, true),
+ 		]);
+ 		this.workspaceConfiguration.reparseWorkspaceSettings({ exclude: [...this.agentsWindowReadOnlyKeys] });
+@@ -308,7 +313,9 @@ export class ConfigurationService extends Disposable implements IWorkbenchConfig
+ 			return;
+ 		}
+ 
+-		const userModel = await this.userConfiguration.initialize();
++		// FlowLeap: `reload()` re-reads settings.json plus the standalone tasks.json
++		// and mcp.json; `initialize()` would drop the mcp `inputs` section.
++		const userModel = await this.userConfiguration.reload();
+ 		const previousData = this._configuration.toData();
+ 		const change = this._configuration.compareAndUpdateLocalUserConfiguration(userModel);
+ 
+diff --git a/src/vs/sessions/services/configuration/test/browser/configurationService.test.ts b/src/vs/sessions/services/configuration/test/browser/configurationService.test.ts
+index 7a7c2c9051c..625e63a4d1f 100644
+--- a/src/vs/sessions/services/configuration/test/browser/configurationService.test.ts
++++ b/src/vs/sessions/services/configuration/test/browser/configurationService.test.ts
+@@ -990,4 +990,29 @@ suite('Sessions ConfigurationService', () => {
+ 	}));
+ 
+ 	// #endregion
++
++	// #region MCP standalone configuration (inputs resolution)
++
++	test('mcp.json inputs are loaded on reload so ${input:} variables can resolve', () => runWithFakedTimers<void>({ useFakeTimers: true }, async () => {
++		// Shape written by the gallery installer: a server whose env references an
++		// `${input:...}` variable, plus the `inputs` section the resolver reads.
++		const mcpConfigWithInputs = {
++			servers: {
++				'co.flowleap/flowleap': {
++					type: 'stdio',
++					command: 'npx',
++					args: ['flowleap', 'mcp'],
++					env: { FLOWLEAP_API_KEY: '${input:FLOWLEAP_API_KEY}' }
++				}
++			},
++			inputs: [
++				{ id: 'FLOWLEAP_API_KEY', type: 'promptString', password: true, description: 'FlowLeap API key' }
++			]
++		};
++		await fileService.writeFile(userDataProfileService.currentProfile.mcpResource, VSBuffer.fromString(JSON.stringify(mcpConfigWithInputs)));
++		await testObject.reloadConfiguration();
++		assert.deepStrictEqual(testObject.inspect('mcp').userValue, mcpConfigWithInputs);
++	}));
++
++	// #endregion
+ });

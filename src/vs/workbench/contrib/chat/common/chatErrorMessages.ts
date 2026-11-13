@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { localize } from '../../../../nls.js';
+import { MarkdownString } from '../../../../base/common/htmlContent.js';
+import { readErrorDetail } from '../../../../platform/agentHost/common/meta/errorMeta.js';
 import type { ErrorInfo } from '../../../../platform/agentHost/common/state/protocol/state.js';
 import { ChatEntitlement } from '../../../services/chat/common/chatEntitlementService.js';
 import { ChatErrorLevel, IChatResponseErrorDetails } from './chatService/chatService.js';
@@ -196,7 +198,7 @@ function getRateLimitMessage(fetchError: IChatFetchErrorPayload, copilotPlan: st
 		return localize({ key: 'chatError.rateLimit.model', comment: [`{Locked=']({'}`] }, "You've hit the rate limit for this model. Please try switching to Auto or try again in {0}. [Learn More]({1})", retryAfterString, RATE_LIMIT_LEARN_MORE_URL);
 	}
 	if (code?.startsWith('integration_rate_limited')) {
-		return localize({ key: 'chatError.rateLimit.integration', comment: [`{Locked=']({'}`] }, "Sorry, FlowLeap is currently experiencing high demand. Please try again in {0}. [Learn More]({1})", retryAfterString, RATE_LIMIT_LEARN_MORE_URL);
+		return localize({ key: 'chatError.rateLimit.integration', comment: [`{Locked=']({'}`] }, "Sorry, GitHub Copilot Chat is currently experiencing high demand. Please try again in {0}. [Learn More]({1})", retryAfterString, RATE_LIMIT_LEARN_MORE_URL);
 	}
 
 	if (fetchError.capiError?.code && fetchError.capiError?.message) {
@@ -274,7 +276,7 @@ function getQuotaHitMessage(fetchError: IChatFetchErrorPayload, copilotPlan: str
 	if (code === 'quota_exceeded') {
 		return getQuotaMessageForPlan(copilotPlan, isUsageBasedBilling, quotaResetDate);
 	} else if (code === 'overage_limit_reached') {
-		return localize({ key: 'chatError.quota.overage', comment: [`{Locked=']({'}`] }, "You cannot accrue additional premium requests at this time. Please contact [GitHub Support]({0}) to continue using FlowLeap.", GITHUB_SUPPORT_URL);
+		return localize({ key: 'chatError.quota.overage', comment: [`{Locked=']({'}`] }, "You cannot accrue additional premium requests at this time. Please contact [GitHub Support]({0}) to continue using Copilot.", GITHUB_SUPPORT_URL);
 	} else if (code === 'additional_spend_limit_reached') {
 		return localize('chatError.quota.additionalSpend', "You've reached your additional usage limit for your plan. Upgrade your plan to keep going.");
 	} else if (code === 'billing_not_configured' && fetchError.capiError?.message) {
@@ -397,8 +399,24 @@ function isForwardedChatError(value: unknown): value is IForwardedChatError {
  * whose fields take precedence over the values forwarded in `_meta`.
  */
 export function getChatErrorDetailsFromMeta(error: ErrorInfo | undefined, context?: IChatErrorContext): IChatResponseErrorDetails | undefined {
-	const meta = error?._meta;
-	const chatError = meta?.chatError;
+	const detail = error && readErrorDetail(error);
+	if (error && detail?.kind === 'diagnostic') {
+		const message = new MarkdownString().appendText(error.message);
+		if (detail.url && URL.canParse(detail.url)) {
+			const url = new URL(detail.url);
+			if (url.protocol === 'https:' || url.protocol === 'http:') {
+				message.appendText(' ').appendLink(detail.url, localize('copilotError.learnMore', "Learn More"));
+			}
+		}
+		return {
+			message: message.value,
+			code: detail.errorCode,
+			isRateLimited: error.errorType === 'rate_limit' || detail.statusCode === 429,
+			isQuotaExceeded: error.errorType === 'quota',
+			isExpectedError: error.errorType === 'rate_limit' || error.errorType === 'quota',
+		};
+	}
+	const chatError = detail?.kind === 'fetch' ? detail.value : undefined;
 	if (!isForwardedChatError(chatError)) {
 		return undefined;
 	}

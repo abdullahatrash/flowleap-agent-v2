@@ -10,9 +10,10 @@ import { IDefaultAccount } from '../../../../base/common/defaultAccount.js';
 import { AccountsActivityActionViewItem, GlobalCompositeBar } from '../../../browser/parts/globalCompositeBar.js';
 import { AuthenticationSession, AuthenticationSessionAccount } from '../../../services/authentication/common/authentication.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
-import { Action } from '../../../../base/common/actions.js';
-import { Emitter } from '../../../../base/common/event.js';
-import { ACCOUNTS_ACTIVITY_ID, GLOBAL_ACTIVITY_ID } from '../../../common/activity.js';
+import { Action, IAction, Separator } from '../../../../base/common/actions.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { ACCOUNTS_ACTIVITY_ID, ACCOUNTS_SHARED_SIGN_IN_GROUP, GLOBAL_ACTIVITY_ID } from '../../../common/activity.js';
 
 interface IGlobalCompositeBarTestHarness {
 	globalActivityActionBar: ActionBar;
@@ -118,6 +119,7 @@ interface IAddOrUpdateAccountTestHarness {
 const updateAvatar = Reflect.get(AccountsActivityActionViewItem.prototype, 'updateAvatar') as (this: IUpdateAvatarTestHarness) => void;
 const getDefaultAccountAvatarIcon = Reflect.get(AccountsActivityActionViewItem.prototype, 'getDefaultAccountAvatarIcon') as (this: IUpdateAvatarTestHarness) => URI | undefined;
 const addOrUpdateAccount = Reflect.get(AccountsActivityActionViewItem.prototype, 'addOrUpdateAccount') as (this: IAddOrUpdateAccountTestHarness, providerId: string, account: AuthenticationSessionAccount) => Promise<void>;
+const resolveMainMenuActions = Reflect.get(AccountsActivityActionViewItem.prototype, 'resolveMainMenuActions') as (this: object, menu: object, disposables: DisposableStore) => Promise<IAction[]>;
 
 function createDefaultAccount(providerId: string, accountName: string): IDefaultAccount {
 	return {
@@ -175,6 +177,19 @@ suite('AccountsActivityActionViewItem - updateAvatar', () => {
 		);
 	});
 
+	test('falls back to the first account with an icon when the matching default account has no icon', () => {
+		const groupedAccounts = createGroupedAccounts();
+		groupedAccounts.set('microsoft', [{ id: 'default-id', label: 'default-account', icon: undefined, canSignOut: true }]);
+		const harness = createHarness(groupedAccounts, createDefaultAccount('microsoft', 'default-account'));
+
+		updateAvatar.call(harness);
+
+		assert.deepStrictEqual(
+			{ src: harness.avatarImg.src, hasAvatarClass: harness.label.classList.contains('has-avatar') },
+			{ src: firstIcon.toString(true), hasAvatarClass: true }
+		);
+	});
+
 	test('prefers the FlowLeap account avatar when there is no default account, and clears it on sign-out', () => {
 		const flowLeapIcon = URI.parse('https://img.clerk.com/flowleap.png');
 		const groupedAccounts = createGroupedAccounts();
@@ -189,19 +204,6 @@ suite('AccountsActivityActionViewItem - updateAvatar', () => {
 		assert.deepStrictEqual(
 			{ signedIn, signedOut: harness.avatarImg.getAttribute('src'), hasAvatarClass: harness.label.classList.contains('has-avatar') },
 			{ signedIn: flowLeapIcon.toString(true), signedOut: null, hasAvatarClass: false }
-		);
-	});
-
-	test('falls back to the first account with an icon when the matching default account has no icon', () => {
-		const groupedAccounts = createGroupedAccounts();
-		groupedAccounts.set('microsoft', [{ id: 'default-id', label: 'default-account', icon: undefined, canSignOut: true }]);
-		const harness = createHarness(groupedAccounts, createDefaultAccount('microsoft', 'default-account'));
-
-		updateAvatar.call(harness);
-
-		assert.deepStrictEqual(
-			{ src: harness.avatarImg.src, hasAvatarClass: harness.label.classList.contains('has-avatar') },
-			{ src: firstIcon.toString(true), hasAvatarClass: true }
 		);
 	});
 });
@@ -232,12 +234,65 @@ suite('AccountsActivityActionViewItem - addOrUpdateAccount', () => {
 			[URI.parse('https://example.com/fresh.png'), undefined]
 		);
 	});
+});
 
-	test('relabels an account with the same id in place instead of adding a second one', async () => {
-		const harness = createAddOrUpdateHarness([{ id: 'user_123', label: 'FlowLeap User', canSignOut: true }]);
+suite('AccountsActivityActionViewItem - account tiers', () => {
 
-		await addOrUpdateAccount.call(harness, 'github', { id: 'user_123', label: 'Jane Doe (jane@example.com)' });
+	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
 
-		assert.deepStrictEqual(harness.groupedAccounts.get('github'), [{ id: 'user_123', label: 'Jane Doe (jane@example.com)', icon: undefined, canSignOut: true }]);
+	function createHarness(initialized: boolean) {
+		return {
+			initialized,
+			authenticationService: {
+				getProviderIds: () => [],
+				isDynamicAuthenticationProvider: () => false,
+			},
+			groupedAccounts: new Map(),
+			problematicProviders: new Set(),
+			codexAccountService: {
+				_serviceBrand: undefined,
+				agent: 'codex',
+				account: { status: 'signedOut' },
+				onDidChangeAccount: Event.None,
+				signIn() { },
+				signOut() { },
+			},
+			configurationService: {
+				getValue: (key: string) => key === 'chat.disableAIFeatures' ? false : true,
+			},
+			addAccountsFromProvider: async () => { },
+		};
+	}
+
+	test('delays ChatGPT without hiding other account commands while shared accounts resolve', async () => {
+		const actionDisposables = disposables.add(new DisposableStore());
+		const github = disposables.add(new Action('github', 'Sign in with GitHub'));
+		const manage = disposables.add(new Action('manage', 'Manage Language Model Access'));
+		const menu = { getActions: () => [[ACCOUNTS_SHARED_SIGN_IN_GROUP, [github]], ['z_manage', [manage]]] };
+		const actions = await resolveMainMenuActions.call(createHarness(false), menu, actionDisposables);
+
+		assert.deepStrictEqual(actions.map(action => action instanceof Separator ? 'separator' : action.label), [
+			'Loading...',
+			'separator',
+			'Sign in with GitHub',
+			'separator',
+			'Manage Language Model Access',
+		]);
+	});
+
+	test('places shared sign-in before ChatGPT and unrelated account commands', async () => {
+		const actionDisposables = disposables.add(new DisposableStore());
+		const github = disposables.add(new Action('github', 'Sign in with GitHub'));
+		const manage = disposables.add(new Action('manage', 'Manage Language Model Access'));
+		const menu = { getActions: () => [[ACCOUNTS_SHARED_SIGN_IN_GROUP, [github]], ['z_manage', [manage]]] };
+		const actions = await resolveMainMenuActions.call(createHarness(true), menu, actionDisposables);
+
+		assert.deepStrictEqual(actions.map(action => action instanceof Separator ? 'separator' : action.label), [
+			'Sign in with GitHub',
+			'separator',
+			'Sign in to ChatGPT',
+			'separator',
+			'Manage Language Model Access',
+		]);
 	});
 });

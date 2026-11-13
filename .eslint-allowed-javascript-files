@@ -29,6 +29,9 @@ build/next/devTunnelsWebEntry.js
 build/npm/stubs/sharp/index.js
 build/upstream-sync/1.140/tools/closure.mjs
 build/upstream-sync/1.140/tools/div.mjs
+build/upstream-sync/1.146/tools/closure.mjs
+build/upstream-sync/1.146/tools/div.mjs
+build/upstream-sync/1.146/tools/rewrite-imports.mjs
 docs/media/549/probe.mjs
 eslint.config.js
 extensions/.pnpmfile.mjs

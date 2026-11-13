@@ -1,0 +1,196 @@
+diff --git a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChangesets.ts b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChangesets.ts
+index 78bfd60fe5e..56e633a7fb4 100644
+--- a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChangesets.ts
++++ b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChangesets.ts
+@@ -8,7 +8,7 @@ import { isEqual } from '../../../../../base/common/resources.js';
+ import { URI } from '../../../../../base/common/uri.js';
+ import { localize } from '../../../../../nls.js';
+ import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+-import { IChatSessionFileChange2 } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
++import { IChatSessionFileChange2 } from '../../../../../workbench/common/chatSessionFileChange.js';
+ import { GitDiffChange, IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
+ import { BRANCH_CHANGES_CHANGESET_ID, IChat, ISessionChangeset, ISessionChangesetOperation, ISessionChangesetOperationTarget, ISessionFileChange, ISessionWorkspace, sessionFileChangesEqual } from '../../../../../workbench/services/sessions/common/session.js';
+ 
+diff --git a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts
+index b5b406291ea..6e01cf1e408 100644
+--- a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts
++++ b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts
+@@ -8,7 +8,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
+ import { Disposable } from '../../../../../base/common/lifecycle.js';
+ import { LocalChatSessionsProvider, LOCAL_SESSION_ENABLED_SETTING } from './localChatSessionsProvider.js';
+ import './localChatSessionsActions.js';
+-import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
++import { ISessionsProvidersService } from '../../../../../workbench/contrib/sessions/browser/sessionsProvidersService.js';
+ import { Registry } from '../../../../../platform/registry/common/platform.js';
+ import { IConfigurationRegistry, Extensions as ConfigurationExtensions } from '../../../../../platform/configuration/common/configurationRegistry.js';
+ import { localize } from '../../../../../nls.js';
+diff --git a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsActions.ts b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsActions.ts
+index 65775ec3f67..4000bf6bb72 100644
+--- a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsActions.ts
++++ b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsActions.ts
+@@ -14,10 +14,9 @@ import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase
+ import { ChatPermissionLevel } from '../../../../../workbench/contrib/chat/common/constants.js';
+ import { Menus } from '../../../../../workbench/contrib/sessions/browser/menus.js';
+ import { SessionProviderIdContext, SessionTypeContext } from '../../../../../workbench/contrib/sessions/common/contextkeys.js';
+-import { ISessionContext } from '../../../../services/sessions/browser/sessionContext.js';
+-import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
++import { ISessionsProvidersService } from '../../../../../workbench/contrib/sessions/browser/sessionsProvidersService.js';
+ import { ISession } from '../../../../../workbench/services/sessions/common/session.js';
+-import { IActiveSession } from '../../../../../workbench/contrib/sessions/common/sessionsManagement.js';
++import { ISessionHost } from '../../../../../workbench/services/sessions/browser/sessionHost.js';
+ import { ModePicker, ScopedModePickerModelCache } from '../../../../../workbench/contrib/sessions/providers/copilotChatSessions/browser/modePicker.js';
+ import { IPermissionLevelMeta, IPermissionPickerDelegate, PermissionPicker } from '../../../../../workbench/contrib/sessions/providers/copilotChatSessions/browser/permissionPicker.js';
+ import { ILocalSessionConfiguration, LOCAL_PROVIDER_ID, LocalChatSessionsProvider, LocalSessionType } from './localChatSessionsProvider.js';
+@@ -42,7 +41,7 @@ registerAction2(class extends Action2 {
+ 			id: LOCAL_MODE_PICKER_ID,
+ 			title: localize2('localModePicker', "Mode"),
+ 			f1: false,
+-			menu: [{ id: Menus.NewSessionConfig, group: 'navigation', order: 0, when: IsActiveLocalSession }],
++			menu: [{ id: Menus.NewSessionControl, group: 'navigation', order: 0, when: IsActiveLocalSession }],
+ 		});
+ 	}
+ 	override async run(): Promise<void> { /* handled by the action view item */ }
+@@ -88,7 +87,7 @@ class LocalPermissionPickerDelegate implements IPermissionPickerDelegate {
+ 	readonly currentPermissionLevel: IObservable<ChatPermissionLevel | undefined>;
+ 
+ 	constructor(
+-		private readonly _session: IObservable<IActiveSession | undefined>,
++		private readonly _session: IObservable<ISession | undefined>,
+ 		private readonly _sessionsProvidersService: ISessionsProvidersService,
+ 	) {
+ 		this.currentPermissionLevel = derived(reader => this._configuration(this._session.read(reader))?.permissionLevel.read(reader));
+@@ -119,12 +118,15 @@ class LocalPickerActionViewItemContribution extends Disposable implements IWorkb
+ 		const modePickerModels = this._register(new ScopedModePickerModelCache(session => session.providerId === LOCAL_PROVIDER_ID));
+ 
+ 		this._register(actionViewItemService.register(
+-			Menus.NewSessionConfig, LOCAL_MODE_PICKER_ID,
++			Menus.NewSessionControl, LOCAL_MODE_PICKER_ID,
+ 			(_action, _options, scopedInstantiationService) => {
+-				const { session } = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionContext));
++				// The host the toolbar lives in (a composer or a session pane) provides itself through the scoped
++				// instantiation service; its `session` is the draft of the new-session composer or the shown session.
++				const host = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionHost));
++				const session = host.session;
+ 				const store = new DisposableStore();
+-				const modePickerModel = store.add(modePickerModels.acquire(session, scopedInstantiationService));
+-				const picker = scopedInstantiationService.createInstance(ModePicker, modePickerModel.model, session);
++				const modePickerModel = store.add(modePickerModels.acquire(host, scopedInstantiationService));
++				const picker = scopedInstantiationService.createInstance(ModePicker, modePickerModel.model, host);
+ 				store.add(picker.onDidSelect(mode => {
+ 					const active = session.get();
+ 					const provider = active ? sessionsProvidersService.getProvider(active.providerId) : undefined;
+@@ -139,8 +141,8 @@ class LocalPickerActionViewItemContribution extends Disposable implements IWorkb
+ 		this._register(actionViewItemService.register(
+ 			Menus.NewSessionControl, LOCAL_PERMISSION_PICKER_ID,
+ 			(_action, _options, scopedInstantiationService) => {
+-				const { session } = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionContext));
+-				const delegate = new LocalPermissionPickerDelegate(session, sessionsProvidersService);
++				const host = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionHost));
++				const delegate = new LocalPermissionPickerDelegate(host.session, sessionsProvidersService);
+ 				return new PickerActionViewItem(scopedInstantiationService.createInstance(PermissionPicker, delegate));
+ 			},
+ 		));
+diff --git a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsProvider.ts b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsProvider.ts
+index 109f3a4757e..10b0fe2d7a7 100644
+--- a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsProvider.ts
++++ b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsProvider.ts
+@@ -12,11 +12,13 @@ import { ThemeIcon } from '../../../../../base/common/themables.js';
+ import { URI, UriComponents } from '../../../../../base/common/uri.js';
+ import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+ import { IChatService, IChatSendRequestOptions, IChatDetail, convertLegacyChatSessionTiming } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
+-import { IChatSessionFileChange2, IChatSessionProviderOptionItem, SessionType } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
+-import { ISession, IChat, ISessionGitRepository, ISessionFolder, ISessionWorkspace, SessionStatus, ISessionType, ISessionFileChange, toSessionId, SESSION_WORKSPACE_GROUP_LOCAL, IChatCheckpoints, ChatInteractivity, ChatModelSource, ISideChatSelection, SessionTypeAuthRequirement } from '../../../../../workbench/services/sessions/common/session.js';
++import { IChatSessionProviderOptionItem, SessionType } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
++import { IChatSessionFileChange2 } from '../../../../../workbench/common/chatSessionFileChange.js';
++import { ISession, IChat, ISessionGitRepository, ISessionFolder, ISessionWorkspace, SessionStatus, ISessionType, ISessionFileChange, toSessionId, SESSION_WORKSPACE_GROUP_LOCAL, IChatCheckpoints, ChatInteractivity, ChatModelSource, ISideChatSelection, SessionTypeAuthRequirement, ISessionEnvironment } from '../../../../../workbench/services/sessions/common/session.js';
++import { getSessionApplication } from '../../../../../workbench/services/sessions/common/sessionApplication.js';
+ import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, isChatPermissionLevel } from '../../../../../workbench/contrib/chat/common/constants.js';
+ import { basename, dirname, isEqual } from '../../../../../base/common/resources.js';
+-import { IDeleteChatOptions, ISendRequestOptions, ISessionChangeEvent, ISessionModelPickerOptions, ISessionModelsSnapshot, ISessionsProvider, ISessionsProviderCreateSessionOptions } from '../../../../services/sessions/common/sessionsProvider.js';
++import { IChatMovedEvent, IDeleteChatOptions, INestedChatFolderInfo, INestedChatWorkspace, INestedChatWorkspaceSupport, ISendRequestOptions, ISessionChangeEvent, ISessionChatMoveDestination, ISessionModelPickerOptions, ISessionModelsSnapshot, ISessionsProvider, ISessionsProviderCreateSessionOptions, NestedChatWorkspaceError, SessionMoveRefusedError } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
+ import { isBuiltinChatMode, IChatMode } from '../../../../../workbench/contrib/chat/common/chatModes.js';
+ import { IChatModel } from '../../../../../workbench/contrib/chat/common/model/chatModel.js';
+ import { IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
+@@ -420,8 +422,11 @@ export class LocalChatSessionsProvider extends Disposable implements ISessionsPr
+ 
+ 	readonly id = LOCAL_PROVIDER_ID;
+ 	readonly label = localize('localChatSessionsProvider', "FlowLeap Chat");
++	readonly environment: ISessionEnvironment = { id: 'local', label: localize('environment.local', "This Computer") };
+ 	readonly icon = Codicon.vm;
+ 	readonly order = 0;
++	/** Local chats live in one window; nothing moves between sessions. */
++	readonly onDidMoveChat: Event<IChatMovedEvent> = Event.None;
+ 	readonly browseActions: readonly [] = [];
+ 	readonly supportsLocalWorkspaces = true;
+ 
+@@ -774,8 +779,6 @@ export class LocalChatSessionsProvider extends Disposable implements ISessionsPr
+ 		// Local (in-process VS Code chat) sessions offer the "Manage Models"
+ 		// action so users can configure the general-purpose model set.
+ 		return {
+-			useGroupedModelPicker: true,
+-			showFeatured: true,
+ 			showUnavailableFeatured: false,
+ 			showManageModelsAction: true,
+ 		};
+@@ -886,6 +889,38 @@ export class LocalChatSessionsProvider extends Disposable implements ISessionsPr
+ 		return true;
+ 	}
+ 
++	canMoveChat(_sessionId: string, _chatUri: URI): boolean {
++		return false;
++	}
++
++	async moveChat(_sessionId: string, _chatUri: URI, _destination: ISessionChatMoveDestination): Promise<void> {
++		throw new SessionMoveRefusedError(localize('localChatSessions.moveChatUnsupported', "Chats of a Local session can't be moved."));
++	}
++
++	canMoveSessionUnder(_sessionId: string): boolean {
++		return false;
++	}
++
++	async moveSessionUnder(_sessionId: string, _destinationSessionId: string, _after: URI | undefined): Promise<void> {
++		throw new SessionMoveRefusedError(localize('localChatSessions.moveSessionUnsupported', "A Local session can't be moved into another session."));
++	}
++
++	getNestedChatWorkspaceSupport(_sessionId: string, _chat: URI, _reader: IReader | undefined): INestedChatWorkspaceSupport | undefined {
++		return undefined;
++	}
++
++	async resolveNestedChatFolder(_sessionId: string, _chat: URI, _folder: URI, _token: CancellationToken): Promise<INestedChatFolderInfo> {
++		throw NestedChatWorkspaceError.notSupported();
++	}
++
++	async getNestedChatBranches(_sessionId: string, _chat: URI, _folder: URI, _query: string, _token: CancellationToken): Promise<readonly string[]> {
++		throw NestedChatWorkspaceError.notSupported();
++	}
++
++	async applyNestedChatWorkspace(_sessionId: string, _chat: URI, _workspace: INestedChatWorkspace, _prompt: string): Promise<void> {
++		throw NestedChatWorkspaceError.notSupported();
++	}
++
+ 	async forkChat(sessionId: string, _sourceChat: URI, _turnId: string): Promise<IChat> {
+ 		throw new Error(`Session '${sessionId}' does not support forking into a chat`);
+ 	}
+@@ -1235,6 +1270,9 @@ export class LocalChatSessionsProvider extends Disposable implements ISessionsPr
+ 			resource: primary.resource,
+ 			providerId: primary.providerId,
+ 			sessionType: primary.sessionType,
++			harness: primary.sessionType,
++			environment: this.environment.id,
++			application: constObservable(getSessionApplication('vscode')),
+ 			icon: primary.icon,
+ 			createdAt: primary.createdAt,
+ 			workspace: primary.workspace,
+diff --git a/src/vs/sessions/sessions.common.main.ts b/src/vs/sessions/sessions.common.main.ts
+index 1949e9edc0e..6e4e5bbb4b8 100644
+--- a/src/vs/sessions/sessions.common.main.ts
++++ b/src/vs/sessions/sessions.common.main.ts
+@@ -492,6 +492,8 @@ import './contrib/providers/agentHost/browser/agentHostForkActions.js';
+ import './contrib/chat/browser/customizationsDebugLog.contribution.js';
+ // FlowLeap keep-out: the Copilot Cloud / Sandbox provider needs GitHub sign-in and the GitHub service (PRD 0017).
+ // Local agent host provider (PRD 0018 A1, ADR 0009) is registered from sessions.desktop.main.ts.
++// FlowLeap: Local (in-process) sessions; upstream removed the Local harness (PRD 0017 A11).
++import './contrib/providers/localChatSessions/browser/localChatSessions.contribution.js';
+ import './contrib/sessions/browser/sessions.contribution.js';
+ import './contrib/canvases/browser/pinnedCanvases.contribution.js';
+ import './contrib/sessions/browser/customizationsToolbar.contribution.js';

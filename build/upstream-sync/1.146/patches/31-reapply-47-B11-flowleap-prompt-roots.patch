@@ -1,0 +1,710 @@
+diff --git a/src/vs/platform/chat/common/chatSettings.ts b/src/vs/platform/chat/common/chatSettings.ts
+index 810db682241..935eb791b08 100644
+--- a/src/vs/platform/chat/common/chatSettings.ts
++++ b/src/vs/platform/chat/common/chatSettings.ts
+@@ -119,6 +119,9 @@ export const ALWAYS_CHECKED_EDIT_PATTERNS: ChatEditAutoApprovePatterns = {
+ 	'**/.devcontainer/*/devcontainer.json': false,
+ 	'**/.github/agents/**': false,
+ 	'**/.github/hooks/**': false,
++	// FlowLeap: `.flowleap/agents/` is a default agent location (promptFileLocations.ts), so its
++	// edits need the same confirmation as the other agent folders.
++	'**/.flowleap/agents/**': false,
+ 	'**/.github/copilot/settings.json': false,
+ 	'**/.github/copilot/settings.local.json': false,
+ 	'**/.claude/agents/**': false,
+diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/promptsServiceCustomizationItemProvider.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/promptsServiceCustomizationItemProvider.ts
+index 8238379f980..7b91277ed2d 100644
+--- a/src/vs/workbench/contrib/chat/browser/aiCustomization/promptsServiceCustomizationItemProvider.ts
++++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/promptsServiceCustomizationItemProvider.ts
+@@ -17,6 +17,7 @@ import { IAICustomizationWorkspaceService, AICustomizationSources } from '../../
+ import { HookType, HOOK_METADATA } from '../../common/promptSyntax/hookTypes.js';
+ import { formatHookCommandLabel } from '../../common/promptSyntax/hookSchema.js';
+ import { PromptsType, getSourceDescription } from '../../common/promptSyntax/promptTypes.js';
++import { getSkillFolderName } from '../../common/promptSyntax/config/promptFileLocations.js';
+ import { ICustomAgent, IPromptsService, matchesSessionType, PromptsStorage } from '../../common/promptSyntax/service/promptsService.js';
+ import { ICustomizationItem, ICustomizationItemProvider, ICustomizationSourceFolder } from '../../common/customizationHarnessService.js';
+ import { BUILTIN_STORAGE } from './aiCustomizationManagement.js';
+@@ -137,6 +138,27 @@ export class PromptsServiceCustomizationItemProvider implements ICustomizationIt
+ 					userInvocable: skill.userInvocable
+ 				});
+ 			}
++			// FlowLeap: a user skill with the name of a built-in skill does not load. Show it with the reason.
++			const builtinSkillUris = new ResourceSet(allSkillFiles.filter(f => f.storage === PromptsStorage.extension && f.extension.isBuiltin).map(f => f.uri));
++			const skillDiscovery = builtinSkillUris.size > 0 ? await this.promptsService.getDiscoveryInfo(PromptsType.skill, token) : undefined;
++			for (const file of skillDiscovery?.files ?? []) {
++				if (file.skipReason === 'duplicate-name' && file.duplicateOf && builtinSkillUris.has(file.duplicateOf) && !seenUris.has(file.promptPath.uri)) {
++					seenUris.add(file.promptPath.uri);
++					const message = localize('skillShadowedByBuiltin', "A built-in skill has this name, so this skill does not load. Rename your skill to use it.");
++					items.push({
++						uri: file.promptPath.uri,
++						type: promptType,
++						name: getSkillFolderName(file.promptPath.uri),
++						description: message,
++						source: file.promptPath.storage,
++						status: 'error',
++						statusMessage: message,
++						extensionId: undefined,
++						pluginUri: undefined,
++						userInvocable: false
++					});
++				}
++			}
+ 			if (disabledUris.size > 0) {
+ 				for (const file of allSkillFiles) {
+ 					if (!seenUris.has(file.uri) && disabledUris.has(file.uri)) {
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/config/promptFileLocations.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/config/promptFileLocations.ts
+index d2a72ac6938..52597cf7c9a 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/config/promptFileLocations.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/config/promptFileLocations.ts
+@@ -166,10 +166,43 @@ export interface IResolvedPromptSourceFolder {
+ 	readonly isDefault?: boolean;
+ }
+ 
++//#region FlowLeap
++
++/**
++ * FlowLeap configuration folder name. The `.flowleap/` workspace folder and the
++ * `~/.flowleap/` user folder have the same shape as `.github/` (no hooks).
++ * Their entries come first in each default list, so new files go there and an
++ * item in `.flowleap/` wins over an item with the same name in a developer folder.
++ */
++export const FLOWLEAP_CONFIG_FOLDER = '.flowleap';
++
++/**
++ * Always-on FlowLeap instructions file name (`.flowleap/instructions.md`),
++ * the FlowLeap counterpart of `.github/copilot-instructions.md`.
++ */
++export const FLOWLEAP_INSTRUCTIONS_FILENAME = 'instructions.md';
++
++function flowLeapSourceFolders(kind: string): readonly IPromptSourceFolder[] {
++	return [
++		{ path: `${FLOWLEAP_CONFIG_FOLDER}/${kind}`, source: PromptFileSource.FlowLeapWorkspace, storage: PromptsStorage.local },
++		{ path: `~/${FLOWLEAP_CONFIG_FOLDER}/${kind}`, source: PromptFileSource.FlowLeapPersonal, storage: PromptsStorage.user },
++	];
++}
++
++/**
++ * Checks if a source is a FlowLeap folder (`.flowleap/` or `~/.flowleap/`).
++ */
++export function isFlowLeapSource(source: PromptFileSource | undefined): boolean {
++	return source === PromptFileSource.FlowLeapWorkspace || source === PromptFileSource.FlowLeapPersonal;
++}
++
++//#endregion
++
+ /**
+  * All default skill source folders (both workspace and user home).
+  */
+ export const DEFAULT_SKILL_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
++	...flowLeapSourceFolders('skills'),
+ 	{ path: '.agents/skills', source: PromptFileSource.AgentsWorkspace, storage: PromptsStorage.local },
+ 	{ path: '.github/skills', source: PromptFileSource.GitHubWorkspace, storage: PromptsStorage.local },
+ 	{ path: '.claude/skills', source: PromptFileSource.ClaudeWorkspace, storage: PromptsStorage.local },
+@@ -182,6 +215,7 @@ export const DEFAULT_SKILL_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
+  * Default instructions source folders.
+  */
+ export const DEFAULT_INSTRUCTIONS_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
++	...flowLeapSourceFolders('instructions'),
+ 	{ path: INSTRUCTIONS_DEFAULT_SOURCE_FOLDER, source: PromptFileSource.GitHubWorkspace, storage: PromptsStorage.local },
+ 	{ path: CLAUDE_RULES_SOURCE_FOLDER, source: PromptFileSource.ClaudeWorkspace, storage: PromptsStorage.local },
+ 	{ path: '~/.copilot/instructions', source: PromptFileSource.CopilotPersonal, storage: PromptsStorage.user },
+@@ -192,6 +226,7 @@ export const DEFAULT_INSTRUCTIONS_SOURCE_FOLDERS: readonly IPromptSourceFolder[]
+  * Default prompt source folders.
+  */
+ export const DEFAULT_PROMPT_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
++	...flowLeapSourceFolders('prompts'),
+ 	{ path: PROMPT_DEFAULT_SOURCE_FOLDER, source: PromptFileSource.GitHubWorkspace, storage: PromptsStorage.local },
+ ];
+ 
+@@ -199,6 +234,7 @@ export const DEFAULT_PROMPT_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
+  * Default agent source folders.
+  */
+ export const DEFAULT_AGENT_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
++	...flowLeapSourceFolders('agents'),
+ 	{ path: AGENTS_SOURCE_FOLDER, source: PromptFileSource.GitHubWorkspace, storage: PromptsStorage.local },
+ 	{ path: CLAUDE_AGENTS_SOURCE_FOLDER, source: PromptFileSource.ClaudeWorkspace, storage: PromptsStorage.local },
+ 	{ path: COPILOT_USER_AGENTS_SOURCE_FOLDER, source: PromptFileSource.CopilotPersonal, storage: PromptsStorage.user },
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/promptTypes.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/promptTypes.ts
+index 828c51b5581..c0d95d54de1 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/promptTypes.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/promptTypes.ts
+@@ -167,6 +167,9 @@ export enum PromptFileSource {
+ 	ExtensionContribution = 'extension-contribution',
+ 	ExtensionAPI = 'extension-api',
+ 	Plugin = 'plugin',
++	// FlowLeap: the `.flowleap/` workspace folder and the `~/.flowleap/` user folder.
++	FlowLeapWorkspace = 'flowleap-workspace',
++	FlowLeapPersonal = 'flowleap-personal',
+ }
+ 
+ /**
+@@ -194,6 +197,10 @@ export function getSourceDescription(source: PromptFileSource): string | undefin
+ 			return localize('source.configWorkspace', "Workspace (contributed from settings)");
+ 		case PromptFileSource.ConfigPersonal:
+ 			return localize('source.configPersonal', "Global (contributed from settings)");
++		case PromptFileSource.FlowLeapWorkspace:
++			return localize('source.flowleapWorkspace', "FlowLeap (Workspace)");
++		case PromptFileSource.FlowLeapPersonal:
++			return localize('source.flowleapPersonal', "FlowLeap (Global)");
+ 		default:
+ 			return undefined;
+ 	}
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.ts
+index 6894b0dd8fd..24dda00c13e 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.ts
+@@ -30,7 +30,7 @@ import { ITelemetryService } from '../../../../../../platform/telemetry/common/t
+ import { IUserDataProfileService } from '../../../../../services/userDataProfile/common/userDataProfile.js';
+ import { IVariableReference } from '../../chatModes.js';
+ import { PromptsConfig } from '../config/config.js';
+-import { AGENT_MD_FILENAME, CLAUDE_CONFIG_FOLDER, CLAUDE_LOCAL_MD_FILENAME, CLAUDE_MD_FILENAME, COPILOT_CONFIG_FOLDER, COPILOT_CUSTOM_INSTRUCTIONS_FILENAME, DICTATION_INSTRUCTIONS_FILENAME, getCleanPromptName, getSkillFolderName, GITHUB_CONFIG_FOLDER, IResolvedPromptSourceFolder, isInClaudeRulesFolder, VOICE_INSTRUCTIONS_FILENAME } from '../config/promptFileLocations.js';
++import { AGENT_MD_FILENAME, CLAUDE_CONFIG_FOLDER, CLAUDE_LOCAL_MD_FILENAME, CLAUDE_MD_FILENAME, COPILOT_CONFIG_FOLDER, COPILOT_CUSTOM_INSTRUCTIONS_FILENAME, DICTATION_INSTRUCTIONS_FILENAME, FLOWLEAP_CONFIG_FOLDER, FLOWLEAP_INSTRUCTIONS_FILENAME, getCleanPromptName, getSkillFolderName, GITHUB_CONFIG_FOLDER, IResolvedPromptSourceFolder, isFlowLeapSource, isInClaudeRulesFolder, VOICE_INSTRUCTIONS_FILENAME } from '../config/promptFileLocations.js';
+ import { PROMPT_LANGUAGE_ID, PromptFileSource, PromptsType, Target, getPromptsTypeForLanguageId } from '../promptTypes.js';
+ import { IWorkspaceInstructionFile, PromptFilesLocator } from '../utils/promptFilesLocator.js';
+ import { evaluateApplyToPattern, PromptFileParser, ParsedPromptFile, PromptHeaderAttributes } from '../promptFileParser.js';
+@@ -496,7 +496,9 @@ export class PromptsService extends Disposable implements IPromptsService {
+ 			return result;
+ 		}
+ 
+-		if (type === PromptsType.skill) {
++		// FlowLeap: prompts, instructions and agents also use the resolved folders, so
++		// new files go to `.flowleap/<kind>/` (workspace) or `~/.flowleap/<kind>/` (user).
++		if (type === PromptsType.skill || type === PromptsType.prompt || type === PromptsType.instructions || type === PromptsType.agent) {
+ 			// Skills have both workspace and user-level source folders (e.g.
+ 			// ~/.copilot/skills). Use the resolved source folders so each
+ 			// location reports its actual storage (local vs user), otherwise
+@@ -916,6 +918,7 @@ export class PromptsService extends Disposable implements IPromptsService {
+ 			const copilotInstructionsFile = { fileName: COPILOT_CUSTOM_INSTRUCTIONS_FILENAME, type: AgentInstructionFileType.copilotInstructionsMd };
+ 			promises.push(this.fileLocator.findFilesInRoots(rootFolders, GITHUB_CONFIG_FOLDER, [copilotInstructionsFile], token, resolvedAgentFiles)); // copilot-instructions.md in .github folder under workspace root
+ 			promises.push(this.fileLocator.findFilesInRoots([await this.pathService.userHome()], COPILOT_CONFIG_FOLDER, [copilotInstructionsFile], token, resolvedAgentFiles)); // copilot-instructions.md in ~/.copilot folder
++			promises.push(this.fileLocator.findFilesInRoots(rootFolders, FLOWLEAP_CONFIG_FOLDER, [{ fileName: FLOWLEAP_INSTRUCTIONS_FILENAME, type: AgentInstructionFileType.copilotInstructionsMd }], token, resolvedAgentFiles)); // instructions.md in .flowleap folder under workspace root
+ 		}
+ 
+ 		promises.push(this.fileLocator.findFilesInRoots(rootFolders, undefined, rootFiles, token, resolvedAgentFiles));
+@@ -1483,10 +1486,17 @@ export class PromptsService extends Disposable implements IPromptsService {
+ 
+ 	/**
+ 	 * Precedence used when deduplicating skills that share the same canonical
+-	 * name: workspace > personal > plugin > extension API > extension contribution.
++	 * name: built-in (shipped with the app) > FlowLeap (`.flowleap/` > `~/.flowleap/`) >
++	 * workspace > personal > plugin > extension API > extension contribution.
+ 	 * Lower numbers win.
+ 	 */
+ 	private getSkillPriority(skill: IPromptPath): number {
++		if (skill.storage === PromptsStorage.extension && skill.extension.isBuiltin) {
++			return -3; // FlowLeap: built-in skills carry the tool and doctrine rules, so a same-name user skill must not replace them
++		}
++		if (isFlowLeapSource(skill.source)) {
++			return skill.storage === PromptsStorage.local ? -2 : -1; // FlowLeap wins over developer folders
++		}
+ 		if (skill.storage === PromptsStorage.local) {
+ 			return 0; // workspace
+ 		}
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/utils/promptFilesLocator.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/utils/promptFilesLocator.ts
+index fbf96c219fb..50777d0c6ad 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/utils/promptFilesLocator.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/utils/promptFilesLocator.ts
+@@ -13,7 +13,7 @@ import { basename, dirname, isEqual, isEqualOrParent, joinPath } from '../../../
+ import { IWorkspaceContextService, IWorkspaceFolder } from '../../../../../../platform/workspace/common/workspace.js';
+ import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+ import { CHAT_CUSTOMIZATION_LOCATION_PATTERN, isValidChatCustomizationLocation } from '../../../../../../platform/chat/common/chatSettings.js';
+-import { AGENTS_SOURCE_FOLDER, CLAUDE_CONFIG_FOLDER, COPILOT_CONFIG_FOLDER, GITHUB_CONFIG_FOLDER, getPromptFileExtension, getPromptFileType, LEGACY_MODE_FILE_EXTENSION, getCleanPromptName, AGENT_FILE_EXTENSION, getPromptFileDefaultLocations, SKILL_FILENAME, IPromptSourceFolder, IResolvedPromptSourceFolder } from '../config/promptFileLocations.js';
++import { AGENTS_SOURCE_FOLDER, CLAUDE_CONFIG_FOLDER, COPILOT_CONFIG_FOLDER, GITHUB_CONFIG_FOLDER, getPromptFileExtension, getPromptFileType, LEGACY_MODE_FILE_EXTENSION, getCleanPromptName, AGENT_FILE_EXTENSION, getPromptFileDefaultLocations, SKILL_FILENAME, IPromptSourceFolder, IResolvedPromptSourceFolder, isFlowLeapSource } from '../config/promptFileLocations.js';
+ import { PromptFileSource, PromptsType } from '../promptTypes.js';
+ import { IWorkbenchEnvironmentService } from '../../../../../services/environment/common/environmentService.js';
+ import { Schemas } from '../../../../../../base/common/network.js';
+@@ -511,7 +511,10 @@ export class PromptFilesLocator {
+ 	 * @returns List of resolved source folders with metadata.
+ 	 */
+ 	public async getResolvedSourceFolders(type: PromptsType): Promise<readonly IResolvedPromptSourceFolder[]> {
+-		const absoluteLocations = await this.getLocalStorageFolders(type);
++		// FlowLeap: offer only `.flowleap/` and user-configured folders as locations for
++		// new files. Developer folders (`.github/`, `.claude/`, `.agents/`, `~/.copilot/`)
++		// and the profile folder still load, but are not offered (see `isCreationSourceFolder`).
++		const absoluteLocations = (await this.getLocalStorageFolders(type)).filter(isCreationSourceFolder);
+ 
+ 		const localFolders = absoluteLocations.filter(loc => loc.storage === PromptsStorage.local);
+ 		const userFolders = absoluteLocations.filter(loc => loc.storage === PromptsStorage.user);
+@@ -918,6 +921,14 @@ export class PromptFilesLocator {
+ }
+ 
+ 
++/**
++ * FlowLeap: checks if a source folder may be offered as the location for a new
++ * file. Only `.flowleap/` folders and folders from the user's settings qualify.
++ */
++function isCreationSourceFolder(folder: IResolvedPromptSourceFolder): boolean {
++	return isFlowLeapSource(folder.source) || folder.source === PromptFileSource.ConfigWorkspace || folder.source === PromptFileSource.ConfigPersonal;
++}
++
+ /**
+  * Checks if the provided path contains a glob pattern (* or **).
+  * Used to detect deprecated glob usage in prompt file locations.
+diff --git a/src/vs/workbench/contrib/chat/test/common/promptSyntax/computeAutomaticInstructions.test.ts b/src/vs/workbench/contrib/chat/test/common/promptSyntax/computeAutomaticInstructions.test.ts
+index 5a816a7c511..536b95a7e51 100644
+--- a/src/vs/workbench/contrib/chat/test/common/promptSyntax/computeAutomaticInstructions.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/promptSyntax/computeAutomaticInstructions.test.ts
+@@ -325,6 +325,26 @@ suite('ComputeAutomaticInstructions', () => {
+ 			}
+ 		});
+ 
++		test('should always add .flowleap/instructions.md like copilot-instructions.md', async () => {
++			const rootFolder = '/flowleap-instructions-test';
++			const rootFolderUri = URI.file(rootFolder);
++			workspaceContextService.setWorkspace(testWorkspace(rootFolderUri));
++
++			await mockFiles(fileService, [
++				{ path: `${rootFolder}/.flowleap/instructions.md`, contents: ['Cite every claim element.'] },
++				{ path: `${rootFolder}/.flowleap/notes.md`, contents: ['Not an instructions file.'] },
++				{ path: `${rootFolder}/src/file.ts`, contents: ['console.log("test");'] },
++			]);
++			const contextComputer = instaService.createInstance(ComputeAutomaticInstructions, ChatModeKind.Agent, undefined, undefined, localSessionType);
++			const variables = new ChatRequestVariableSet();
++			variables.add(toFileVariableEntry(URI.joinPath(rootFolderUri, 'src/file.ts')));
++
++			await contextComputer.collect(variables, CancellationToken.None);
++
++			const paths = variables.asArray().filter(v => isPromptFileVariableEntry(v)).map(i => isPromptFileVariableEntry(i) ? i.value.path : undefined);
++			assert.deepStrictEqual(paths, [`${rootFolder}/.flowleap/instructions.md`]);
++		});
++
+ 		test('should not collect when settings are disabled', async () => {
+ 			testConfigService.setUserConfiguration(PromptsConfig.INCLUDE_APPLYING_INSTRUCTIONS, false);
+ 			testConfigService.setUserConfiguration(PromptsConfig.USE_COPILOT_INSTRUCTION_FILES, false);
+@@ -1540,6 +1560,38 @@ suite('ComputeAutomaticInstructions', () => {
+ 			assert.equal(xmlContents(instructions[0], 'applyTo')[0], '**/*.ts');
+ 		});
+ 
++		test('applies .flowleap/instructions files on every request with applyTo "**" and lists description-only files', async () => {
++			const rootFolder = '/flowleap-firm-instructions-test';
++			workspaceContextService.setWorkspace(testWorkspace(URI.file(rootFolder)));
++
++			await mockFiles(fileService, [
++				{
++					path: `${rootFolder}/.flowleap/instructions/prior-art-practice.instructions.md`,
++					contents: ['---', 'description: \'Firm steps for prior-art searches\'', 'applyTo: "**"', '---', 'Also search DE utility models.'],
++				},
++				{
++					path: `${rootFolder}/.flowleap/instructions/fto-practice.instructions.md`,
++					contents: ['---', 'description: \'Firm steps for FTO memos\'', '---', 'Put the client patents in a separate table.'],
++				},
++			]);
++
++			const contextComputer = instaService.createInstance(ComputeAutomaticInstructions, ChatModeKind.Agent, { 'vscode_readFile': true }, undefined, localSessionType);
++			const variables = new ChatRequestVariableSet();
++			await contextComputer.collect(variables, CancellationToken.None);
++
++			const index = variables.asArray().filter(v => isPromptTextVariableEntry(v)).map(v => v.value).join('');
++			assert.deepStrictEqual({
++				attached: variables.asArray().filter(v => isPromptFileVariableEntry(v)).map(v => isPromptFileVariableEntry(v) ? v.value.path : undefined),
++				listed: xmlContents(xmlContents(index, 'instructions')[0], 'instruction').map(i => xmlContents(i, 'file')[0]),
++			}, {
++				attached: [`${rootFolder}/.flowleap/instructions/prior-art-practice.instructions.md`],
++				listed: [
++					getFilePath(`${rootFolder}/.flowleap/instructions/prior-art-practice.instructions.md`),
++					getFilePath(`${rootFolder}/.flowleap/instructions/fto-practice.instructions.md`),
++				],
++			});
++		});
++
+ 		test('should escape instruction metadata that could alter the index structure', async () => {
+ 			const rootFolder = '/customization-index-escaping-test';
+ 			const rootFolderUri = URI.file(rootFolder);
+diff --git a/src/vs/workbench/contrib/chat/test/common/promptSyntax/config/config.test.ts b/src/vs/workbench/contrib/chat/test/common/promptSyntax/config/config.test.ts
+index 0e0ede10e8c..ff82d50b5be 100644
+--- a/src/vs/workbench/contrib/chat/test/common/promptSyntax/config/config.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/promptSyntax/config/config.test.ts
+@@ -257,7 +257,7 @@ suite('PromptsConfig', () => {
+ 			test('empty', () => {
+ 				assert.deepStrictEqual(
+ 					getPaths(PromptsConfig.promptSourceFolders(createMock({}), PromptsType.prompt)),
+-					['.github/prompts'],
++					['.flowleap/prompts', '~/.flowleap/prompts', '.github/prompts'],
+ 					'Must read correct value.',
+ 				);
+ 			});
+@@ -280,6 +280,8 @@ suite('PromptsConfig', () => {
+ 						'./.tempfile': true,
+ 					}), PromptsType.prompt)),
+ 					[
++						'.flowleap/prompts',
++						'~/.flowleap/prompts',
+ 						'.github/prompts',
+ 						'/root/.bashrc',
+ 						'../../folder/.hidden-folder/config.xml',
+@@ -328,6 +330,8 @@ suite('PromptsConfig', () => {
+ 						'/dev/shm/.shared_resource': 2345,
+ 					}), PromptsType.prompt)),
+ 					[
++						'.flowleap/prompts',
++						'~/.flowleap/prompts',
+ 						'.github/prompts',
+ 						'../assets/img/logo.v2.png',
+ 						'../.local/bin/script.sh',
+@@ -356,6 +360,8 @@ suite('PromptsConfig', () => {
+ 						'/dev/shm/.shared_resource': 7654,
+ 					}), PromptsType.prompt)),
+ 					[
++						'.flowleap/prompts',
++						'~/.flowleap/prompts',
+ 						'.github/prompts',
+ 					],
+ 					'Must read correct value.',
+@@ -367,6 +373,8 @@ suite('PromptsConfig', () => {
+ 					getPaths(PromptsConfig.promptSourceFolders(createMock({
+ 						'/etc/hosts.backup': '\t\n\t',
+ 						'./run.tests.sh': '\v',
++						'.flowleap/prompts': false,
++						'~/.flowleap/prompts': false,
+ 						'.github/prompts': false,
+ 						'../assets/img/logo.v2.png': true,
+ 						'/mnt/storage/video.archive/episode.01.mkv': false,
+@@ -428,7 +436,7 @@ suite('PromptsConfig', () => {
+ 			test('empty object returns default skill folders', () => {
+ 				assert.deepStrictEqual(
+ 					getPaths(PromptsConfig.promptSourceFolders(createMock({}), PromptsType.skill)),
+-					['.agents/skills', '.github/skills', '.claude/skills', '~/.agents/skills', '~/.copilot/skills', '~/.claude/skills'],
++					['.flowleap/skills', '~/.flowleap/skills', '.agents/skills', '.github/skills', '.claude/skills', '~/.agents/skills', '~/.copilot/skills', '~/.claude/skills'],
+ 					'Must return default skill folders.',
+ 				);
+ 			});
+@@ -440,6 +448,8 @@ suite('PromptsConfig', () => {
+ 						'./local/skills': true,
+ 					}), PromptsType.skill)),
+ 					[
++						'.flowleap/skills',
++						'~/.flowleap/skills',
+ 						'.agents/skills',
+ 						'.github/skills',
+ 						'.claude/skills',
+@@ -460,6 +470,8 @@ suite('PromptsConfig', () => {
+ 						'/custom/skills': true,
+ 					}), PromptsType.skill)),
+ 					[
++						'.flowleap/skills',
++						'~/.flowleap/skills',
+ 						'.agents/skills',
+ 						'.claude/skills',
+ 						'~/.agents/skills',
+@@ -474,6 +486,8 @@ suite('PromptsConfig', () => {
+ 			test('filters out all disabled default skill folders', () => {
+ 				assert.deepStrictEqual(
+ 					getPaths(PromptsConfig.promptSourceFolders(createMock({
++						'.flowleap/skills': false,
++						'~/.flowleap/skills': false,
+ 						'.github/skills': false,
+ 						'.agents/skills': false,
+ 						'.claude/skills': false,
+@@ -499,6 +513,8 @@ suite('PromptsConfig', () => {
+ 						'\n': true,
+ 					}), PromptsType.skill)),
+ 					[
++						'.flowleap/skills',
++						'~/.flowleap/skills',
+ 						'.agents/skills',
+ 						'.github/skills',
+ 						'.claude/skills',
+@@ -524,6 +540,8 @@ suite('PromptsConfig', () => {
+ 						'/extra/skills': true,
+ 					}), PromptsType.skill)),
+ 					[
++						'.flowleap/skills',
++						'~/.flowleap/skills',
+ 						'.agents/skills',
+ 						'.github/skills',
+ 						'.claude/skills',
+diff --git a/src/vs/workbench/contrib/chat/test/common/promptSyntax/service/promptsService.test.ts b/src/vs/workbench/contrib/chat/test/common/promptSyntax/service/promptsService.test.ts
+index 92d585903d7..0912a5aadab 100644
+--- a/src/vs/workbench/contrib/chat/test/common/promptSyntax/service/promptsService.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/promptSyntax/service/promptsService.test.ts
+@@ -2738,42 +2738,37 @@ suite('PromptsService', () => {
+ 	});
+ 
+ 	suite('getSourceFolders - skills', () => {
+-		test('includes user-level skill source folders', async () => {
++		test('offers only .flowleap/ folders for new skills, prompts, instructions and agents', async () => {
+ 			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
+ 			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {});
+ 
+ 			const rootFolderUri = URI.file('/skills-source-folders');
+ 			workspaceContextService.setWorkspace(testWorkspace(rootFolderUri));
+ 
+-			const folders = await service.getSourceFolders(PromptsType.skill);
+-
+-			const userFolders = folders.filter(f => f.storage === PromptsStorage.user);
+-			const localFolders = folders.filter(f => f.storage === PromptsStorage.local);
+-
+-			assert.ok(userFolders.length > 0, 'Should include user-level skill source folders');
+-			assert.ok(localFolders.length > 0, 'Should include workspace-level skill source folders');
+-			assert.ok(
+-				userFolders.some(f => f.uri.path === '/home/user/.copilot/skills'),
+-				'Should include ~/.copilot/skills as a user source folder'
+-			);
++			const result: Record<string, { path: string; storage: PromptsStorage }[]> = {};
++			for (const type of [PromptsType.skill, PromptsType.prompt, PromptsType.instructions, PromptsType.agent]) {
++				result[type] = (await service.getSourceFolders(type)).map(f => ({ path: f.uri.path, storage: f.storage }));
++			}
++			assert.deepStrictEqual(result, {
++				skill: [{ path: '/skills-source-folders/.flowleap/skills', storage: PromptsStorage.local }, { path: '/home/user/.flowleap/skills', storage: PromptsStorage.user }],
++				prompt: [{ path: '/skills-source-folders/.flowleap/prompts', storage: PromptsStorage.local }, { path: '/home/user/.flowleap/prompts', storage: PromptsStorage.user }],
++				instructions: [{ path: '/skills-source-folders/.flowleap/instructions', storage: PromptsStorage.local }, { path: '/home/user/.flowleap/instructions', storage: PromptsStorage.user }],
++				agent: [{ path: '/skills-source-folders/.flowleap/agents', storage: PromptsStorage.local }, { path: '/home/user/.flowleap/agents', storage: PromptsStorage.user }],
++			});
+ 		});
+ 
+-		test('excludes defaults explicitly disabled via configuration', async () => {
++		test('excludes defaults explicitly disabled via configuration and keeps configured folders', async () => {
+ 			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
+ 			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {
+-				'.github/skills': false,
+-				'~/.copilot/skills': false,
++				'.flowleap/skills': false,
++				'~/my-skills': true,
+ 			});
+ 
+ 			const rootFolderUri = URI.file('/skills-disabled-defaults');
+ 			workspaceContextService.setWorkspace(testWorkspace(rootFolderUri));
+ 
+ 			const folders = await service.getSourceFolders(PromptsType.skill);
+-			const paths = folders.map(f => f.uri.path);
+-
+-			assert.ok(!paths.some(p => p.endsWith('/.github/skills')), 'Disabled .github/skills must not appear');
+-			assert.ok(!paths.includes('/home/user/.copilot/skills'), 'Disabled ~/.copilot/skills must not appear');
+-			assert.ok(paths.includes('/home/user/.agents/skills'), 'Non-disabled ~/.agents/skills must still appear');
++			assert.deepStrictEqual(folders.map(f => f.uri.path), ['/home/user/.flowleap/skills', '/home/user/my-skills']);
+ 		});
+ 	});
+ 
+@@ -4163,6 +4158,63 @@ suite('PromptsService', () => {
+ 			assert.ok(uniqueSkill, 'Should find the unique skill');
+ 		});
+ 
++		test('should prefer .flowleap/ skills over developer-folder skills with the same name', async () => {
++			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
++			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {});
++
++			const rootFolder = '/flowleap-precedence-test';
++			workspaceContextService.setWorkspace(testWorkspace(URI.file(rootFolder)));
++
++			const skillFile = (path: string, name: string, description: string) => ({
++				path,
++				contents: ['---', `name: "${name}"`, `description: "${description}"`, '---', 'content'],
++			});
++			await mockFiles(fileService, [
++				skillFile(`${rootFolder}/.github/skills/upc-revocation/SKILL.md`, 'upc-revocation', 'developer folder'),
++				skillFile(`${rootFolder}/.flowleap/skills/upc-revocation/SKILL.md`, 'upc-revocation', 'flowleap workspace'),
++				skillFile(`${rootFolder}/.claude/skills/claim-chart/SKILL.md`, 'claim-chart', 'developer folder'),
++				skillFile('/home/user/.flowleap/skills/claim-chart/SKILL.md', 'claim-chart', 'flowleap personal'),
++			]);
++
++			const skills = await service.findAgentSkills(CancellationToken.None);
++			assert.deepStrictEqual(
++				skills?.map(s => ({ name: s.name, description: s.description })).sort((a, b) => a.name.localeCompare(b.name)),
++				[
++					{ name: 'claim-chart', description: 'flowleap personal' },
++					{ name: 'upc-revocation', description: 'flowleap workspace' },
++				],
++			);
++		});
++
++		test('should keep a built-in skill over a .flowleap/ skill with the same name', async () => {
++			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
++			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {});
++
++			const rootFolder = '/flowleap-builtin-test';
++			workspaceContextService.setWorkspace(testWorkspace(URI.file(rootFolder)));
++
++			const builtinUri = URI.file('/app/extensions/patent-ai/assets/skills/prior-art/SKILL.md');
++			const userUri = URI.file(`${rootFolder}/.flowleap/skills/prior-art/SKILL.md`);
++			const skillFile = (uri: URI, description: string) => ({
++				path: uri.path,
++				contents: ['---', 'name: "prior-art"', `description: "${description}"`, '---', 'content'],
++			});
++			await mockFiles(fileService, [skillFile(builtinUri, 'built-in'), skillFile(userUri, 'user')]);
++			const extension = { identifier: new ExtensionIdentifier('flowleap.patent-ai'), isBuiltin: true } as IExtensionDescription;
++			const registered = service.registerContributedFile(PromptsType.skill, builtinUri, extension, 'prior-art', 'built-in');
++
++			const skills = await service.findAgentSkills(CancellationToken.None);
++			const discovery = await service.getDiscoveryInfo(PromptsType.skill, CancellationToken.None);
++			assert.deepStrictEqual({
++				loaded: skills?.map(s => ({ name: s.name, description: s.description })),
++				skipped: discovery.files.filter(f => f.status === 'skipped').map(f => ({ path: f.promptPath.uri.path, reason: f.skipReason, duplicateOf: f.duplicateOf?.path })),
++			}, {
++				loaded: [{ name: 'prior-art', description: 'built-in' }],
++				skipped: [{ path: userUri.path, reason: 'duplicate-name', duplicateOf: builtinUri.path }],
++			});
++			registered.dispose();
++		});
++
+ 		test('should prioritize skills by source: workspace > user > extension', async () => {
+ 			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
+ 			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {});
+diff --git a/src/vs/workbench/contrib/chat/test/common/promptSyntax/utils/promptFilesLocator.test.ts b/src/vs/workbench/contrib/chat/test/common/promptSyntax/utils/promptFilesLocator.test.ts
+index 02c9a4e4435..310e559756e 100644
+--- a/src/vs/workbench/contrib/chat/test/common/promptSyntax/utils/promptFilesLocator.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/promptSyntax/utils/promptFilesLocator.test.ts
+@@ -2058,6 +2058,83 @@ suite('PromptFilesLocator', () => {
+ 			});
+ 		});
+ 
++		suite('.flowleap folders', () => {
++			testT('finds skills in .flowleap/skills and ~/.flowleap/skills by default', async () => {
++				setLocations({});
++				setWorkspaceFolders(['/Users/legomushroom/repos/vscode']);
++				await mockFiles(fileService, [
++					{
++						path: '/Users/legomushroom/repos/vscode/.flowleap/skills/upc-revocation/SKILL.md',
++						contents: ['# UPC Revocation'],
++					},
++					{
++						path: '/Users/legomushroom/.flowleap/skills/claim-drafting/SKILL.md',
++						contents: ['# Claim Drafting'],
++					},
++				]);
++				const locator = instantiationService.createInstance(PromptFilesLocator);
++
++				const skills = await locator.findAgentSkills(CancellationToken.None);
++				assert.deepStrictEqual(
++					skills.map(s => ({ path: s.uri.path, source: s.source, storage: s.storage })),
++					[
++						{ path: '/Users/legomushroom/repos/vscode/.flowleap/skills/upc-revocation/SKILL.md', source: PromptFileSource.FlowLeapWorkspace, storage: PromptsStorage.local },
++						{ path: '/Users/legomushroom/.flowleap/skills/claim-drafting/SKILL.md', source: PromptFileSource.FlowLeapPersonal, storage: PromptsStorage.user },
++					],
++				);
++			});
++
++			testT('offers only .flowleap/ and ~/.flowleap/ as locations for new files', async () => {
++				setLocations({});
++				configValues[PromptsConfig.AGENTS_LOCATION_KEY] = {};
++				setWorkspaceFolders(['/Users/legomushroom/repos/vscode']);
++				await mockFiles(fileService, []);
++				const locator = instantiationService.createInstance(PromptFilesLocator);
++
++				const result: Record<string, string[]> = {};
++				for (const type of [PromptsType.skill, PromptsType.instructions, PromptsType.prompt, PromptsType.agent]) {
++					result[type] = (await locator.getResolvedSourceFolders(type)).map(f => f.uri.path);
++				}
++				assert.deepStrictEqual(result, {
++					skill: ['/Users/legomushroom/repos/vscode/.flowleap/skills', '/Users/legomushroom/.flowleap/skills'],
++					instructions: ['/Users/legomushroom/repos/vscode/.flowleap/instructions', '/Users/legomushroom/.flowleap/instructions'],
++					prompt: ['/Users/legomushroom/repos/vscode/.flowleap/prompts', '/Users/legomushroom/.flowleap/prompts'],
++					agent: ['/Users/legomushroom/repos/vscode/.flowleap/agents', '/Users/legomushroom/.flowleap/agents'],
++				});
++			});
++
++			testT('finds instructions, prompts and agents in .flowleap/ and ~/.flowleap/ by default', async () => {
++				setLocations({});
++				configValues[PromptsConfig.AGENTS_LOCATION_KEY] = {};
++				setWorkspaceFolders(['/Users/legomushroom/repos/vscode']);
++				await mockFiles(fileService, [
++					{ path: '/Users/legomushroom/repos/vscode/.flowleap/instructions/style.instructions.md', contents: ['style'] },
++					{ path: '/Users/legomushroom/.flowleap/instructions/firm.instructions.md', contents: ['firm'] },
++					{ path: '/Users/legomushroom/repos/vscode/.flowleap/prompts/summarize.prompt.md', contents: ['summarize'] },
++					{ path: '/Users/legomushroom/.flowleap/prompts/review.prompt.md', contents: ['review'] },
++					{ path: '/Users/legomushroom/repos/vscode/.flowleap/agents/examiner.agent.md', contents: ['examiner'] },
++					{ path: '/Users/legomushroom/.flowleap/agents/drafter.agent.md', contents: ['drafter'] },
++				]);
++				const locator = instantiationService.createInstance(PromptFilesLocator);
++
++				const result: Record<string, { path: string; source: PromptFileSource }[]> = {};
++				for (const type of [PromptsType.instructions, PromptsType.prompt, PromptsType.agent]) {
++					for (const storage of [PromptsStorage.local, PromptsStorage.user]) {
++						const files = await locator.listFilesWithSource(type, storage, CancellationToken.None);
++						result[`${type}/${storage}`] = files.map(f => ({ path: f.uri.path, source: f.source }));
++					}
++				}
++				assert.deepStrictEqual(result, {
++					'instructions/local': [{ path: '/Users/legomushroom/repos/vscode/.flowleap/instructions/style.instructions.md', source: PromptFileSource.FlowLeapWorkspace }],
++					'instructions/user': [{ path: '/Users/legomushroom/.flowleap/instructions/firm.instructions.md', source: PromptFileSource.FlowLeapPersonal }],
++					'prompt/local': [{ path: '/Users/legomushroom/repos/vscode/.flowleap/prompts/summarize.prompt.md', source: PromptFileSource.FlowLeapWorkspace }],
++					'prompt/user': [{ path: '/Users/legomushroom/.flowleap/prompts/review.prompt.md', source: PromptFileSource.FlowLeapPersonal }],
++					'agent/local': [{ path: '/Users/legomushroom/repos/vscode/.flowleap/agents/examiner.agent.md', source: PromptFileSource.FlowLeapWorkspace }],
++					'agent/user': [{ path: '/Users/legomushroom/.flowleap/agents/drafter.agent.md', source: PromptFileSource.FlowLeapPersonal }],
++				});
++			});
++		});
++
+ 		suite('listFiles with PromptsType.skill', () => {
+ 			testT('does not list skills when location is disabled', async () => {
+ 				setLocations({
+@@ -2092,6 +2169,8 @@ suite('PromptFilesLocator', () => {
+ 					'skills/*': true,
+ 					'**/skills': true,
+ 					// disable defaults
++					'.flowleap/skills': false,
++					'~/.flowleap/skills': false,
+ 					'.github/skills': false,
+ 					'.agents/skills': false,
+ 					'.claude/skills': false,
+@@ -2115,6 +2194,8 @@ suite('PromptFilesLocator', () => {
+ 				setLocations({
+ 					'/absolute/path/skills': true,
+ 					// disable defaults
++					'.flowleap/skills': false,
++					'~/.flowleap/skills': false,
+ 					'.github/skills': false,
+ 					'.agents/skills': false,
+ 					'.claude/skills': false,
+@@ -2139,6 +2220,8 @@ suite('PromptFilesLocator', () => {
+ 					'./my-skills': true,
+ 					'custom/skills': true,
+ 					// disable defaults
++					'.flowleap/skills': false,
++					'~/.flowleap/skills': false,
+ 					'.github/skills': false,
+ 					'.agents/skills': false,
+ 					'.claude/skills': false,
+@@ -2165,6 +2248,8 @@ suite('PromptFilesLocator', () => {
+ 				setLocations({
+ 					'../shared-skills': true,
+ 					// disable defaults
++					'.flowleap/skills': false,
++					'~/.flowleap/skills': false,
+ 					'.github/skills': false,
+ 					'.agents/skills': false,
+ 					'.claude/skills': false,
+@@ -2190,6 +2275,8 @@ suite('PromptFilesLocator', () => {
+ 				setLocations({
+ 					'~/my-skills': true,
+ 					// disable defaults
++					'.flowleap/skills': false,
++					'~/.flowleap/skills': false,
+ 					'.github/skills': false,
+ 					'.agents/skills': false,
+ 					'.claude/skills': false,
+@@ -2218,6 +2305,8 @@ suite('PromptFilesLocator', () => {
+ 					'.claude/skills': true,
+ 					'custom-skills': true,
+ 					// explicitly disable other defaults we don't want for this test
++					'.flowleap/skills': false,
++					'~/.flowleap/skills': false,
+ 					'.github/skills': false,
+ 					'.agents/skills': false,
+ 					'~/.copilot/skills': false,
+@@ -2250,6 +2339,8 @@ suite('PromptFilesLocator', () => {
+ 					'skills/**': true, // glob - should be filtered out
+ 					'/absolute/skills': true, // absolute - should be filtered out
+ 					// explicitly disable other defaults we don't want for this test
++					'.flowleap/skills': false,
++					'~/.flowleap/skills': false,
+ 					'.github/skills': false,
+ 					'.agents/skills': false,
+ 					'~/.copilot/skills': false,
+@@ -2283,6 +2374,8 @@ suite('PromptFilesLocator', () => {
+ 					folders,
+ 					[
+ 						// defaults
++						'/Users/legomushroom/repos/vscode/.flowleap/skills',
++						'/Users/legomushroom/.flowleap/skills',
+ 						'/Users/legomushroom/repos/vscode/.agents/skills',
+ 						'/Users/legomushroom/repos/vscode/.github/skills',
+ 						'/Users/legomushroom/repos/vscode/.claude/skills',
+@@ -2599,6 +2692,8 @@ suite('PromptFilesLocator', () => {
+ 	suite('getConfigBasedSourceFolders', () => {
+ 		testT('gets unambiguous list of folders', async () => {
+ 			setLocations({
++				'.flowleap/prompts': false,
++				'~/.flowleap/prompts': false,
+ 				'.github/prompts': true,
+ 				'/Users/**/repos/**': true,
+ 				'gen/text/**': true,

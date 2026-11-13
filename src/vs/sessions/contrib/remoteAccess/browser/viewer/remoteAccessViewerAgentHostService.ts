@@ -26,7 +26,6 @@ import {
 	IRemoteAgentHostConnectionFactory, IRemoteAgentHostConnectOptions, IRemoteAgentHostCreatedConnection, IRemoteAgentHostEntry, RemoteAgentHostEntryType,
 } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
@@ -111,8 +110,13 @@ export class RemoteAccessViewerConnectionFactory implements IRemoteAgentHostConn
  */
 export class RemoteAccessViewerAgentHostService extends AgentsWindowRemoteAgentHostService {
 
-	protected override get supportsWebSocketConnections(): boolean {
-		return false;
+	/**
+	 * Upstream 1.146 dials the hosts a setting lists; the Viewer dials only its
+	 * pair, so it reads a setting nothing writes (the 1.140 base had a
+	 * `supportsWebSocketConnections` switch for this).
+	 */
+	protected override get webSocketEntriesSettingId(): string {
+		return 'flowleap.remoteAccessViewer.noConfiguredRemoteAgentHosts';
 	}
 
 	constructor(
@@ -120,11 +124,10 @@ export class RemoteAccessViewerAgentHostService extends AgentsWindowRemoteAgentH
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ILogService logService: ILogService,
 		@ILabelService labelService: ILabelService,
-		@IEnvironmentService environmentService: IEnvironmentService,
 		@IStorageService storageService: IStorageService,
 		@IBrowserWorkbenchEnvironmentService browserEnvironmentService: IBrowserWorkbenchEnvironmentService,
 	) {
-		super(configurationService, instantiationService, logService, labelService, environmentService, storageService);
+		super(configurationService, instantiationService, logService, labelService, storageService);
 		const options = browserEnvironmentService.options?.remoteAccessViewer;
 		if (options) {
 			this._register(this.registerConnectionFactory(new RemoteAccessViewerConnectionFactory(options, instantiationService)));

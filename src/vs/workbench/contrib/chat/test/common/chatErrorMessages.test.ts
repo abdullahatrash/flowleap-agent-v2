@@ -29,6 +29,33 @@ suite('ChatErrorMessages', () => {
 
 	suite('getChatErrorDetailsFromMeta', () => {
 
+		test('renders Copilot error detail when VS Code metadata is invalid without allowing command links', () => {
+			const copilot = { errorCode: 'limited', statusCode: 429, url: 'command:unsafe', providerCallId: 'request' };
+			const error: ErrorInfo = { errorType: 'rate_limit', message: 'Slow down', _meta: { 'copilot.errorDetail': copilot } };
+			const expected = {
+				message: 'Slow&nbsp;down', code: 'limited', isRateLimited: true, isQuotaExceeded: false, isExpectedError: true,
+			};
+			assert.deepStrictEqual([
+				getChatErrorDetailsFromMeta(error),
+				getChatErrorDetailsFromMeta({ ...error, _meta: { ...error._meta, chatError: null } }),
+				getChatErrorDetailsFromMeta({ ...error, _meta: { ...error._meta, chatError: { fetchError: {} } } }),
+			], [expected, expected, expected]);
+		});
+
+		test('valid VS Code error metadata keeps its existing formatting when both styles are present', () => {
+			const forwarded = {
+				fetchError: { type: ChatFetchResponseType.RateLimited, retryAfter: 60 },
+				copilotPlan: 'free',
+			};
+			assert.deepStrictEqual(
+				getChatErrorDetailsFromMeta(errorInfo({
+					chatError: forwarded,
+					'copilot.errorDetail': { errorCode: 'ignored', statusCode: 500 },
+				})),
+				getChatErrorDetailsFromMeta(errorInfo({ chatError: forwarded })),
+			);
+		});
+
 		test('returns undefined when no meta or no chatError', () => {
 			assert.strictEqual(getChatErrorDetailsFromMeta(undefined), undefined);
 			assert.strictEqual(getChatErrorDetailsFromMeta(errorInfo(undefined)), undefined);
@@ -239,7 +266,7 @@ suite('ChatErrorMessages', () => {
 			assert.deepStrictEqual(messages, [
 				'Sorry, you have exceeded the agent mode rate limit. Please switch to ask mode and try again in 30 seconds. [Learn More](https://aka.ms/github-copilot-rate-limit-error)',
 				'Sorry, the upstream model provider is currently experiencing high demand. Please try again in 30 seconds. [Learn More](https://aka.ms/github-copilot-rate-limit-error)',
-				'Sorry, FlowLeap is currently experiencing high demand. Please try again in 30 seconds. [Learn More](https://aka.ms/github-copilot-rate-limit-error)',
+				'Sorry, GitHub Copilot Chat is currently experiencing high demand. Please try again in 30 seconds. [Learn More](https://aka.ms/github-copilot-rate-limit-error)',
 				'Sorry, your request was rate-limited. Please wait 30 seconds before trying again or consider switching to Auto. [Learn More](https://aka.ms/github-copilot-rate-limit-error)',
 			]);
 		});
@@ -252,7 +279,7 @@ suite('ChatErrorMessages', () => {
 				getChatErrorDetailsFromFetchError({ type: ChatFetchResponseType.QuotaExceeded }, undefined).message,
 			];
 			assert.deepStrictEqual(messages, [
-				'You cannot accrue additional premium requests at this time. Please contact [GitHub Support](https://support.github.com/contact) to continue using FlowLeap.',
+				'You cannot accrue additional premium requests at this time. Please contact [GitHub Support](https://support.github.com/contact) to continue using Copilot.',
 				'You\'ve reached your additional usage limit for your plan. Upgrade your plan to keep going.',
 				'set up billing',
 				'Quota Exceeded',

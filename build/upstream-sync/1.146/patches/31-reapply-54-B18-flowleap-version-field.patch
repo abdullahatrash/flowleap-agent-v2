@@ -1,0 +1,17 @@
+diff --git a/src/vs/base/common/product.ts b/src/vs/base/common/product.ts
+index 9838b2b993b..f7e63617681 100644
+--- a/src/vs/base/common/product.ts
++++ b/src/vs/base/common/product.ts
+@@ -98,6 +98,12 @@ export interface IDictationRuntimeProductConfig {
+ 
+ export interface IProductConfiguration {
+ 	readonly version: string;
++	/**
++	 * FlowLeap: the release version (for example `0.9.0`), stamped into the
++	 * built product.json by build/flowleap/stamp-flowleap-version.mjs. `version`
++	 * stays the upstream package version. Absent in dev builds.
++	 */
++	readonly flowleapVersion?: string;
+ 	readonly date?: string;
+ 	readonly quality?: string;
+ 	readonly commit?: string;

@@ -1,0 +1,83 @@
+diff --git a/src/vs/sessions/browser/sessionsSetUpService.ts b/src/vs/sessions/browser/sessionsSetUpService.ts
+index 987dee2eb40..6a963d2f95b 100644
+--- a/src/vs/sessions/browser/sessionsSetUpService.ts
++++ b/src/vs/sessions/browser/sessionsSetUpService.ts
+@@ -589,7 +589,7 @@ class SessionsSetUpWidget extends Disposable {
+ 			createWorkbenchDialogOptions({
+ 				type: 'none',
+ 				extraClasses: ['chat-setup-dialog', 'sessions-welcome-dialog', 'sessions-main-welcome-dialog'],
+-				detail: localize('sessions.welcome.detail', "Your AI-powered coding experience where agents explore, build, and iterate with you."),
++				detail: localize('sessions.welcome.detail', "Your AI-powered patent workspace where agents research, analyze, and draft with you."),
+ 				icon: Codicon.agent,
+ 				alignment: DialogContentsAlignment.Vertical,
+ 				cancelId: 1,
+diff --git a/src/vs/workbench/contrib/sessions/browser/chat/newChatComposerInput.ts b/src/vs/workbench/contrib/sessions/browser/chat/newChatComposerInput.ts
+index 57d981752b4..c4b8a333960 100644
+--- a/src/vs/workbench/contrib/sessions/browser/chat/newChatComposerInput.ts
++++ b/src/vs/workbench/contrib/sessions/browser/chat/newChatComposerInput.ts
+@@ -48,8 +48,41 @@ export function hasSendableNewChatContent(query: string, attachments: readonly I
+ 	return !!query.trim() || attachments.some(isExplicitFileOrImageVariableEntry) || hasAdditionalSendContent;
+ }
+ 
+-/** The new-session composer's prompt placeholder. */
+-export const NEW_SESSION_PROMPT_PLACEHOLDER = localize('sessionsChatInput.placeholder.pitchYourIdea', "Pitch your idea");
++/**
++ * The new-session composer's prompt placeholders. FlowLeap: they lead with
++ * patent-research framings (prior art, freedom-to-operate, claim analysis) to
++ * signal what the product is for, while keeping a few open-ended research
++ * prompts. One is picked per composer instance, avoiding an immediate repeat
++ * of the previous pick (PRD 0017 A6, #65).
++ */
++const NEW_SESSION_PROMPT_PLACEHOLDERS = [
++	localize('sessionsChatInput.placeholder.searchPriorArt', "Search prior art for…"),
++	localize('sessionsChatInput.placeholder.runFreedomToOperate', "Run a freedom-to-operate check on…"),
++	localize('sessionsChatInput.placeholder.analyzeTheClaims', "Analyze the claims of a patent…"),
++	localize('sessionsChatInput.placeholder.mapThePatentLandscape', "Map the patent landscape for…"),
++	localize('sessionsChatInput.placeholder.findInvalidatingReferences', "Find references that challenge novelty…"),
++	localize('sessionsChatInput.placeholder.assessPatentability', "Assess the patentability of an idea…"),
++	localize('sessionsChatInput.placeholder.compareTwoPatents', "Compare the claims of two patents…"),
++	localize('sessionsChatInput.placeholder.summarizeProsecutionHistory', "Summarize a patent's prosecution history…"),
++	localize('sessionsChatInput.placeholder.findForwardCitations', "Find who cites a patent…"),
++	localize('sessionsChatInput.placeholder.reviewSpecificationForPriorArt', "Review a specification against prior art…"),
++	localize('sessionsChatInput.placeholder.searchAcademicLiterature', "Search the academic literature for…"),
++	localize('sessionsChatInput.placeholder.whatAreYouResearching', "What are you researching?"),
++	localize('sessionsChatInput.placeholder.whatPatentQuestion', "What patent question can I help with?"),
++	localize('sessionsChatInput.placeholder.describeWhatToAnalyze', "Describe what you want to analyze"),
++];
++
++let lastPlaceholderIndex = -1;
++
++/** The new-session composer's prompt placeholder: a random patent-research framing, never the previous one. */
++export function getNewSessionPromptPlaceholder(): string {
++	let index = Math.floor(Math.random() * NEW_SESSION_PROMPT_PLACEHOLDERS.length);
++	if (NEW_SESSION_PROMPT_PLACEHOLDERS.length > 1 && index === lastPlaceholderIndex) {
++		index = (index + 1) % NEW_SESSION_PROMPT_PLACEHOLDERS.length;
++	}
++	lastPlaceholderIndex = index;
++	return NEW_SESSION_PROMPT_PLACEHOLDERS[index];
++}
+ 
+ /**
+  * The labeled pickers in `container`, for responsive layouts that compact them
+diff --git a/src/vs/workbench/contrib/sessions/browser/chat/newChatWidget.ts b/src/vs/workbench/contrib/sessions/browser/chat/newChatWidget.ts
+index e653a09b594..5c1ef045245 100644
+--- a/src/vs/workbench/contrib/sessions/browser/chat/newChatWidget.ts
++++ b/src/vs/workbench/contrib/sessions/browser/chat/newChatWidget.ts
+@@ -48,7 +48,7 @@ import { WebWorkspacePicker } from './webWorkspacePicker.js';
+ import { getStoredSessionOptionsExpanded, SessionOptionsRow, storeSessionOptionsExpanded } from './sessionOptionsRow.js';
+ import { IconOnlySessionPickers } from './iconOnlySessionPickers.js';
+ import { IPickedSessionType, IPreferredSessionType } from './sessionTypePicker.js';
+-import { INewChatComposerInputOptions, NEW_SESSION_PROMPT_PLACEHOLDER } from './newChatComposerInput.js';
++import { getNewSessionPromptPlaceholder, INewChatComposerInputOptions } from './newChatComposerInput.js';
+ import { SharedChatInputComposer } from './sharedChatInputComposer.js';
+ import { getDefaultSessionCreationEnvironment, getEnvironmentWorkspaceProvider, getRemoteSessionCreationEnvironment, getSessionCreationEnvironments, ISessionCreationEnvironment, SessionEnvironmentPicker } from './sessionEnvironmentPicker.js';
+ import { NoAgentHostEmptyState } from './noAgentHostEmptyState.js';
+@@ -543,7 +543,7 @@ export class NewChatWidget extends Disposable {
+ 			canSubmitWithoutSession,
+ 			hasAdditionalSendContent: hasFeedback,
+ 			loading,
+-			placeholder: NEW_SESSION_PROMPT_PLACEHOLDER,
++			placeholder: getNewSessionPromptPlaceholder(),
+ 			onboardingTargetId: 'sessions.newSession.input',
+ 			supportsBackground: true,
+ 			...this._globalTargetOptions(),

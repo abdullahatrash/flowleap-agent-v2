@@ -1,0 +1,6 @@
+# Fork-created files whose intent upstream now covers; step 10 does not restore them. One path per line.
+# B10 #440: agentEditorComments null ext-host seam; upstream ships the real implementation.
+src/vs/workbench/api/test/browser/extHostAgentEditorComments.test.ts
+# B6e: MCP tool groups in the Tools section; upstream getCustomizationToolSets (copilotCliBuiltinToolSet.ts) + connected MCP rows in toolsListWidget.ts cover it.
+src/vs/workbench/contrib/chat/browser/agentSessions/agentHost/agentHostCustomizationToolSets.ts
+src/vs/workbench/contrib/chat/test/browser/agentSessions/agentHostCustomizationToolSets.test.ts

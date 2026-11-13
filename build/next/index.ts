@@ -91,7 +91,7 @@ const workerEntryPoints = [
 	'vs/workbench/services/languageDetection/browser/languageDetectionWebWorkerMain',
 	'vs/workbench/services/search/worker/localFileSearchMain',
 	'vs/workbench/contrib/output/common/outputLinkComputerMain',
-	// 'vs/workbench/contrib/mediaPreview/browser/imageEncoderWorkerMain' is not listed: src is at 1.140 until PR B (media-preview is still an extension).
+	'vs/workbench/contrib/mediaPreview/browser/imageEncoderWorkerMain',
 	'vs/workbench/services/textMate/browser/backgroundTokenization/worker/textMateTokenizationWorker.workerMain',
 ];
 

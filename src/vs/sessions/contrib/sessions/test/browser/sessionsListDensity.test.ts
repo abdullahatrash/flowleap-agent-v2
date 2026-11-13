@@ -5,8 +5,8 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { SessionStatus } from '../../../../services/sessions/common/session.js';
-import { SessionsGrouping, SessionsList, SessionsSorting } from '../../browser/views/sessionsList.js';
+import { SessionStatus } from '../../../../../workbench/services/sessions/common/session.js';
+import { SessionsGrouping, SessionsList, SessionsSorting } from '../../../../../workbench/contrib/sessions/browser/views/sessionsList.js';
 import { createListHarness, createTestSession } from './sessionsListTestUtils.js';
 
 suite('Sessions list density', () => {
@@ -121,7 +121,7 @@ suite('Sessions list density', () => {
 
 		assert.deepStrictEqual({ compact, standard }, {
 			// 28px compact row, 32px callout, 2px inset gap.
-			compact: { visible: true, label: 'Input needed', height: '62px' },
+			compact: { visible: true, label: 'Attention needed', height: '62px' },
 			// The details row carries the status at the default density, so no callout.
 			standard: { visible: false, label: '', height: '56px' },
 		});

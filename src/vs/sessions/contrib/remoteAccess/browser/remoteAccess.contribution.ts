@@ -33,7 +33,7 @@ import {
 	IRemoteAccessPair, IRemoteAccessPairingOffer, IRemoteAccessService, RemoteAccessEnabledContext, RemoteAccessError, RemoteAccessErrorKind,
 } from '../../../../workbench/contrib/chat/common/remoteAccess/remoteAccess.js';
 import { IHostService } from '../../../../workbench/services/host/browser/host.js';
-import { Menus } from '../../../browser/menus.js';
+import { AgentsWindowMenus } from '../../../browser/agentsWindowMenus.js';
 import './media/remoteAccess.css';
 
 export const TOGGLE_REMOTE_ACCESS_ID = 'flowleap.remoteAccess.toggle';
@@ -333,7 +333,7 @@ registerAction2(class ManageViewersAction extends Action2 {
 
 // ---- Title bar ------------------------------------------------------------------
 
-MenuRegistry.appendMenuItem(Menus.TitleBarRightLayout, {
+MenuRegistry.appendMenuItem(AgentsWindowMenus.TitleBarRightLayout, {
 	command: {
 		id: TOGGLE_REMOTE_ACCESS_ID,
 		title: localize('remoteAccess.title', "Remote Access"),

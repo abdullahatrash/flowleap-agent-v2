@@ -35,6 +35,7 @@ export const all = Object.freeze<string[]>([
 
 export const unicodeFilter = Object.freeze<string[]>([
 	'**',
+	'!build/upstream-sync/**', // FlowLeap replay kits carry patches of upstream strings
 
 	'!**/ThirdPartyNotices.txt',
 	'!**/ThirdPartyNotices.cli.txt',
@@ -102,6 +103,7 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!build/ext.js',
 	'!build/darwin/patch-dmg.py',
 	'!build/npm/patches/*.patch',
+	'!build/upstream-sync/**', // FlowLeap replay kits: patches and notes keep their original indentation
 	'!product.overrides.json',
 	'!src/vs/platform/endpoint/common/licenseAgreement.ts',
 
