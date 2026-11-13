@@ -10,6 +10,10 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { ISecretStorageProvider, ISecretStorageService, BaseSecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IBrowserWorkbenchEnvironmentService } from '../../environment/browser/environmentService.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { joinPath } from '../../../../base/common/resources.js';
+import { HostedSecretStorageProvider } from './hostedSecretStorageProvider.js';
+import { ServerKeyedAESCrypto, TransparentCrypto } from './secretStorageCrypto.js';
 
 export class BrowserSecretStorageService extends BaseSecretStorageService {
 
@@ -20,7 +24,8 @@ export class BrowserSecretStorageService extends BaseSecretStorageService {
 		@IStorageService storageService: IStorageService,
 		@IEncryptionService encryptionService: IEncryptionService,
 		@IBrowserWorkbenchEnvironmentService environmentService: IBrowserWorkbenchEnvironmentService,
-		@ILogService logService: ILogService
+		@ILogService logService: ILogService,
+		@IFileService fileService: IFileService,
 	) {
 		// We don't have encryption in the browser so instead we use the
 		// in-memory base class implementation instead.
@@ -28,6 +33,17 @@ export class BrowserSecretStorageService extends BaseSecretStorageService {
 
 		if (environmentService.options?.secretStorageProvider) {
 			this._secretStorageProvider = environmentService.options.secretStorageProvider;
+			this._embedderSequencer = new SequencerByKey<string>();
+		} else if (environmentService.options?.hostedUserData && environmentService.remoteAuthority) {
+			// Hosted Workspace (FlowLeap #547): one sealed secrets file in the user data folder on the server
+			const hostedUserData = environmentService.options.hostedUserData;
+			const provider = this._register(new HostedSecretStorageProvider(
+				joinPath(environmentService.userRoamingDataHome, 'secrets.json'),
+				ServerKeyedAESCrypto.supported() ? new ServerKeyedAESCrypto(hostedUserData.secretKeyPath) : new TransparentCrypto(),
+				fileService,
+				logService));
+			this._register(provider.onDidChangeSecretExternally(key => this.onDidChangeSecretEmitter.fire(key)));
+			this._secretStorageProvider = provider;
 			this._embedderSequencer = new SequencerByKey<string>();
 		}
 	}
