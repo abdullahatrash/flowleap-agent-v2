@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from './remoteAccessHost.js';
+import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID, type ChatMirrorPublication } from './agentHostChatMirror.js';
 import type { AgentChatMoveDestination } from './agentHostChatMove.js';
 import type { IAgentHostManagedWorktree, IAgentHostWorktreeCleanupStatus } from './agentHostWorktreeCleanup.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
@@ -253,6 +255,25 @@ export const AgentHostMultipleChatProvidersEnabledEnvVar = 'VSCODE_AGENT_HOST_MU
  */
 export const AgentHostCodexAgentEnabledEnvVar = 'VSCODE_AGENT_HOST_CODEX_AGENT_ENABLED';
 
+/**
+ * FlowLeap: environment variable that re-enables the GitHub Copilot agent
+ * provider inside the agent host. Accepts the same values as
+ * {@link isAgentEnabled}; absent means **off**. No starter forwards it and no
+ * setting backs it, so only a developer who sets it by hand gets the Copilot
+ * agent. With it off the agent host never spawns `copilot-runtime`, never asks
+ * for a GitHub token for it, and Claude is the default agent (ADR 0009, PRD
+ * 0018 A3). The Copilot agent files stay in the tree (neutralize, not delete).
+ */
+export const AgentHostCopilotAgentEnabledEnvVar = 'VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED';
+
+/**
+ * FlowLeap: whether the agent host registers the GitHub Copilot agent
+ * provider. Off unless {@link AgentHostCopilotAgentEnabledEnvVar} enables it.
+ */
+export function isCopilotAgentEnabled(env: { readonly [key: string]: string | undefined }): boolean {
+	return isAgentEnabled(env[AgentHostCopilotAgentEnabledEnvVar], false);
+}
+
 /** Overrides the soft cap on resident session roots. Primarily used by integration tests. */
 export const AgentHostSessionResidencyLimitEnvVar = 'VSCODE_AGENT_HOST_SESSION_RESIDENCY_LIMIT';
 
@@ -300,6 +321,11 @@ export function affectsAgentHostProviderPreference(event: IConfigurationChangeEv
 
 export function shouldSurfaceLocalAgentHostProvider(provider: AgentProvider, configurationService: IConfigurationService, isSessionsWindow: boolean): boolean {
 	switch (provider) {
+		// FlowLeap (PRD 0018 C3, spike gap 7): the Editor Chats this window already shows. Only a
+		// remote Viewer lists them, through the `remoteAgentHost` provider. Hiding the agent here
+		// also keeps its pseudo model out of this window's language models and model picker.
+		case FLOWLEAP_CHAT_AGENT_PROVIDER_ID:
+			return false;
 		case CLAUDE_AGENT_PROVIDER_ID:
 			return configurationService.getValue<boolean>(AgentHostClaudeAgentEnabledSettingId) !== false;
 		case CODEX_AGENT_PROVIDER_ID:
@@ -852,6 +878,22 @@ export interface IConnectionTrackerService {
 	 * enabled (e.g. running in an environment without `node:inspector`).
 	 */
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
+
+	/**
+	 * FlowLeap (PRD 0018 B3): switch the Remote Access Host transport on (or
+	 * refresh its token and pairs) with a config, or off with `undefined`. The
+	 * token and pair keys stay in the agent host's memory.
+	 */
+	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void>;
+
+	/** FlowLeap (PRD 0018 B3): the Remote Access Host transport's current status. */
+	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus>;
+
+	/**
+	 * A window publishes its editor chats to the `flowleap-chat` agent (PRD 0018 C1). The window
+	 * names its own client id, the id its MessagePort connection carries.
+	 */
+	publishChatMirror(publication: ChatMirrorPublication): Promise<void>;
 }
 
 /**
@@ -971,6 +1013,9 @@ export interface IAgentHostManagementService {
 	readDebugLogsChunk(resource: URI, position: number): Promise<IAgentHostDebugLogsChunk>;
 	startWebSocketServer(): Promise<IAgentHostSocketInfo>;
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
+	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void>;
+	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus>;
+	publishChatMirror(publication: ChatMirrorPublication): Promise<void>;
 }
 
 // ---- Service interfaces -----------------------------------------------------
@@ -1679,4 +1724,16 @@ export interface IAgentHostService extends IAgentConnection {
 	 * enabled.
 	 */
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
+
+	/**
+	 * Remote Access (local agent host only): switch the Host transport on or
+	 * refresh it with a config, or off with `undefined`.
+	 */
+	setRemoteAccessHost?(config: IRemoteAccessHostConfig | undefined): Promise<void>;
+
+	/** Remote Access (local agent host only): the Host transport's status. */
+	getRemoteAccessHostStatus?(): Promise<IRemoteAccessHostStatus>;
+
+	/** Remote Access (local agent host only): publish this window's editor chats (PRD 0018 C1). */
+	publishChatMirror?(publication: ChatMirrorPublication): Promise<void>;
 }

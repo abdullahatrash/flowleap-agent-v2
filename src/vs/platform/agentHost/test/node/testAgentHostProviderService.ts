@@ -19,6 +19,7 @@ export function createTestAgentHostProviderService(getProviderForSession: (sessi
 		onMcpNotification: Event.None,
 		registerProviderInitializer: () => Disposable.None,
 		registerProvider: () => { throw new Error('Not implemented'); },
+		unregisterProvider: () => { },
 		resolveProvider: () => undefined,
 		getProvider: () => undefined,
 		getProviderForSession,

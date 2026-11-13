@@ -65,6 +65,7 @@ import { artifactToolsConfigurationProperties } from './artifactToolsConfigurati
 import { chatMoveConfigurationProperties } from './chatMoveConfiguration.js';
 import { titleGenerationConfigurationProperties } from './titleGenerationConfiguration.js';
 import { isAhpJsonlLoggingEnabled } from './ahpJsonlLogger.js';
+import { AgentHostAhpJsonlLoggingIncludeContentSettingId } from './sessionLogContent.js';
 import { ModelRouterEnabledConfigKey, ModelRouterEnabledSettingId } from './modelRouterConfig.js';
 
 // Settings consumed by the agent host starter (`electronAgentHostStarter.ts`
@@ -150,6 +151,13 @@ configurationRegistry.registerConfiguration({
 			default: isAhpJsonlLoggingEnabled(product.quality),
 			tags: ['experimental', 'advanced'],
 			agentHost: { key: AgentHostAhpJsonlLoggingEnabledConfigKey, scope: AgentHostConfigurationSyncScope.Local },
+		},
+		// FlowLeap (PRD 0018 A4): AHP logs hold metadata only unless this developer setting is on.
+		[AgentHostAhpJsonlLoggingIncludeContentSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.agentHost.ahpJsonlLoggingIncludeContent', "Developer setting. When enabled together with `#{0}#`, the AHP JSONL logs keep the full message content: your prompts, model responses, tool input and output, and file content. Leave this off unless you are debugging the agent host protocol. Exported debug logs then include that content.", AgentHostAhpJsonlLoggingSettingId),
+			default: false,
+			tags: ['experimental', 'advanced'],
 		},
 		[AgentMergeSettingId.Enabled]: {
 			type: 'boolean',
@@ -394,7 +402,9 @@ configurationRegistry.registerConfiguration({
 		[AgentHostCodexAgentEnabledSettingId]: {
 			type: 'boolean',
 			description: nls.localize('chat.agentHost.codexAgent.enabled', "When enabled, the agent host registers the Codex provider (subject to the Codex SDK being reachable). Enabling takes effect without restarting the agent host."),
-			default: true,
+			// FlowLeap: Codex is hidden from the agent picker by default in every
+			// quality (upstream: on). Users can still turn it on.
+			default: false,
 			// Allow the default to be overridden by an experiment. Uses `startup`
 			// to match the sibling agent-host provider settings.
 			experiment: { mode: 'startup' },

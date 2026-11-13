@@ -8,8 +8,9 @@ import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { ConfigurationTarget, IConfigurationChangeEvent, IConfigurationService } from '../../../configuration/common/configuration.js';
 import { COPILOT_TEMPORARY_ALLOW_LOCAL_HARNESS_KEY, thirdPartyAgentEnabledValue } from '../../../policy/common/copilotManagedSettings.js';
+import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID } from '../../common/agentHostChatMirror.js';
 import { AgentSession, GITHUB_COPILOT_PROTECTED_RESOURCE, GITHUB_REPO_PROTECTED_RESOURCE, protectedResourcesRequireGitHubCopilotSignIn } from '../../common/agent.js';
-import { affectsAgentHostProviderPreference, AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostOTelEnvVars, AgentHostOTelPolicyState, buildAgentHostOTelEnv, CodexPreferAgentHostEditorSettingId, isAgentEnabled, readAgentHostOTelPolicySettings, sanitizeAgentHostOTelPolicySettings, shouldSurfaceLocalAgentHostProvider } from '../../common/agentService.js';
+import { affectsAgentHostProviderPreference, AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostOTelEnvVars, AgentHostOTelPolicyState, buildAgentHostOTelEnv, CodexPreferAgentHostEditorSettingId, isAgentEnabled, isCopilotAgentEnabled, readAgentHostOTelPolicySettings, sanitizeAgentHostOTelPolicySettings, shouldSurfaceLocalAgentHostProvider } from '../../common/agentService.js';
 import type { ProtectedResourceMetadata } from '../../common/state/protocol/state.js';
 import { TestConfigurationService } from '../../../configuration/test/common/testConfigurationService.js';
 
@@ -95,9 +96,35 @@ suite('isAgentEnabled', () => {
 	}
 });
 
+suite('isCopilotAgentEnabled', () => {
+
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('the Copilot agent is off unless the env var enables it', () => {
+		assert.deepStrictEqual({
+			absent: isCopilotAgentEnabled({}),
+			empty: isCopilotAgentEnabled({ VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED: '' }),
+			off: isCopilotAgentEnabled({ VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED: 'false' }),
+			on: isCopilotAgentEnabled({ VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED: 'true' }),
+		}, { absent: false, empty: false, off: false, on: true });
+	});
+});
+
 suite('shouldSurfaceLocalAgentHostProvider', () => {
 
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('never surfaces the flowleap-chat agent in a local window (PRD 0018 C3)', () => {
+		const configurationService = new TestConfigurationService();
+
+		assert.deepStrictEqual({
+			agentsWindow: shouldSurfaceLocalAgentHostProvider(FLOWLEAP_CHAT_AGENT_PROVIDER_ID, configurationService, true),
+			editorWindow: shouldSurfaceLocalAgentHostProvider(FLOWLEAP_CHAT_AGENT_PROVIDER_ID, configurationService, false),
+		}, {
+			agentsWindow: false,
+			editorWindow: false,
+		});
+	});
 
 	test('surfaces enabled providers and uses window-specific Codex settings', () => {
 		const configurationService = new TestConfigurationService({

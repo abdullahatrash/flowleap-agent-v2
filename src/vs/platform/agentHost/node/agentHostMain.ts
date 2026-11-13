@@ -16,7 +16,7 @@ import { generateUuid } from '../../../base/common/uuid.js';
 import * as os from 'os';
 import { writeSync } from 'fs';
 import * as inspector from 'inspector';
-import { AgentHostClaudeAgentEnabledEnvVar, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentEnabledEnvVar, AgentHostIpcChannels, IAgentHostInspectInfo, IAgentHostSocketInfo, IConnectionTrackerService, isAgentEnabled } from '../common/agentService.js';
+import { AgentHostClaudeAgentEnabledEnvVar, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentEnabledEnvVar, AgentHostIpcChannels, IAgentHostInspectInfo, IAgentHostSocketInfo, IConnectionTrackerService, isAgentEnabled, isCopilotAgentEnabled } from '../common/agentService.js';
 import { AgentHostCodexEnabledConfigKey, platformRootSchema } from '../common/agentHostSchema.js';
 import { AgentModelRefreshScheduler, MODEL_REFRESH_INTERVAL_MS } from './agentModelRefreshScheduler.js';
 import { AgentService } from './agentService.js';
@@ -57,6 +57,11 @@ import { BANG_COMMAND_PREFIX } from './agentHostBangCommand.js';
 import { AgentHostClientFileSystemProvider } from '../common/agentHostClientFileSystemProvider.js';
 import { AGENT_CLIENT_SCHEME } from '../common/agentClientUri.js';
 import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, createAgentHostClientByokLmConnection } from '../common/agentHostClientByokLmChannel.js';
+import { IRemoteAccessHostConfig, IRemoteAccessHostStatus, REMOTE_ACCESS_STOPPED_STATUS } from '../common/remoteAccessHost.js';
+import { SUPPORTED_PROTOCOL_VERSIONS } from '../common/state/protocol/version/registry.js';
+import { RemoteAccessHostController } from './remoteAccessHostController.js';
+import { FlowLeapChatAgentRegistration, FlowLeapChatMirrorAgent } from './flowleapChatMirrorAgent.js';
+import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostChatMirrorRegistry, createAgentHostChatMirrorWindow, isRendererWindowConnection, type ChatMirrorPublication } from '../common/agentHostChatMirror.js';
 import { AGENT_HOST_CLIENT_PROXY_CHANNEL, createAgentHostClientProxyConnection } from '../common/agentHostClientProxyChannel.js';
 import { dirname, join } from '../../../base/common/path.js';
 import { FileAccess } from '../../../base/common/network.js';
@@ -150,6 +155,8 @@ async function startAgentHost(): Promise<void> {
 	// after the block) can forward agent-SDK download progress to clients.
 	let sdkDownloadProgress: Event<IAgentSdkDownloadProgress> | undefined;
 	let byokLmBridgeRegistry: ByokLmBridgeRegistry;
+	// FlowLeap (PRD 0018 C1/C2): the editor chats each window publishes while Remote Access is on.
+	const chatMirrorRegistry = disposables.add(new AgentHostChatMirrorRegistry());
 	let proxyResolver!: IAgentHostProxyResolver;
 	const hostLaunchKind = readAgentHostLaunchKind(process.env[AgentHostLaunchKindEnvVar]);
 	try {
@@ -191,7 +198,11 @@ async function startAgentHost(): Promise<void> {
 		const agentSdkDownloader = runtimeServices.agentSdkDownloader;
 		const providerService = runtimeServices.providerService;
 		sdkDownloadProgress = runtime.sdkDownloadProgress;
-		providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
+		// FlowLeap: the Copilot agent needs GitHub sign-in and spawns `copilot-runtime`.
+		// It is off unless a developer sets the env var, so Claude is the default agent.
+		if (isCopilotAgentEnabled(process.env)) {
+			providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
+		}
 		// Claude and Codex providers are gated on two things:
 		//  1. The user-facing enable toggle (`chat.agentHost.<x>Agent.enabled`,
 		//     forwarded as an env var by the starters). Claude defaults to on.
@@ -209,6 +220,15 @@ async function startAgentHost(): Promise<void> {
 		if (isAgentEnabled(process.env[AgentHostClaudeAgentEnabledEnvVar], true) && (!environmentService.isBuilt || agentSdkDownloader.isAvailable(ClaudeSdkPackage))) {
 			providerService.registerProvider(instantiationService.createInstance(ClaudeAgent));
 		}
+		// FlowLeap (PRD 0018 C2/C3): the editor chat bridge agent. It runs no model. It exists only
+		// while a window publishes, which a window does only while Remote Access is on (D5). The
+		// local Agents Window never shows it (`shouldSurfaceLocalAgentHostProvider`).
+		disposables.add(new FlowLeapChatAgentRegistration(
+			chatMirrorRegistry,
+			providerService,
+			() => instantiationService.createInstance(FlowLeapChatMirrorAgent, chatMirrorRegistry),
+			logService,
+		));
 		// Codex registration is one-way (register-on-enable): the env-var toggle
 		// or the renderer-forwarded `codexAgentEnabled` root config enables it.
 		// Disabling requires an agent host restart.
@@ -321,6 +341,12 @@ async function startAgentHost(): Promise<void> {
 					const byokLmConnection = createAgentHostClientByokLmConnection(getChannel(AGENT_HOST_CLIENT_BYOK_LM_CHANNEL));
 					connectionStore.add(byokLmBridgeRegistry.register(clientId, byokLmConnection));
 				}
+				// FlowLeap (PRD 0018 C1): renderer windows only (spike gap 6): the main process has no
+				// chat view and no mirror channel. Lazy: the agent host calls a window's mirror channel
+				// only after it published.
+				if (isRendererWindowConnection(clientId)) {
+					connectionStore.add(chatMirrorRegistry.attachWindow(clientId, createAgentHostChatMirrorWindow(getChannel(AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL))));
+				}
 				authorityRegistrations.set(connection, connectionStore);
 			};
 			localDataPlaneDisposables.add(server.onDidAddConnection(registerConnection));
@@ -394,6 +420,47 @@ async function startAgentHost(): Promise<void> {
 	// management IPC channel.
 	const connectionCountEmitter = disposables.add(new Emitter<number>());
 	let dynamicSocketInfo: IAgentHostSocketInfo | undefined;
+	// Remote Access (PRD 0018 B3): the outbound Relay transport, created on
+	// first use. Viewers are remote clients, so host-control extension methods
+	// stay off for them.
+	let remoteAccessHost: RemoteAccessHostController | undefined;
+	const getRemoteAccessHost = (): RemoteAccessHostController => {
+		if (!remoteAccessHost) {
+			remoteAccessHost = protocolIngressDisposables.add(new RemoteAccessHostController(
+				// The Viewer picks its build by this (contract section 3, section 8):
+				// the FlowLeap release, not the upstream package version.
+				productService.flowleapVersion ?? productService.version,
+				SUPPORTED_PROTOCOL_VERSIONS,
+				relayServer => {
+					const handler = instantiationService.createInstance(
+						ProtocolServerHandler,
+						agentService,
+						stateManager,
+						relayServer,
+						{
+							hostLaunchKind,
+							defaultDirectory: URI.file(os.homedir()).toString(),
+							completionTriggerCharacters,
+							terminalCommandPrefix: BANG_COMMAND_PREFIX,
+							otlpLogEmitter,
+							allowExtensionMethods: false,
+						},
+						clientFileSystemProvider,
+					);
+					protocolHandlers.push(handler);
+					return toDisposable(() => {
+						const index = protocolHandlers.indexOf(handler);
+						if (index !== -1) {
+							protocolHandlers.splice(index, 1);
+						}
+						handler.dispose();
+					});
+				},
+				logService,
+			));
+		}
+		return remoteAccessHost;
+	};
 	const configuredWebSocketServer = new DeferredPromise<void>();
 	const connectionTrackerService: IConnectionTrackerService = {
 		onDidChangeConnectionCount: connectionCountEmitter.event,
@@ -485,6 +552,26 @@ async function startAgentHost(): Promise<void> {
 			} catch {
 				logService.warn(`[AgentHost] Unexpected inspector URL: ${url}`);
 				return undefined;
+			}
+		},
+		async setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void> {
+			if (protocolIngressDisposables.isDisposed) {
+				if (config) {
+					throw new Error('Agent Host is shutting down.');
+				}
+				return;
+			}
+			if (!config && !remoteAccessHost) {
+				return;
+			}
+			getRemoteAccessHost().setConfig(config);
+		},
+		async getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
+			return remoteAccessHost?.status ?? REMOTE_ACCESS_STOPPED_STATUS;
+		},
+		async publishChatMirror(publication: ChatMirrorPublication): Promise<void> {
+			if (!chatMirrorRegistry.publish(publication)) {
+				logService.trace(`[AgentHost] editor chat publication '${publication.kind}' from client ${publication.clientId} dropped`);
 			}
 		},
 	};

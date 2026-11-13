@@ -133,6 +133,12 @@ export async function buildOptions(
 		// uses its own credential resolution from the subprocess env
 		// (`ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` from `claude
 		// setup-token` — both forwarded by `buildSubprocessEnv`).
+		// FlowLeap guardrail (decision #59, ADR 0009 decision 2): Agents Window
+		// Claude runs on the user's own Claude credentials (claude.ai login or
+		// their own API key). The native path must never carry
+		// `ANTHROPIC_BASE_URL` or `ANTHROPIC_AUTH_TOKEN`, and no proxy runs for it.
+		// FlowLeap never sends a GitHub token, so the proxy branch stays unused.
+		// `claudeSdkOptions.test.ts` asserts this for both env bags.
 		...(transport.kind === 'proxy'
 			? {
 				ANTHROPIC_BASE_URL: transport.handle.baseUrl,

@@ -24,6 +24,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../storage/comm
 import { hasKey } from '../../../base/common/types.js';
 
 import { AgentHostAhpJsonlLoggingSettingId, type IAgentConnection } from '../common/agentService.js';
+import { getSessionLogContent } from '../common/sessionLogContent.js';
 import {
 	IRemoteAgentHostService,
 	RemoteAgentHostConnectionStatus,
@@ -139,7 +140,7 @@ class WebSocketConnectionFactory extends Disposable implements IRemoteAgentHostC
 			address,
 			entry.connectionToken,
 			ahpLoggingEnabled
-				? { logsHome: this._environmentService.logsHome, logId: address, connectionId: address, transport: 'websocket' }
+				? { logsHome: this._environmentService.logsHome, logId: address, connectionId: address, transport: 'websocket', content: getSessionLogContent(this._configurationService) }
 				: undefined,
 		);
 		const authentication = this._authenticationResolver.createResolver(address);

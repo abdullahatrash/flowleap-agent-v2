@@ -857,7 +857,7 @@ suite('Mission Control WPS', () => {
 				const connectionId = `${clientId}-${generation}`;
 				generations.push(connectionId);
 				const logger = new AhpJsonlLogger({
-					logsHome: URI.file('/logs'), logId: MISSION_CONTROL_AHP_LOG_ID, connectionId, transport: 'mission-control',
+					logsHome: URI.file('/logs'), logId: MISSION_CONTROL_AHP_LOG_ID, connectionId, transport: 'mission-control', content: 'full',
 				}, files, log);
 				const dispose = sinon.spy(logger, 'dispose');
 				disposals.push(dispose);

@@ -1,0 +1,273 @@
+diff --git a/src/vs/platform/agentHost/common/agentService.ts b/src/vs/platform/agentHost/common/agentService.ts
+index f5635ad50ed..8453075812c 100644
+--- a/src/vs/platform/agentHost/common/agentService.ts
++++ b/src/vs/platform/agentHost/common/agentService.ts
+@@ -3,6 +3,7 @@
+  *  Licensed under the MIT License. See License.txt in the project root for license information.
+  *--------------------------------------------------------------------------------------------*/
+ 
++import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from './remoteAccessHost.js';
+ import type { AgentChatMoveDestination } from './agentHostChatMove.js';
+ import type { IAgentHostManagedWorktree, IAgentHostWorktreeCleanupStatus } from './agentHostWorktreeCleanup.js';
+ import type { CancellationToken } from '../../../base/common/cancellation.js';
+@@ -871,6 +872,16 @@ export interface IConnectionTrackerService {
+ 	 * enabled (e.g. running in an environment without `node:inspector`).
+ 	 */
+ 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
++
++	/**
++	 * FlowLeap (PRD 0018 B3): switch the Remote Access Host transport on (or
++	 * refresh its token and pairs) with a config, or off with `undefined`. The
++	 * token and pair keys stay in the agent host's memory.
++	 */
++	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void>;
++
++	/** FlowLeap (PRD 0018 B3): the Remote Access Host transport's current status. */
++	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus>;
+ }
+ 
+ /**
+@@ -990,6 +1001,8 @@ export interface IAgentHostManagementService {
+ 	readDebugLogsChunk(resource: URI, position: number): Promise<IAgentHostDebugLogsChunk>;
+ 	startWebSocketServer(): Promise<IAgentHostSocketInfo>;
+ 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
++	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void>;
++	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus>;
+ }
+ 
+ // ---- Service interfaces -----------------------------------------------------
+@@ -1698,4 +1711,13 @@ export interface IAgentHostService extends IAgentConnection {
+ 	 * enabled.
+ 	 */
+ 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
++
++	/**
++	 * Remote Access (local agent host only): switch the Host transport on or
++	 * refresh it with a config, or off with `undefined`.
++	 */
++	setRemoteAccessHost?(config: IRemoteAccessHostConfig | undefined): Promise<void>;
++
++	/** Remote Access (local agent host only): the Host transport's status. */
++	getRemoteAccessHostStatus?(): Promise<IRemoteAccessHostStatus>;
+ }
+diff --git a/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts b/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts
+index aeacf2fb507..20a8848b700 100644
+--- a/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts
++++ b/src/vs/platform/agentHost/electron-browser/localAgentHostService.ts
+@@ -31,6 +31,7 @@ import { AgentHostIpcChannelTransport } from '../browser/agentHostIpcChannelTran
+ import { AgentHostClientState, AgentHostProtocolClient } from '../browser/agentHostProtocolClient.js';
+ import { AhpJsonlLogger } from '../common/ahpJsonlLogger.js';
+ import { getSessionLogContent } from '../common/sessionLogContent.js';
++import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from '../common/remoteAccessHost.js';
+ import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AgentHostClientByokLmChannel, NullAgentHostClientByokLmChannel } from '../common/agentHostClientByokLmChannel.js';
+ import { getAgentHostClientType } from '../common/agentHostClientInfo.js';
+ import { AGENT_HOST_CLIENT_PROXY_CHANNEL, AgentHostClientProxyChannel } from '../common/agentHostClientProxyChannel.js';
+@@ -869,6 +870,14 @@ export class LocalAgentHostServiceClient extends Disposable implements IAgentHos
+ 		return this._getManagementService().getInspectInfo(tryEnable);
+ 	}
+ 
++	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void> {
++		return this._getManagementService().setRemoteAccessHost(config);
++	}
++
++	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
++		return this._getManagementService().getRemoteAccessHostStatus();
++	}
++
+ 	private _getManagementService(): IAgentHostManagementService {
+ 		return ProxyChannel.toService<IAgentHostManagementService>(
+ 			getDelayedChannel(this._managementConnection.client().then(client => client.getChannel(AgentHostIpcChannels.Management)))
+diff --git a/src/vs/platform/agentHost/node/agentHostMain.ts b/src/vs/platform/agentHost/node/agentHostMain.ts
+index 816c468e442..31e0dab1657 100644
+--- a/src/vs/platform/agentHost/node/agentHostMain.ts
++++ b/src/vs/platform/agentHost/node/agentHostMain.ts
+@@ -57,6 +57,9 @@ import { BANG_COMMAND_PREFIX } from './agentHostBangCommand.js';
+ import { AgentHostClientFileSystemProvider } from '../common/agentHostClientFileSystemProvider.js';
+ import { AGENT_CLIENT_SCHEME } from '../common/agentClientUri.js';
+ import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, createAgentHostClientByokLmConnection } from '../common/agentHostClientByokLmChannel.js';
++import { IRemoteAccessHostConfig, IRemoteAccessHostStatus, REMOTE_ACCESS_STOPPED_STATUS } from '../common/remoteAccessHost.js';
++import { SUPPORTED_PROTOCOL_VERSIONS } from '../common/state/protocol/version/registry.js';
++import { RemoteAccessHostController } from './remoteAccessHostController.js';
+ import { AGENT_HOST_CLIENT_PROXY_CHANNEL, createAgentHostClientProxyConnection } from '../common/agentHostClientProxyChannel.js';
+ import { dirname, join } from '../../../base/common/path.js';
+ import { FileAccess } from '../../../base/common/network.js';
+@@ -398,6 +401,47 @@ async function startAgentHost(): Promise<void> {
+ 	// management IPC channel.
+ 	const connectionCountEmitter = disposables.add(new Emitter<number>());
+ 	let dynamicSocketInfo: IAgentHostSocketInfo | undefined;
++	// Remote Access (PRD 0018 B3): the outbound Relay transport, created on
++	// first use. Viewers are remote clients, so host-control extension methods
++	// stay off for them.
++	let remoteAccessHost: RemoteAccessHostController | undefined;
++	const getRemoteAccessHost = (): RemoteAccessHostController => {
++		if (!remoteAccessHost) {
++			remoteAccessHost = protocolIngressDisposables.add(new RemoteAccessHostController(
++				// The Viewer picks its build by this (contract section 3, section 8):
++				// the FlowLeap release, not the upstream package version.
++				productService.flowleapVersion ?? productService.version,
++				SUPPORTED_PROTOCOL_VERSIONS,
++				relayServer => {
++					const handler = instantiationService.createInstance(
++						ProtocolServerHandler,
++						agentService,
++						stateManager,
++						relayServer,
++						{
++							hostLaunchKind,
++							defaultDirectory: URI.file(os.homedir()).toString(),
++							completionTriggerCharacters,
++							terminalCommandPrefix: BANG_COMMAND_PREFIX,
++							otlpLogEmitter,
++							allowExtensionMethods: false,
++						},
++						clientFileSystemProvider,
++					);
++					protocolHandlers.push(handler);
++					return toDisposable(() => {
++						const index = protocolHandlers.indexOf(handler);
++						if (index !== -1) {
++							protocolHandlers.splice(index, 1);
++						}
++						handler.dispose();
++					});
++				},
++				logService,
++			));
++		}
++		return remoteAccessHost;
++	};
+ 	const configuredWebSocketServer = new DeferredPromise<void>();
+ 	const connectionTrackerService: IConnectionTrackerService = {
+ 		onDidChangeConnectionCount: connectionCountEmitter.event,
+@@ -491,6 +535,21 @@ async function startAgentHost(): Promise<void> {
+ 				return undefined;
+ 			}
+ 		},
++		async setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void> {
++			if (protocolIngressDisposables.isDisposed) {
++				if (config) {
++					throw new Error('Agent Host is shutting down.');
++				}
++				return;
++			}
++			if (!config && !remoteAccessHost) {
++				return;
++			}
++			getRemoteAccessHost().setConfig(config);
++		},
++		async getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
++			return remoteAccessHost?.status ?? REMOTE_ACCESS_STOPPED_STATUS;
++		},
+ 	};
+ 	const missionControl = protocolIngressDisposables.add(instantiationService.createInstance(MissionControlHost, {
+ 		hostLaunchKind,
+diff --git a/src/vs/platform/agentHost/node/agentHostManagementService.ts b/src/vs/platform/agentHost/node/agentHostManagementService.ts
+index 2507c4c1a53..db435f33011 100644
+--- a/src/vs/platform/agentHost/node/agentHostManagementService.ts
++++ b/src/vs/platform/agentHost/node/agentHostManagementService.ts
+@@ -11,6 +11,7 @@ import { type AgentCanvasDefinitionSnapshot, type AgentProvider, type IAgentCanv
+ import { IAgentHostInspectInfo, IAgentHostManagedSettingsDiagnostics, IAgentHostManagementService, IAgentHostNetworkDiagnosticsInfo, IAgentHostNetworkFetchResult, IAgentHostSocketInfo, IAgentService, IConnectionTrackerService, type AgentHostDebugLogsArtifactKind, type IAgentHostDebugLogsArtifact, type IAgentHostDebugLogsChunk, type IMissionControlOptions, type IMissionControlCredentialSealingRequest } from '../common/agentService.js';
+ import { sealMissionControlCredential } from './missionControl/missionControlAuthentication.js';
+ import { MissionControlEnvironment } from './missionControl/missionControlEnvironment.js';
++import { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from '../common/remoteAccessHost.js';
+ import { ISessionDataService } from '../common/sessionDataService.js';
+ import { IAgentHostMacAccessibilityTrustService } from './agentHostMacAccessibilityTrustService.js';
+ import { IAgentHostSystemWakeService } from './agentHostSystemWakeService.js';
+@@ -393,4 +394,12 @@ export class AgentHostManagementService implements IAgentHostManagementService {
+ 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined> {
+ 		return this._connectionTrackerService.getInspectInfo(tryEnable);
+ 	}
++
++	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void> {
++		return this._connectionTrackerService.setRemoteAccessHost(config);
++	}
++
++	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
++		return this._connectionTrackerService.getRemoteAccessHostStatus();
++	}
+ }
+diff --git a/src/vs/sessions/contrib/remoteAccess/browser/remoteAccess.contribution.ts b/src/vs/sessions/contrib/remoteAccess/browser/remoteAccess.contribution.ts
+index b417563f7cd..0483b8945a3 100644
+--- a/src/vs/sessions/contrib/remoteAccess/browser/remoteAccess.contribution.ts
++++ b/src/vs/sessions/contrib/remoteAccess/browser/remoteAccess.contribution.ts
+@@ -33,7 +33,7 @@ import {
+ 	IRemoteAccessPair, IRemoteAccessPairingOffer, IRemoteAccessService, RemoteAccessEnabledContext, RemoteAccessError, RemoteAccessErrorKind,
+ } from '../../../../workbench/contrib/chat/common/remoteAccess/remoteAccess.js';
+ import { IHostService } from '../../../../workbench/services/host/browser/host.js';
+-import { Menus } from '../../../../workbench/contrib/sessions/browser/menus.js';
++import { AgentsWindowMenus } from '../../../browser/agentsWindowMenus.js';
+ import './media/remoteAccess.css';
+ 
+ export const TOGGLE_REMOTE_ACCESS_ID = 'flowleap.remoteAccess.toggle';
+@@ -333,7 +333,7 @@ registerAction2(class ManageViewersAction extends Action2 {
+ 
+ // ---- Title bar ------------------------------------------------------------------
+ 
+-MenuRegistry.appendMenuItem(Menus.TitleBarRightLayout, {
++MenuRegistry.appendMenuItem(AgentsWindowMenus.TitleBarRightLayout, {
+ 	command: {
+ 		id: TOGGLE_REMOTE_ACCESS_ID,
+ 		title: localize('remoteAccess.title', "Remote Access"),
+diff --git a/src/vs/sessions/contrib/remoteAccess/browser/viewer/remoteAccessViewerAgentHostService.ts b/src/vs/sessions/contrib/remoteAccess/browser/viewer/remoteAccessViewerAgentHostService.ts
+index 99c69c1845c..340eeebde52 100644
+--- a/src/vs/sessions/contrib/remoteAccess/browser/viewer/remoteAccessViewerAgentHostService.ts
++++ b/src/vs/sessions/contrib/remoteAccess/browser/viewer/remoteAccessViewerAgentHostService.ts
+@@ -26,7 +26,6 @@ import {
+ 	IRemoteAgentHostConnectionFactory, IRemoteAgentHostConnectOptions, IRemoteAgentHostCreatedConnection, IRemoteAgentHostEntry, RemoteAgentHostEntryType,
+ } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
+ import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+-import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
+ import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+ import { ILabelService } from '../../../../../platform/label/common/label.js';
+ import { ILogService } from '../../../../../platform/log/common/log.js';
+@@ -111,8 +110,13 @@ export class RemoteAccessViewerConnectionFactory implements IRemoteAgentHostConn
+  */
+ export class RemoteAccessViewerAgentHostService extends AgentsWindowRemoteAgentHostService {
+ 
+-	protected override get supportsWebSocketConnections(): boolean {
+-		return false;
++	/**
++	 * Upstream 1.146 dials the hosts a setting lists; the Viewer dials only its
++	 * pair, so it reads a setting nothing writes (the 1.140 base had a
++	 * `supportsWebSocketConnections` switch for this).
++	 */
++	protected override get webSocketEntriesSettingId(): string {
++		return 'flowleap.remoteAccessViewer.noConfiguredRemoteAgentHosts';
+ 	}
+ 
+ 	constructor(
+@@ -120,11 +124,10 @@ export class RemoteAccessViewerAgentHostService extends AgentsWindowRemoteAgentH
+ 		@IInstantiationService instantiationService: IInstantiationService,
+ 		@ILogService logService: ILogService,
+ 		@ILabelService labelService: ILabelService,
+-		@IEnvironmentService environmentService: IEnvironmentService,
+ 		@IStorageService storageService: IStorageService,
+ 		@IBrowserWorkbenchEnvironmentService browserEnvironmentService: IBrowserWorkbenchEnvironmentService,
+ 	) {
+-		super(configurationService, instantiationService, logService, labelService, environmentService, storageService);
++		super(configurationService, instantiationService, logService, labelService, storageService);
+ 		const options = browserEnvironmentService.options?.remoteAccessViewer;
+ 		if (options) {
+ 			this._register(this.registerConnectionFactory(new RemoteAccessViewerConnectionFactory(options, instantiationService)));
+diff --git a/src/vs/sessions/contrib/remoteAccess/test/browser/remoteAccess.contribution.test.ts b/src/vs/sessions/contrib/remoteAccess/test/browser/remoteAccess.contribution.test.ts
+index 3f618e8af43..dc0c51a8d1e 100644
+--- a/src/vs/sessions/contrib/remoteAccess/test/browser/remoteAccess.contribution.test.ts
++++ b/src/vs/sessions/contrib/remoteAccess/test/browser/remoteAccess.contribution.test.ts
+@@ -14,7 +14,7 @@ import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contex
+ import { NullLogService } from '../../../../../platform/log/common/log.js';
+ import { IsAuxiliaryWindowContext, IsSessionsWindowContext } from '../../../../../workbench/common/contextkeys.js';
+ import { RemoteAccessEnabledContext } from '../../../../../workbench/contrib/chat/common/remoteAccess/remoteAccess.js';
+-import { Menus } from '../../../../../workbench/contrib/sessions/browser/menus.js';
++import { AgentsWindowMenus } from '../../../../browser/agentsWindowMenus.js';
+ import { ISession, SessionStatus } from '../../../../../workbench/services/sessions/common/session.js';
+ import { describeHostStatus, MANAGE_VIEWERS_ID, PAIR_VIEWER_ID, TOGGLE_REMOTE_ACCESS_ID } from '../../browser/remoteAccess.contribution.js';
+ import { RemoteAccessKeepAwakeController } from '../../browser/remoteAccessKeepAwake.js';
+@@ -23,7 +23,7 @@ suite('Sessions - RemoteAccess title bar', () => {
+ 	ensureNoDisposablesAreLeakedInTestSuite();
+ 
+ 	test('registers the Remote Access toggle in the Agents Window title bar', () => {
+-		const item = MenuRegistry.getMenuItems(Menus.TitleBarRightLayout)
++		const item = MenuRegistry.getMenuItems(AgentsWindowMenus.TitleBarRightLayout)
+ 			.filter(isIMenuItem)
+ 			.find(candidate => candidate.command.id === TOGGLE_REMOTE_ACCESS_ID);
+ 		assert.ok(item, 'toggle is in the title bar');
