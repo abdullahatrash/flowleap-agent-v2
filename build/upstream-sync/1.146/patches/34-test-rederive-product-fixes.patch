@@ -1,0 +1,84 @@
+diff --git a/src/vs/workbench/browser/parts/globalCompositeBar.ts b/src/vs/workbench/browser/parts/globalCompositeBar.ts
+index cb3791ef715..e06a8ac8abb 100644
+--- a/src/vs/workbench/browser/parts/globalCompositeBar.ts
++++ b/src/vs/workbench/browser/parts/globalCompositeBar.ts
+@@ -56,6 +56,8 @@ import { createCodexAccountMenuActions, ICodexAccountService, shouldShowCodexAcc
+ const COMMAND_PALETTE_ACTIVITY_ID = 'workbench.actions.activityBarCommandPalette';
+ /** The command opened when the activity-bar Command Palette icon is clicked (same as the Command Palette keybinding). */
+ const SHOW_COMMANDS_COMMAND_ID = 'workbench.action.showCommands';
++// FlowLeap (B17): the FlowLeap (Clerk) authentication provider id, whose session picture is the account avatar.
++const FLOWLEAP_AUTH_PROVIDER_ID = 'flowleap';
+ 
+ export class GlobalCompositeBar extends Disposable {
+ 
+@@ -535,7 +537,8 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
+ 	private getDefaultAccountAvatarIcon(): URI | undefined {
+ 		const currentDefaultAccount = this.defaultAccountService.currentDefaultAccount;
+ 		if (!currentDefaultAccount) {
+-			return undefined;
++			// FlowLeap: without a default account, the FlowLeap (Clerk) session picture is the avatar.
++			return this.groupedAccounts.get(FLOWLEAP_AUTH_PROVIDER_ID)?.find(account => account.icon)?.icon;
+ 		}
+ 
+ 		const accounts = this.groupedAccounts.get(currentDefaultAccount.authenticationProvider.id);
+diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/pluginCustomizationMarketplaceProvider.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/pluginCustomizationMarketplaceProvider.ts
+index 9d40d0b68e9..f7c59a95325 100644
+--- a/src/vs/workbench/contrib/chat/browser/aiCustomization/pluginCustomizationMarketplaceProvider.ts
++++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/pluginCustomizationMarketplaceProvider.ts
+@@ -11,11 +11,12 @@ import { createLazyCustomizationMarketplaceProvider, CustomizationMarketplaceMed
+ import { CustomizationMarketplaceConfiguration, CustomizationMarketplaceSources } from '../../../../../platform/customizationMarketplace/common/customizationMarketplaceSources.js';
+ import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+ import { ChatConfiguration } from '../../common/constants.js';
+-import { DEFAULT_PLUGIN_MARKETPLACE, IMarketplaceReference, parseMarketplaceReference, parseProviderMarketplaceReference } from '../../common/plugins/marketplaceReference.js';
++import { DEFAULT_PLUGIN_MARKETPLACE, IMarketplaceReference, parseMarketplaceReference, parseProviderMarketplaceReference, PUBLIC_FEED_PLUGIN_MARKETPLACE } from '../../common/plugins/marketplaceReference.js';
+ import { getMarketplacePluginRepositoryUri, IMarketplacePlugin, IPluginMarketplaceService, MarketplaceType, PluginSourceKind } from '../../common/plugins/pluginMarketplaceService.js';
+ 
+ const defaultMarketplaceReference = parseMarketplaceReference(DEFAULT_PLUGIN_MARKETPLACE)!;
+ const defaultMarketplaceId = defaultMarketplaceReference.canonicalId;
++const publicFeedMarketplaceReference = parseMarketplaceReference(PUBLIC_FEED_PLUGIN_MARKETPLACE)!;
+ const pluginMarketplaceSourceInfo: ICustomizationMarketplaceSourceInfo = {
+ 	...CustomizationMarketplaceSources.PluginMarketplaces,
+ 	configurationDependencies: [
+@@ -59,7 +60,7 @@ export function isPluginMarketplaceAvailableInDiscover(configurationService: ICo
+ 	return !githubFeedAvailable ||
+ 		configurationService.getValue<boolean>(CustomizationMarketplaceConfiguration.MarketplaceEnabled) !== true ||
+ 		configurationService.getValue<boolean>(CustomizationMarketplaceConfiguration.AgentFinderPublicFeedEnabled) !== true ||
+-		reference?.githubRepo?.toLowerCase() !== defaultMarketplaceReference.githubRepo;
++		reference?.githubRepo?.toLowerCase() !== publicFeedMarketplaceReference.githubRepo;
+ }
+ 
+ export function getPluginCustomizationMarketplaceSourceInfos(
+diff --git a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupRunner.ts b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupRunner.ts
+index 004ccc76203..580bf7641a9 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupRunner.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupRunner.ts
+@@ -294,10 +294,10 @@ export function getChatSetupDialogFooter(
+ 	}
+ 
+ 	if (!settingsUrl) {
+-		return localize({ key: 'settingsWithoutLink', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}', '{Locked="]({4})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}). {3} Copilot may show [public code]({4}) suggestions and use your data to improve the product. You can change these settings anytime.", content.providerName, content.termsStatementUrl, content.privacyStatementUrl, content.providerName, content.publicCodeMatchesUrl);
++		return localize({ key: 'settingsWithoutLink', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}', '{Locked="]({4})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}). {3} may show [public code]({4}) suggestions and use your data to improve the product. You can change these settings anytime.", content.providerName, content.termsStatementUrl, content.privacyStatementUrl, content.providerName, content.publicCodeMatchesUrl);
+ 	}
+ 
+-	return localize({ key: 'settings', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}', '{Locked="]({4})"}', '{Locked="]({5})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}). {3} Copilot may show [public code]({4}) suggestions and use your data to improve the product. You can change these [settings]({5}) anytime.", content.providerName, content.termsStatementUrl, content.privacyStatementUrl, content.providerName, content.publicCodeMatchesUrl, settingsUrl);
++	return localize({ key: 'settings', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}', '{Locked="]({4})"}', '{Locked="]({5})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}). {3} may show [public code]({4}) suggestions and use your data to improve the product. You can change these [settings]({5}) anytime.", content.providerName, content.termsStatementUrl, content.privacyStatementUrl, content.providerName, content.publicCodeMatchesUrl, settingsUrl);
+ }
+ 
+ export class ChatSetup {
+diff --git a/src/vs/workbench/contrib/chat/common/plugins/marketplaceReference.ts b/src/vs/workbench/contrib/chat/common/plugins/marketplaceReference.ts
+index ad1fac2df63..c37818bc35a 100644
+--- a/src/vs/workbench/contrib/chat/common/plugins/marketplaceReference.ts
++++ b/src/vs/workbench/contrib/chat/common/plugins/marketplaceReference.ts
+@@ -23,6 +23,12 @@ export { extraKnownMarketplacesToConfigDict } from '../../../../../base/common/m
+  */
+ export const DEFAULT_PLUGIN_MARKETPLACE = 'flowleap-ai/flowleap-plugins';
+ 
++/**
++ * The marketplace the GitHub public feed (Agent Finder) mirrors. Upstream this is its default
++ * marketplace; the fork ships its own default, so the feed replaces this repository only.
++ */
++export const PUBLIC_FEED_PLUGIN_MARKETPLACE = 'github/awesome-copilot';
++
+ export const enum MarketplaceReferenceKind {
+ 	GitHubShorthand = 'githubShorthand',
+ 	GitUri = 'gitUri',
