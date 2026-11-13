@@ -20,6 +20,7 @@ import { IMarkdownString, MarkdownString } from '../../../../../base/common/html
 import { Iterable } from '../../../../../base/common/iterator.js';
 import { Disposable, DisposableStore, IDisposable, MutableDisposable, thenIfNotDisposed, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ResourceSet } from '../../../../../base/common/map.js';
+import { getPatentModeInputPlaceholder } from '../../common/widget/patentInputPlaceholder.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { filter } from '../../../../../base/common/objects.js';
@@ -3523,7 +3524,9 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		if (this._respondent && isEqual(this._respondent.resource, this.viewModel.sessionResource)) {
 			placeholder = localize('chat.input.placeholder.respondent', "Chat with {0}", this._respondent.respondent.label);
 		} else if (this._lockedAgent) {
+			// FlowLeap: a locked agent (e.g. the agent host's Claude) speaks the patent voice, not "Chat with Claude".
 			placeholder = this.chatSessionsService.getChatSessionContribution(this._lockedAgent.id)?.inputPlaceholder
+				|| getPatentModeInputPlaceholder(ChatModeKind.Agent, PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false)
 				|| localize('chat.input.placeholder.lockedToAgent', "Chat with {0}", this._lockedAgent.displayName || this._lockedAgent.name);
 		}
 		// Routed through `_updateInputPlaceholder`, so a host-supplied placeholder still wins.
