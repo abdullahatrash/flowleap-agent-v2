@@ -35,7 +35,7 @@ suite('ChatConfiguration defaults', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
 	const localWorkspace = createWorkspace(URI.file('/workspace'));
 
-	test('Copilot harness defaults on without experiment controls or experimental tags', () => {
+	test('Copilot harness defaults off (FlowLeap: Claude-only) without experiment controls or experimental tags', () => {
 		const settings = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfigurationProperties();
 		assert.deepStrictEqual([ChatConfiguration.DefaultToCopilotHarness, ChatConfiguration.EditorPreferCopilotHarness].map(key => {
 			const setting = settings[key];
@@ -45,7 +45,7 @@ suite('ChatConfiguration defaults', () => {
 				tags: setting.tags,
 			};
 		}), Array.from({ length: 2 }, () => ({
-			default: true,
+			default: false,
 			experiment: undefined,
 			tags: undefined,
 		})));
@@ -543,7 +543,7 @@ suite('ChatConfiguration defaults', () => {
 		});
 	});
 
-	test('editor default prefers agent host Copilot when the agent host is enabled', () => {
+	test('editor default stays local under the registered default even when the agent host is enabled (FlowLeap)', () => {
 		const configurationService = new TestConfigurationService({
 			[ChatConfiguration.DefaultToCopilotHarness]: Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfigurationProperties()[ChatConfiguration.DefaultToCopilotHarness].default,
 		});
@@ -555,8 +555,8 @@ suite('ChatConfiguration defaults', () => {
 			rememberedAware: getDefaultNewChatSessionType(configurationService, chatSessionsService, storageService, localWorkspace, true),
 			localVisible: isVisibleEditorChatSessionType(localChatSessionType, configurationService, chatSessionsService, localWorkspace),
 		}, {
-			computed: SessionType.AgentHostCopilot,
-			rememberedAware: SessionType.AgentHostCopilot,
+			computed: localChatSessionType,
+			rememberedAware: localChatSessionType,
 			localVisible: true,
 		});
 	});
@@ -816,7 +816,7 @@ suite('ChatConfiguration defaults', () => {
 		});
 	});
 
-	test('default Copilot preference preserves explicit Local for one conversation and the user opt-out', async () => {
+	test('registered defaults off (FlowLeap): explicit Local, the next conversation and the user opt-out all stay local', async () => {
 		const settings = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfigurationProperties();
 		const configurationService = new TestConfigurationService({
 			[ChatConfiguration.DefaultToCopilotHarness]: settings[ChatConfiguration.DefaultToCopilotHarness].default,
@@ -831,7 +831,7 @@ suite('ChatConfiguration defaults', () => {
 		await configurationService.setUserConfiguration(ChatConfiguration.EditorPreferCopilotHarness, false);
 		assert.deepStrictEqual({ explicit, next, optOut: resolve(), stored: getRememberedSessionType(storageService) }, {
 			explicit: { sessionType: localChatSessionType, selectionReason: 'explicitOverride' },
-			next: { sessionType: SessionType.AgentHostCopilot, selectionReason: 'copilotPreference' },
+			next: { sessionType: localChatSessionType, selectionReason: 'rememberedSelection' },
 			optOut: { sessionType: localChatSessionType, selectionReason: 'rememberedSelection' },
 			stored: localChatSessionType,
 		});
