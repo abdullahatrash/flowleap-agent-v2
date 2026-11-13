@@ -81,13 +81,21 @@ The website calls the backend only after sign-in (`/billing/subscription`), so t
 
 ## App (`~/flowleap/flowleap-agent-v2`, branch `main`)
 
+The app uses pnpm 12 since the 1.146 upstream sync (PRD 0027, `docs/prd/0027-upstream-sync-1.146-pnpm.md`): `packageManager` in `package.json` pins `pnpm@12.16.0`, `.nvmrc` pins Node 24.22.1, and there is no `package-lock.json` or `.npmrc` any more.
+
 ```bash
 cd ~/flowleap/flowleap-agent-v2
 git pull
-# npm ci only when node_modules/.package-lock.json is older than package-lock.json
-# empty extensions/*/node_modules → VSCODE_FORCE_INSTALL=1 npm_command=ci node build/npm/postinstall.ts
-npm run typecheck-client        # tsgo; never npm run compile
+nvm use                          # reads .nvmrc (24.22.1)
+npm i -g pnpm@12.16.0            # once; or `corepack enable` to let Node pick the pinned version up
+pnpm install --frozen-lockfile   # root install; the postinstall installs build/, extensions/, extensions/copilot (build/npm/dirs.ts)
+pnpm run typecheck-client        # tsgo; never pnpm run compile
+pnpm -C extensions/copilot run compile   # the copilot extension's esbuild dev bundle (dist/)
 ```
+
+`pnpm install` re-runs the separate roots' installs every time, so an empty `extensions/*/node_modules` is fixed by running it again (the old `VSCODE_FORCE_INSTALL=1 npm_command=ci node build/npm/postinstall.ts` recipe is gone). `pnpm run gulp <task>` replaces `npm run gulp <task>`, and `pnpm -C <dir> run <script>` replaces `npm --prefix <dir> run <script>`.
+
+**Worktrees.** A git worktree gets no `node_modules`, and copying or symlinking them from another checkout is no longer the way (pnpm's `node_modules` are hard links into the shared store plus a `.pnpm` virtual store keyed to that folder). Run `pnpm install --frozen-lockfile` inside the worktree instead; the packages already sit in the shared store, so it is mostly linking. The built Electron under `.build/` can still be symlinked from a full checkout.
 
 Build outputs (`out/`, `extensions/copilot/dist/`, `extensions/flowleap/out/`) must exist. The launch harness refuses to rebuild.
 
@@ -123,7 +131,7 @@ Extension log: `[Patent AI] Backend URL: http://localhost:8000/v1` and `FlowLeap
 
 ![Patent Agent chat answer through the local backend](./local-dev-chat-proof.png)
 
-`npm run typecheck-client`: green.
+`pnpm run typecheck-client`: green (was `npm run typecheck-client` when this was verified; the gate itself is unchanged).
 
 ## Full sign-in from the app (default profile)
 

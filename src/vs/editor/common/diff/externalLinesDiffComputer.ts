@@ -54,12 +54,10 @@ class ExternalLinesDiffComputer implements ILinesDiffComputer {
 		const originalText = new StringText(originalLines.join('\n'));
 		const modifiedText = new StringText(modifiedLines.join('\n'));
 
+		// The edit always contains whitespace changes, so it reproduces the modified text.
+		// Ignoring trim whitespace only hides the replacements annotated as such.
 		const result = this._computer.computeDiff(originalText.value, modifiedText.value, {
-			// TODO: this currently throws
-			ignoreTrimWhitespace: true,
-			// ignoreTrimWhitespace: options.ignoreTrimWhitespace,
-			// TODO: support this. Currently throws with "Time is not implemented in this environment."
-			// maxComputationTimeMs: options.maxComputationTimeMs,
+			maxComputationTimeMs: options.maxComputationTimeMs,
 			computeMoves: options.computeMoves,
 			extendToSubwords: options.extendToSubwords,
 		});

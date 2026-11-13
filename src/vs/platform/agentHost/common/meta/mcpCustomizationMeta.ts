@@ -12,7 +12,8 @@ export type McpServerSource =
 	| 'workspace' // Defined in workspace-level configuration.
 	| 'plugin' // Contributed by a plugin.
 	| 'builtin' // Bundled with the provider.
-	| 'managed'; // Supplied by a trusted host-managed catalog.
+	| 'managed' // Supplied by a trusted host-managed catalog.
+	| 'account'; // Attached to the signed-in account (Copilot SDK 1.0.30 and later).
 
 /** Reads the runtime-reported configuration source, independently of the server's lifecycle state. */
 export function readMcpServerSource(customization: McpServerCustomization | undefined): McpServerSource | undefined {

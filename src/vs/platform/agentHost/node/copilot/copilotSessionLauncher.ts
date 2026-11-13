@@ -6,7 +6,7 @@
 import type { ContextTier, CopilotClient, ElicitationContext, ElicitationResult, ExitPlanModeRequest, ExitPlanModeResult, ModelCapabilitiesOverride, NamedProviderConfig, PermissionRequest, PermissionRequestResult, ProviderModelConfig, ResumeSessionConfig, SessionConfig, SessionHooks, Tool, Verbosity } from '@github/copilot-sdk';
 import { coalesce } from '../../../../base/common/arrays.js';
 import { Schemas } from '../../../../base/common/network.js';
-import { isObject, isStringArray } from '../../../../base/common/types.js';
+import { hasKey, isObject, isStringArray } from '../../../../base/common/types.js';
 import { StopWatch } from '../../../../base/common/stopwatch.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
@@ -14,7 +14,7 @@ import { IFileService } from '../../../files/common/files.js';
 import { ILogService, LogLevel } from '../../../log/common/log.js';
 import { AgentSession } from '../../common/agent.js';
 import { getByokLmSelectionModelId, resolveByokLmEnablement, type IByokLmModelInfo } from '../../common/agentHostByokLm.js';
-import { AgentHostByokModelsEnabledConfigKey, AgentHostMcpConnectorsEnabledConfigKey, AgentHostSessionSyncEnabledConfigKey, platformRootSchema, type AgentHostMcpServers } from '../../common/agentHostSchema.js';
+import { AgentHostByokModelsEnabledConfigKey, AgentHostMcpConnectorsEnabledConfigKey, platformRootSchema, type AgentHostMcpServers } from '../../common/agentHostSchema.js';
 import { CopilotCliConfigKey, copilotCliConfigSchema, normalizeModelFamilyAlias, normalizeToolSearchDeferThreshold, resolveModelCapabilityOverrideField } from '../../common/copilotCliConfig.js';
 import { IAgentHostOTelService } from '../../common/otel/agentHostOTelService.js';
 import { reasoningEffortLevels, type ReasoningEffortLevel } from '../../common/reasoningEffort.js';
@@ -233,7 +233,12 @@ export interface ICopilotSessionLauncher {
 }
 
 type CopilotSessionClient = Pick<CopilotClient, 'createSession' | 'resumeSession'> & {
-	readonly rpc: Pick<CopilotClient['rpc'], 'account' | 'sandbox'>;
+	readonly rpc: {
+		// Only the sandbox host-support probe is used here; the SDK's full sandbox surface
+		// (proxyCa and friends, SDK 1.0.30) stays out of the seam so test fakes stay small.
+		readonly account: CopilotClient['rpc']['account'];
+		readonly sandbox: Pick<CopilotClient['rpc']['sandbox'], 'getHostSupport'>;
+	};
 };
 
 interface ICopilotSessionLaunchBase {
@@ -784,9 +789,11 @@ export class CopilotSessionLauncher implements ICopilotSessionLauncher {
 			if (!account) {
 				const sessionHost = auth.host?.replace(/^https?:\/\//, '').replace(/\/+$/, '').toLowerCase();
 				const matchingAccounts = accounts.filter(candidate => {
-					const login = candidate.authInfo.type === 'env' || candidate.authInfo.type === 'user' || candidate.authInfo.type === 'gh-cli'
+					// Copilot SDK 1.0.30 types no longer carry `copilotUser` on the token-provider variants;
+					// older runtimes still report the login there, so both shapes are read.
+					const login = hasKey(candidate.authInfo, { login: true })
 						? candidate.authInfo.login
-						: candidate.authInfo.copilotUser?.login;
+						: (candidate.authInfo as { copilotUser?: { login?: string } }).copilotUser?.login;
 					const accountHost = candidate.authInfo.host.replace(/^https?:\/\//, '').replace(/\/+$/, '').toLowerCase();
 					return candidate.selectionId && accountHost === sessionHost && (!auth.login || login === auth.login);
 				});
@@ -1093,11 +1100,6 @@ export class CopilotSessionLauncher implements ICopilotSessionLauncher {
 			// it, `rpc.plan.read()` returns `path: null` and the SDK
 			// never emits `exit_plan_mode.requested`.
 			infiniteSessions: { enabled: true },
-			// Per-session remote export: the client-level `--remote` flag
-			// (enableRemoteSessions) enables the CLI capability, but each
-			// session must opt in via `remoteSession` to actually export
-			// events. Without this, sessions default to "off".
-			remoteSession: this._configurationService.getRootValue(platformRootSchema, AgentHostSessionSyncEnabledConfigKey) === true ? 'export' : undefined,
 			enableManagedSettings: true,
 		};
 	}

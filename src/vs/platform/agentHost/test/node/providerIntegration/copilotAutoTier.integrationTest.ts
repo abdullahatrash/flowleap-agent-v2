@@ -181,8 +181,9 @@ suite('Copilot SDK client-selected Auto startup defaults', function () {
 			});
 			await session.sendAndWait({ prompt: 'Reply only OK' }, 20_000);
 			const current = await session.rpc.model.getCurrent();
-			assert.ok(current.autoTier === 'intelligence' || current.autoTier === 'balance');
-			routed.push(current.autoTier);
+			const tier = current.autoTier;
+			assert.ok(tier === 'intelligence' || tier === 'balance');
+			routed.push(tier === 'intelligence' ? 'intelligence' : 'balance');
 			await session.disconnect();
 		}
 		assert.deepStrictEqual({ routed, routedTiers, unexpectedRequests }, {

@@ -1,5 +1,7 @@
 # Upstream sync to VS Code 1.140 (PRD 0017)
 
+> **Superseded by the 1.146 sync (PRD 0027).** The repo moved from npm to pnpm 12 with upstream 1.146: `packageManager` pins `pnpm@12.16.0`, each install root (`/`, `build/`, `remote/`, `extensions/`, `extensions/copilot`) has its own `pnpm-lock.yaml`, and there is no `package-lock.json` or `.npmrc` any more. So step 11 (`11-npm-deps.sh`, npm packages at upstream's lockfile versions plus the lockfile stub for `npm ci`) and the npm worktree setup below (copying the root `node_modules`, symlinking the others) no longer apply: a worktree now gets its own `pnpm install --frozen-lockfile`. See `docs/prd/0027-upstream-sync-1.146-pnpm.md` and `docs/dev/LOCAL-DEV.md`. The rest of the kit (copy, keep-out, re-apply) is still the method.
+
 These scripts turned the fork into a whole-tree sync of `src/vs` and `src/vscode-dts` with upstream 1.140. The next upstream sync is a re-run of the same kit against a newer reference, not a rediscovery.
 
 **What they do:** copy upstream, keep what the fork deliberately keeps out, then re-apply the fork's intents as small patches written against upstream's code. Old fork hunks are never merged.

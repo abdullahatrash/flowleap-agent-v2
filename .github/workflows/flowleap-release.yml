@@ -111,10 +111,16 @@ jobs:
           node-version-file: .nvmrc
 
       # The producer needs only node-tar, not the whole root dependency tree.
-      # The version comes from the root lockfile, so there is no second pin.
+      # The version comes from the root pnpm-lock.yaml (`tar` is a root
+      # dependency), read with build/lib/pnpmLock.ts's getLockedVersion, which
+      # needs no installed packages — so there is no second pin. build/agent-sdk
+      # is not a pnpm install root (no package.json of its own; the SDK's own
+      # pinned agents/claude lockfile is still `npm ci`'d by buildOne), so this
+      # one-off stays an npm install into a throwaway prefix.
       - name: Install node-tar for the producer
         run: |
-          TAR_VERSION=$(node -p "require('./package-lock.json').packages['node_modules/tar'].version")
+          TAR_VERSION=$(node --input-type=module -e "import { getLockedVersion } from './build/lib/pnpmLock.ts'; console.log(getLockedVersion('', 'tar'))")
+          test -n "$TAR_VERSION" && [ "$TAR_VERSION" != "undefined" ] || { echo "::error::tar is not a locked root dependency in pnpm-lock.yaml"; exit 1; }
           npm install --no-save --no-package-lock --prefix build/agent-sdk "tar@$TAR_VERSION"
 
       - name: Produce Claude SDK tarballs
@@ -191,23 +197,42 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # pnpm 12 (PRD 0027): setup-pnpm installs the version `packageManager` pins
+      # and must run before setup-node so `cache: pnpm` can find the store.
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: pnpm
 
-      # The native modules npm ci builds (kerberos, native-keymap) need these
+      # The native modules pnpm install builds (kerberos, native-keymap) need these
       # headers even though the Viewer itself uses none of them.
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libkrb5-dev libxkbfile-dev libx11-dev libsecret-1-dev
 
+      # Retried like upstream's workflows do: the registry and the header
+      # downloads flake on shared runners.
       - name: Install dependencies
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-        run: npm ci
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          for i in {1..5}; do # try 5 times
+            pnpm install --frozen-lockfile && break
+            if [ $i -eq 5 ]; then
+              echo "pnpm install failed too many times" >&2
+              exit 1
+            fi
+            echo "pnpm install failed $i, trying again..."
+          done
 
       - name: Build the Viewer
         env:
@@ -255,18 +280,38 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # pnpm 12 (PRD 0027): setup-pnpm installs the version `packageManager` pins
+      # and must run before setup-node so `cache: pnpm` can find the store.
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: 'npm'
+          cache: pnpm
 
-      # Root `npm ci` also installs each built-in extension's node_modules (they are
-      # listed in build/npm/dirs.ts, including pdf-preview / flowleap / markdown-pdf /
-      # docx-viewer). That is why the old per-extension `npm install --production`
-      # steps for markdown-pdf and docx-viewer are gone — they were redundant.
+      # The root `pnpm install` also installs the separate install roots (build/,
+      # extensions/, extensions/copilot — build/npm/dirs.ts) through the root
+      # postinstall, and with them each built-in extension's node_modules
+      # (pdf-preview / flowleap / markdown-pdf / docx-viewer). That is why the
+      # old per-extension `npm install --production` steps for markdown-pdf and
+      # docx-viewer are gone — they were redundant. Retried like upstream's
+      # pr-darwin-test.yml does. `npm_config_arch` still selects the target's
+      # native modules: build/npm/pnpm/nativeBuildEnv.ts passes the npm_config_*
+      # variables on to every install script.
       - name: Install dependencies
-        run: npm ci
+        run: |
+          set -e
+
+          for i in {1..5}; do # try 5 times
+            pnpm install --frozen-lockfile && break
+            if [ $i -eq 5 ]; then
+              echo "pnpm install failed too many times" >&2
+              exit 1
+            fi
+            echo "pnpm install failed $i, trying again..."
+          done
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
@@ -298,9 +343,9 @@ jobs:
       # missed docx-viewer; that omission is fixed here.
       - name: Compile FlowLeap legacy extensions
         run: |
-          npm run gulp compile-extension:pdf-preview
-          npm run gulp compile-extension:flowleap
-          npm run gulp compile-extension:docx-viewer
+          pnpm run gulp compile-extension:pdf-preview
+          pnpm run gulp compile-extension:flowleap
+          pnpm run gulp compile-extension:docx-viewer
 
       # The Claude SDK stamp from the agent-sdk job. The gulp package task reads
       # AGENT_SDK_RESULTS_FILE and writes it into the BUILT product.json as
@@ -315,7 +360,7 @@ jobs:
       - name: Build macOS ${{ matrix.arch }}
         run: |
           ulimit -n 65536 2>/dev/null || true
-          npm run gulp vscode-darwin-${{ matrix.arch }}
+          pnpm run gulp vscode-darwin-${{ matrix.arch }}
         env:
           VSCODE_ARCH: ${{ matrix.arch }}
           AGENT_SDK_RESULTS_FILE: ${{ runner.temp }}/agent-sdk/agent-sdks.json
@@ -551,7 +596,7 @@ jobs:
   # is how upstream builds it too: build/azure-pipelines/product-build.yml
   # instantiates the same win32 template twice against the same x64 agent pool.
   # Three things make that work and all three are reproduced below.
-  #   - `npm_config_arch` selects the TARGET's native node modules at npm ci time.
+  #   - `npm_config_arch` selects the TARGET's native node modules at pnpm install time.
   #   - `VSCODE_ARCH` and the arch in the gulp task name select the target Electron
   #     and packaging layout.
   #   - Inno Setup only writes `ArchitecturesAllowed=arm64` into the installer
@@ -577,11 +622,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # pnpm 12 (PRD 0027): setup-pnpm installs the version `packageManager` pins
+      # (pnpm/action-setup puts pnpm.cmd on PATH on Windows) and must run before
+      # setup-node so `cache: pnpm` can find the store.
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: 'npm'
+          cache: pnpm
 
       # Belt-and-braces for future image drift: point vs2022_install at whatever VS
       # vswhere finds, so preinstall.ts's toolchain check passes even if the default
@@ -596,10 +647,35 @@ jobs:
           Write-Host "Using Visual Studio at: $vs"
           "vs2022_install=$vs" >> $env:GITHUB_ENV
 
-      # As on macOS, root `npm ci` installs the per-extension node_modules via
-      # build/npm/dirs.ts, so no separate extension `npm install` steps are needed.
+      # As on macOS, the root `pnpm install` installs the separate roots and the
+      # per-extension node_modules via build/npm/dirs.ts, so no separate extension
+      # install steps are needed. Mirrors upstream's pr-win32-test.yml: the
+      # preinstall runs on its own first so the Electron/v8 headers are patched
+      # before any native module builds, and the install is retried.
       - name: Install dependencies
-        run: npm ci
+        shell: pwsh
+        run: |
+          . build/azure-pipelines/win32/exec.ps1
+          $ErrorActionPreference = "Stop"
+
+          # Run preinstall script before root dependencies are installed
+          # so that Electron/v8 headers are patched correctly for native modules.
+          exec { pnpm run preinstall }
+
+          for ($i = 1; $i -le 5; $i++) {
+            try {
+              exec { pnpm install --frozen-lockfile }
+              break
+            }
+            catch {
+              if ($i -eq 5) {
+                Write-Error "pnpm install failed after 5 attempts"
+                throw
+              }
+              Write-Host "pnpm install failed attempt $i, retrying..."
+              Start-Sleep -Seconds 2
+            }
+          }
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
@@ -628,9 +704,9 @@ jobs:
       # TS FlowLeap extensions need pre-compilation before packaging.
       - name: Compile FlowLeap legacy extensions
         run: |
-          npm run gulp compile-extension:pdf-preview
-          npm run gulp compile-extension:flowleap
-          npm run gulp compile-extension:docx-viewer
+          pnpm run gulp compile-extension:pdf-preview
+          pnpm run gulp compile-extension:flowleap
+          pnpm run gulp compile-extension:docx-viewer
 
       # The win32 package task shells out to bare `signtool.exe` (strips stale
       # Authenticode signatures before rcedit patches version resources). It's
@@ -654,7 +730,7 @@ jobs:
           path: ${{ runner.temp }}/agent-sdk
 
       - name: Build Windows ${{ matrix.arch }}
-        run: npm run gulp vscode-win32-${{ matrix.arch }}
+        run: pnpm run gulp vscode-win32-${{ matrix.arch }}
         env:
           VSCODE_ARCH: ${{ matrix.arch }}
           AGENT_SDK_RESULTS_FILE: ${{ runner.temp }}/agent-sdk/agent-sdks.json
@@ -702,13 +778,13 @@ jobs:
         run: choco install innosetup -y
 
       - name: Copy Inno Updater Files
-        run: npm run gulp vscode-win32-${{ matrix.arch }}-inno-updater
+        run: pnpm run gulp vscode-win32-${{ matrix.arch }}-inno-updater
 
       - name: Build Installers
         continue-on-error: true
         run: |
-          npm run gulp vscode-win32-${{ matrix.arch }}-system-setup
-          npm run gulp vscode-win32-${{ matrix.arch }}-user-setup
+          pnpm run gulp vscode-win32-${{ matrix.arch }}-system-setup
+          pnpm run gulp vscode-win32-${{ matrix.arch }}-user-setup
 
       # Windows artifacts ship UNSIGNED from CI. Signing uses Certum SimplySign, which
       # requires a local desktop app, so it is done after the fact:
@@ -824,15 +900,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # pnpm 12 (PRD 0027): setup-pnpm installs the version `packageManager` pins
+      # and must run before setup-node so `cache: pnpm` can find the store.
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: 'npm'
+          cache: pnpm
 
       # Three toolchains the packaging tasks shell out to:
       #   pkg-config + libkrb5-dev + libxkbfile-dev — headers for the native
-      #     modules npm ci builds (kerberos, native-keymap).
+      #     modules pnpm install builds (kerberos, native-keymap).
       #   fakeroot — `fakeroot dpkg-deb` in the build-deb task (dpkg-deb itself
       #     is preinstalled).
       #   rpm — rpmbuild for build-rpm, and /usr/lib/rpm/find-requires, which
@@ -851,10 +932,21 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc "$AGENT_TOOLSDIRECTORY/CodeQL" || true
           df -h /
 
-      # As on macOS, root `npm ci` installs the per-extension node_modules via
-      # build/npm/dirs.ts, so no separate extension `npm install` steps are needed.
+      # As on macOS, the root `pnpm install` installs the separate roots and the
+      # per-extension node_modules via build/npm/dirs.ts, so no separate extension
+      # install steps are needed. Retried like upstream's pr-linux-test.yml does.
       - name: Install dependencies
-        run: npm ci
+        run: |
+          set -e
+
+          for i in {1..5}; do # try 5 times
+            pnpm install --frozen-lockfile && break
+            if [ $i -eq 5 ]; then
+              echo "pnpm install failed too many times" >&2
+              exit 1
+            fi
+            echo "pnpm install failed $i, trying again..."
+          done
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
@@ -870,9 +962,9 @@ jobs:
       # legacy TS FlowLeap extensions need pre-compilation before packaging.
       - name: Compile FlowLeap legacy extensions
         run: |
-          npm run gulp compile-extension:pdf-preview
-          npm run gulp compile-extension:flowleap
-          npm run gulp compile-extension:docx-viewer
+          pnpm run gulp compile-extension:pdf-preview
+          pnpm run gulp compile-extension:flowleap
+          pnpm run gulp compile-extension:docx-viewer
 
       # `-min` is the minified variant, which is what a shipped Linux build
       # wants. It produces ../VSCode-linux-<arch>, the input to every packaging
@@ -888,7 +980,7 @@ jobs:
           path: ${{ runner.temp }}/agent-sdk
 
       - name: Build Linux ${{ matrix.arch }}
-        run: npm run gulp vscode-linux-${{ matrix.arch }}-min
+        run: pnpm run gulp vscode-linux-${{ matrix.arch }}-min
         env:
           VSCODE_ARCH: ${{ matrix.arch }}
           AGENT_SDK_RESULTS_FILE: ${{ runner.temp }}/agent-sdk/agent-sdks.json
@@ -940,28 +1032,28 @@ jobs:
       # requests are rate-limited. The sysroots are what dpkg-shlibdeps reads to
       # compute Depends.
       - name: Prepare deb package
-        run: npm run gulp vscode-linux-${{ matrix.arch }}-prepare-deb
+        run: pnpm run gulp vscode-linux-${{ matrix.arch }}-prepare-deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build deb package
         run: |
           set -e
-          npm run gulp vscode-linux-${{ matrix.arch }}-build-deb
+          pnpm run gulp vscode-linux-${{ matrix.arch }}-build-deb
           VERSION="${{ inputs.version || github.ref_name }}"
           built=$(ls .build/linux/deb/${{ matrix.deb_arch }}/deb/*.deb)
           echo "gulp produced: $built"
           cp "$built" "dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.deb"
 
       - name: Prepare rpm package
-        run: npm run gulp vscode-linux-${{ matrix.arch }}-prepare-rpm
+        run: pnpm run gulp vscode-linux-${{ matrix.arch }}-prepare-rpm
         env:
           VSCODE_ARCH: ${{ matrix.arch }}
 
       - name: Build rpm package
         run: |
           set -e
-          npm run gulp vscode-linux-${{ matrix.arch }}-build-rpm
+          pnpm run gulp vscode-linux-${{ matrix.arch }}-build-rpm
           VERSION="${{ inputs.version || github.ref_name }}"
           built=$(ls .build/linux/rpm/${{ matrix.rpm_arch }}/*.rpm)
           echo "gulp produced: $built"
