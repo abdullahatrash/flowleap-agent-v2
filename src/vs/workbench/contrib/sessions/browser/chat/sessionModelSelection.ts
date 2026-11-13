@@ -65,6 +65,38 @@ class ConversationModelSelection {
 
 export const ISessionModelSelection = createDecorator<ISessionModelSelection>('sessionModelSelection');
 
+/** The first dotted number in a model name ("Claude Sonnet 4.6" -> [4, 6]), for ordering releases of one family. */
+function parseModelNameVersion(name: string): number[] {
+	const match = /\d+(?:\.\d+)*/.exec(name);
+	return match ? match[0].split('.').map(Number) : [];
+}
+
+function compareModelNameVersions(a: number[], b: number[]): number {
+	for (let i = 0; i < Math.max(a.length, b.length); i++) {
+		const difference = (a[i] ?? 0) - (b[i] ?? 0);
+		if (difference !== 0) {
+			return difference;
+		}
+	}
+	return 0;
+}
+
+/**
+ * FlowLeap: the recommended default of a Claude catalog is its newest Sonnet; `undefined` when the
+ * catalog has none, so the provider's declared default applies. Workbench chat applies the same
+ * rule through its own model picker (B9c).
+ */
+export function findRecommendedClaudeDefaultModel(models: readonly ILanguageModelChatMetadataAndIdentifier[]): ILanguageModelChatMetadataAndIdentifier | undefined {
+	const candidates = models.filter(candidate => /\bsonnet\b/i.test(candidate.metadata.name));
+	if (candidates.length === 0) {
+		return undefined;
+	}
+	return candidates.reduce((best, candidate) =>
+		compareModelNameVersions(parseModelNameVersion(candidate.metadata.name), parseModelNameVersion(best.metadata.name)) > 0 ? candidate : best
+	);
+}
+
+
 export interface ISessionModelSelection {
 	readonly comparison?: IModelPickerComparison;
 	readonly comparisonBusy?: IObservable<boolean>;
@@ -329,7 +361,9 @@ export class SessionModelSelection extends Disposable implements ISessionModelSe
 			getConfiguredModelValue: () => this._configurationService.getValue<string>(ChatConfiguration.DefaultModel),
 			// A session runs whatever its provider published: no mode, nowhere else to show it.
 			isModelSupportedHere: () => true,
-			getDeclaredDefaultModel: models => models.find(model => model.metadata.isDefaultForLocation[ChatAgentLocation.Chat]),
+			// FlowLeap (B9c / PRD 0018 A5.2): the recommended tier (the newest Sonnet) outranks a provider's
+			// own default, the same as Workbench chat: the agent host's Claude catalog declares Opus first.
+			getDeclaredDefaultModel: models => findRecommendedClaudeDefaultModel(models) ?? models.find(model => model.metadata.isDefaultForLocation[ChatAgentLocation.Chat]),
 			getBoundConversationKey: () => this._boundConversationKey,
 			getIntentHolder: () => this._conversation().intent,
 			applyModel: model => this._pushModelToProvider(model),
