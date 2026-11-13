@@ -55,10 +55,10 @@ index 7056164caed..ba3f3419a74 100644
 +	mask-size: 56px;
 +}
 diff --git a/src/vs/sessions/browser/parts/mobile/mobileTitlebarPart.ts b/src/vs/sessions/browser/parts/mobile/mobileTitlebarPart.ts
-index e1588486b2e..d711b4ab00e 100644
+index 85de8c6b929..2533db0e5b7 100644
 --- a/src/vs/sessions/browser/parts/mobile/mobileTitlebarPart.ts
 +++ b/src/vs/sessions/browser/parts/mobile/mobileTitlebarPart.ts
-@@ -517,8 +517,10 @@ export class MobileTitlebarPart extends Disposable {
+@@ -513,8 +513,10 @@ export class MobileTitlebarPart extends Disposable {
  		// pending), the dashboard shows a "Set up Copilot" prompt that
  		// doesn't apply in the agents app.
  		const entitlement = this.chatEntitlementService.entitlement;
