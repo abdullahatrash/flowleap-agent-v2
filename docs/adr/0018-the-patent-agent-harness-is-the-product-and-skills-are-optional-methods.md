@@ -1,6 +1,6 @@
 # The Patent Agent harness is the product, and skills are optional methods the attorney can change
 
-**Status:** proposed (2026-10-20)
+**Status:** accepted (2026-10-20); amended 2026-10-21 (decisions 1, 4, 7 sharpened; decision 8 added)
 
 The Patent Agent reached its quality with three layers that grew together: a long system prompt
 that routes, 44 typed tools whose descriptions carry data knowledge, and 34 bundled skills that
@@ -19,12 +19,15 @@ points at.
 
 ## The decisions
 
-1. **The harness alone meets the quality gate.** Every deliverable the gates measure (search,
-   prior art, dossier, invalidity chart, office-action response, drafting, drawings) must pass
-   with no skill loaded. A skill may make a run faster or shape a report; it may not be the only
-   place a rule lives. The skill-grounded suite runs with the skill removed from the bundle as
-   the proof. Rejected: skills as the carrier of doctrine (a skill the attorney edits can delete
-   a rule the product needs).
+1. **The harness alone meets the quality gate, on every supported model.** Every deliverable the
+   gates measure (search, prior art, dossier, invalidity chart, office-action response, drafting,
+   drawings) must pass with no skill loaded. A skill may make a run faster or shape a report; it
+   may not be the only place a rule lives. The skill-grounded suite runs with the skill removed
+   from the bundle as the proof. The model is a plug (BYOK, ADR 0004), so the proof is per model:
+   the zero-skill main suite runs on each supported model family before a release, and each
+   provider declares its limits (tool count, images, PDF parts, prompt caching) in one place the
+   prompt reads. Rejected: skills as the carrier of doctrine (a skill the attorney edits can
+   delete a rule the product needs); a gate measured on one vendor only.
 2. **Data knowledge lives with its owner, in three places and no fourth.** Before the call, in
    the tool's input schema (field list, grouping, wildcard rule). After the call, in the result
    text (`Next step` line, fault fix, validation finding). On demand, in the backend (one
@@ -37,13 +40,15 @@ points at.
    the US path is one hop, not three. The same shape applies to any tool that today has an EPO
    and a USPTO twin behind a guide. Rejected: a tool per office (doubles the surface) and a
    single "smart" search that hides the office (the attorney must know which index answered).
-4. **The default tool set is the smallest set that passes the gates.** Target for the Patent
-   Agent prompt: at most 30 tools and 8,000 words of tool text, and a system prompt under 6,000
-   words, reached by removal PRs that each hold the gates and cut tokens per task. The results
-   writer's description carries its contract only; per-template rules move to its validation
-   result, which already names the fix. Tools outside the default set stay registered and
-   reachable by name. Rejected: a fixed cut list decided now (each removal is measured, and the
-   gates decide).
+4. **The default tool set is the smallest set that passes the gates, and the prompt is a table
+   of contents.** Ceiling for the Patent Agent prompt: 30 tools and 8,000 words of tool text
+   expanded at start (coding harnesses run on about ten core tools; keep cutting), and a system
+   prompt under 6,000 words whose shape is identity, the gates, and one line per deliverable
+   naming the tool or skill that owns it, never a restatement of a tool's description. Reached by
+   removal PRs that each hold the gates and cut tokens per task. The results writer's description
+   carries its contract only; per-template rules move to its validation result, which already
+   names the fix. Tools outside the default set stay registered and reachable through decision
+   8. Rejected: a fixed cut list decided now (each removal is measured, and the gates decide).
 5. **Skills are methods, seeded into the attorney's own folder, and the attorney's copy wins.**
    A skill is ordered steps with a "Done when" each, no tool names, no API detail, about five
    steps with reference files. On first run the bundle is copied to the user skills folder; the
@@ -60,13 +65,30 @@ points at.
 7. **Every step is one PR behind the full bar, and the measure is quality held and tokens cut.**
    Each PR names the decision above it delivers and reports: main suite, trajectory repeat gate,
    key-gate repeat, skill-grounded with the skill removed, tokens per task for the affected
-   deliverable, and the laptop run. Rejected: one rewrite branch (no staging; one long branch
-   drifts from main and lands as one unreviewable merge).
+   deliverable (prompt words paid every turn and words paid per task, both before and after),
+   and the laptop run. The "no tool names in a skill" rule is measured, not assumed: it held on
+   patent-search (#779) and legal-research (#830); the next heavy skill reports routing speed
+   with and without names before the rule applies to all. Rejected: one rewrite branch (no
+   staging; one long branch drifts from main and lands as one unreviewable merge).
+8. **Both loops load lazily: a name and a description at start, the body on call.** For skills
+   this is how the prompt's `skills` block already works, so a 3,000-word skill in the folder
+   costs nothing until it matches. For tools the mechanism ships in the extension as virtual
+   tools (grouped tools with a one-line summary each, expanded on demand) behind a threshold
+   that defaults to 128 and never fires on our 75 tools; the Patent Agent sets its own threshold
+   so the core set stays expanded and every other tool is one line until asked for. Measured in
+   harness search step 2: tokens per task against the cost of expansion calls, because a model
+   that expands eagerly spends what the index saves (the eager-call lesson of step 1). The same
+   rule holds in the Agents window and the editor chat, which settles their parity. Rejected:
+   preloading every schema because the count is under the default threshold.
 
 ## Consequences
 
 - The system prompt loses routing lines as tools carry their own routing; branches that only
-  repeat a tool's description go first.
+  repeat a tool's description go first. Measured 2026-10-21: the prompt is a 450-line decision
+  tree with three API guide sections pasted in, the opposite of a table of contents.
+- Parked for a later ADR, once the folder and the per-model gate exist: skills that improve from
+  recorded attorney runs (the execution ledger and the working records are the raw material),
+  curated rather than hand-maintained in four places.
 - The 34 skills are classified sentence by sentence as method, data knowledge or doctrine. Data
   knowledge moves to the owning tool; doctrine that a gate measures moves to tool result text or
   the prompt; the method stays, shorter. Heavy skills (prior-art, invalidity-analysis,
