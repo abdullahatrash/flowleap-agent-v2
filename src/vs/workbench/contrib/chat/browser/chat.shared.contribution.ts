@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import './agentSessions/agentHost/codexContinuation.contribution.js';
+// FlowLeap keep-out: Codex continuation offers to continue Codex chats with GitHub Copilot; Codex is hidden (PRD 0018 A3.2).
+// Computer Use setup stays registered: the agent host session handler injects IComputerUseSetupService (`chat.agentHost.computerUse.enabled` defaults to false).
 import './agentSessions/agentHost/computerUseSetup.contribution.js';
 import './agentSessions/agentHost/localModel.contribution.js';
 import { getDefaultModelPolicyDescription } from '../common/modelSelection.js';
