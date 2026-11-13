@@ -23,6 +23,7 @@ import { AGENT_HOST_ENABLED_CONTEXT_KEY } from '../../../../../platform/agentHos
 import { isAhpLogFileFor } from '../../../../../platform/agentHost/common/ahpJsonlLogger.js';
 import { AGENT_HOST_DEBUG_LOGS_CHUNK_BYTES, AGENT_HOST_DEBUG_LOGS_MAX_ENTRIES, IAgentHostService, type AgentHostDebugLogsArtifactKind, type IAgentConnection, type IAgentHostDebugLogsArtifact, type IAgentHostDebugLogsChunk } from '../../../../../platform/agentHost/common/agentService.js';
 import { IRemoteAgentHostService, remoteAgentHostLogOutputChannelId } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
+import { AgentHostAhpJsonlLoggingIncludeContentSettingId, getSessionLogContent } from '../../../../../platform/agentHost/common/sessionLogContent.js';
 import { DEFAULT_CHAT_ID, getSessionChatResource, StateComponents, type SessionState } from '../../../../../platform/agentHost/common/state/sessionState.js';
 import { JsonRpcErrorCodes, ProtocolError } from '../../../../../platform/agentHost/common/state/sessionProtocol.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
@@ -568,6 +569,7 @@ export async function exportAgentHostDebugLogs(
 	const fileService = accessor.get(IFileService);
 	const logService = accessor.get(ILogService);
 	const progressService = accessor.get(IProgressService);
+	const includesSessionContent = getSessionLogContent(accessor.get(IConfigurationService)) === 'full';
 	let hostArtifact: IAgentHostDebugLogsArtifact | undefined;
 	let committing = false;
 	const disposables = new DisposableStore();
@@ -645,7 +647,7 @@ export async function exportAgentHostDebugLogs(
 					} else if (saveResult?.hostSaveError) {
 						notificationService.warn(localize('exportDebugLogs.partialSave', "Agent Host logs were not fully exported: {0}", saveResult.hostSaveError));
 					}
-					notifyAgentHostDebugLogsExported(notificationService, clipboardService, chatEntitlementService.isInternal, destination);
+					notifyAgentHostDebugLogsExported(notificationService, clipboardService, chatEntitlementService.isInternal, destination, includesSessionContent);
 				} catch (error) {
 					if (isCancellationError(error) || options.token.isCancellationRequested) {
 						throw new CancellationError();
@@ -692,13 +694,19 @@ export function notifyAgentHostDebugLogsExported(
 	clipboardService: IClipboardService,
 	isInternal: boolean,
 	savedResource: URI,
+	includesSessionContent = false,
 ): void {
 	const savedPath = savedResource.scheme === Schemas.file ? savedResource.fsPath : savedResource.toString(true);
 	notificationService.notify({
 		severity: Severity.Warning,
-		message: isInternal
-			? localize('exportDebugLogs.privacyWarning.internal', "Note: This log may contain personal information such as auth tokens, file contents, or terminal output. It MUST be shared privately via Slack or in an issue filed on the microsoft/vscode-internalbacklog repo.")
-			: localize('exportDebugLogs.privacyWarning', "Note: This log may contain personal information such as auth tokens, file contents, or terminal output. Please consider sharing privately or reviewing the contents carefully before sharing."),
+		// FlowLeap fork (PRD 0018 A4): AHP logs hold only metadata by default. When
+		// the developer content setting is on, say plainly that the export holds
+		// the session itself.
+		message: includesSessionContent
+			? localize('exportDebugLogs.sessionContentWarning', "Note: This export includes full agent session content (your prompts, model responses, tool input and output, and file content) because {0} is enabled. Share it only privately, or turn the setting off and export again.", AgentHostAhpJsonlLoggingIncludeContentSettingId)
+			: isInternal
+				? localize('exportDebugLogs.privacyWarning.internal', "Note: This log may contain personal information such as auth tokens, file contents, or terminal output. It MUST be shared privately via Slack or in an issue filed on the microsoft/vscode-internalbacklog repo.")
+				: localize('exportDebugLogs.privacyWarning', "Note: This log may contain personal information such as auth tokens, file contents, or terminal output. Please consider sharing privately or reviewing the contents carefully before sharing."),
 		actions: {
 			primary: [
 				new Action('copyAgentHostDebugLogsPath', localize('exportDebugLogs.copyPath', "Copy Path"), undefined, true, () => clipboardService.writeText(savedPath)),

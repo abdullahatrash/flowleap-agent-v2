@@ -16,6 +16,7 @@ import { FileOperationResult, IFileService, IFileStatWithMetadata, toFileOperati
 import { ILogService } from '../../log/common/log.js';
 import { AHP_CANVAS_SCHEME } from './canvasUri.js';
 import { redactAgentPermissionFeedback } from './meta/agentPermissionResponseMeta.js';
+import { SessionLogContent, toSessionLogMetadata } from './sessionLogContent.js';
 
 export type AhpLogDirection = 'c2s' | 's2c';
 
@@ -44,6 +45,12 @@ export interface IAhpJsonlLoggerOptions {
 	readonly maxTotalSizeBytes?: number;
 	/** Checked before serializing each message so host capture can follow live configuration. */
 	readonly isEnabled?: () => boolean;
+	/**
+	 * How much of each message reaches the file. Defaults to `metadata`: no
+	 * user text, model text, tool input or output, or file content is written.
+	 * `full` restores the upstream full-message log for developers.
+	 */
+	readonly content?: SessionLogContent;
 }
 
 export const AgentHostAhpJsonlLoggingEnvVar = 'VSCODE_AGENT_HOST_AHP_JSONL_LOGGING';
@@ -182,7 +189,7 @@ export class AhpJsonlLogger extends Disposable {
 			transport: this._options.transport,
 			...(typeof byteLength === 'number' ? { byteLength } : {}),
 		};
-		const entry = { ...message, _ahpLog: meta };
+		const entry = { ...(this._options.content === 'full' ? message : toSessionLogMetadata(message)), _ahpLog: meta };
 		// Fast path: serialize once. The vast majority of messages are small, so
 		// we only pay a single stringify and use its length to decide whether the
 		// rare oversized-message path below is needed. When the caller already

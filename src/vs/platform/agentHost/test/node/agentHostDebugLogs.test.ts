@@ -174,7 +174,7 @@ suite('AgentHostDebugLogsCollector', () => {
 			const files = disposables.add(new FileService(log));
 			disposables.add(files.registerProvider('file', disposables.add(new DiskFileSystemProvider(log))));
 			const logger = disposables.add(new AhpJsonlLogger({
-				logsHome, logId: MISSION_CONTROL_AHP_LOG_ID, connectionId: 'mobile-client', transport: 'mission-control', maxFileSizeBytes: 1,
+				logsHome, logId: MISSION_CONTROL_AHP_LOG_ID, connectionId: 'mobile-client', transport: 'mission-control', content: 'full', maxFileSizeBytes: 1,
 			}, files, log));
 			const first = logger.resource;
 			const request = { jsonrpc: '2.0', id: 7, method: 'authenticate', params: { resource: 'https://api.github.com', token: 'private-token' } };

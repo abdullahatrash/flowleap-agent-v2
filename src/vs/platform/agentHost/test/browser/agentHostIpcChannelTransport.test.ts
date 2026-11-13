@@ -159,7 +159,7 @@ suite('AgentHostIpcChannelTransport', () => {
 		const channel = ds.add(new FakeChannel());
 		const fileService = createInMemoryFileService(ds, Schemas.file);
 		const logger = ds.add(new AhpJsonlLogger(
-			{ logsHome: URI.file('/logs'), logId: 'local-client', connectionId: 'local-client', transport: 'local' },
+			{ logsHome: URI.file('/logs'), logId: 'local-client', connectionId: 'local-client', transport: 'local', content: 'full' },
 			fileService,
 			new NullLogService(),
 		));

@@ -647,7 +647,7 @@ suite('WebPubSubRelayTransport', () => {
 			logsHome: URI.from({ scheme: Schemas.inMemory, path: '/logs' }),
 			logId: 'cloudsandbox:env-1',
 			connectionId: 'cloud-client',
-			transport: 'webpubsub',
+			transport: 'webpubsub', content: 'full',
 		}, fileService, logService));
 		const fake = new FakeWebSocket();
 		const transport = createTransport(fake, { ahpLogger: logger });
@@ -924,7 +924,7 @@ suite('WebPubSubRelayTransport', () => {
 	test('redacts sealed authentication from the WPS transcript without changing wire messages', async () => {
 		const fileService = createInMemoryFileService(store, Schemas.file);
 		const logger = store.add(new AhpJsonlLogger(
-			{ logsHome: URI.file('/logs'), logId: 'relay', connectionId: 'client', transport: 'webpubsub' },
+			{ logsHome: URI.file('/logs'), logId: 'relay', connectionId: 'client', transport: 'webpubsub', content: 'full' },
 			fileService, new NullLogService(),
 		));
 		const socket = new FakeWebSocket();

@@ -65,6 +65,7 @@ import { artifactToolsConfigurationProperties } from './artifactToolsConfigurati
 import { chatMoveConfigurationProperties } from './chatMoveConfiguration.js';
 import { titleGenerationConfigurationProperties } from './titleGenerationConfiguration.js';
 import { isAhpJsonlLoggingEnabled } from './ahpJsonlLogger.js';
+import { AgentHostAhpJsonlLoggingIncludeContentSettingId } from './sessionLogContent.js';
 import { ModelRouterEnabledConfigKey, ModelRouterEnabledSettingId } from './modelRouterConfig.js';
 
 // Settings consumed by the agent host starter (`electronAgentHostStarter.ts`
@@ -150,6 +151,13 @@ configurationRegistry.registerConfiguration({
 			default: isAhpJsonlLoggingEnabled(product.quality),
 			tags: ['experimental', 'advanced'],
 			agentHost: { key: AgentHostAhpJsonlLoggingEnabledConfigKey, scope: AgentHostConfigurationSyncScope.Local },
+		},
+		// FlowLeap (PRD 0018 A4): AHP logs hold metadata only unless this developer setting is on.
+		[AgentHostAhpJsonlLoggingIncludeContentSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.agentHost.ahpJsonlLoggingIncludeContent', "Developer setting. When enabled together with `#{0}#`, the AHP JSONL logs keep the full message content: your prompts, model responses, tool input and output, and file content. Leave this off unless you are debugging the agent host protocol. Exported debug logs then include that content.", AgentHostAhpJsonlLoggingSettingId),
+			default: false,
+			tags: ['experimental', 'advanced'],
 		},
 		[AgentMergeSettingId.Enabled]: {
 			type: 'boolean',
