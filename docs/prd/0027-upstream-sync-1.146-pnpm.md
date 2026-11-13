@@ -1,6 +1,6 @@
 # PRD 0027 — Upstream sync to 1.146.0 in two PRs: build/pnpm first, then `src/vs`
 
-**Status:** PR A MERGED #860 2026-11-13; PR B DRAFT (branch `port/1146-src-sync`) 2026-11-13
+**Status:** COMPLETE — PR A MERGED #860 (`1feddc94420`), PR B MERGED #861 (`9f3eb3d6bdb`), both 2026-11-13. Open: three-platform release dry run before the next release; `policyData.jsonc` re-export needs a built product; Host + Viewer pairing live re-test.
 **Date:** 2026-11-13
 **Base of the last sync:** upstream `480c6e142fa` (1.140.0), PR #464 (`45a4c6d6ddc`, 2026-09-29)
 **Upstream reference:** `/Users/abdullahatrash/flowleap/refrence/vscode` at tag `1.146.0` = `69047191fc4` (2026-11-10)
