@@ -37,6 +37,10 @@ export class WorkbenchMcpManagementService extends BaseWorkbenchMcpManagementSer
 		super(mMcpManagementService, allowedMcpServersService, logService, userDataProfileService, uriIdentityService, workspaceContextService, remoteAgentService, userDataProfilesService, remoteUserDataProfilesService, instantiationService, workspaceInstallTargetService, mcpResourceScannerService);
 		this._register(mMcpManagementService);
 	}
+
+	protected override canInstallInLocalUser(): boolean {
+		return false;
+	}
 }
 
 registerSingleton(IWorkbenchMcpManagementService, WorkbenchMcpManagementService, InstantiationType.Delayed);

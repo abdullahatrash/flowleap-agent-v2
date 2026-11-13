@@ -21,7 +21,7 @@ import { InMemoryFileSystemProvider } from '../../../../../platform/files/common
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { ILogService, NullLogService } from '../../../../../platform/log/common/log.js';
-import { IAllowedMcpServersService, IGalleryMcpServer, IMcpGalleryService, IMcpManagementService, IInstallableMcpServer } from '../../../../../platform/mcp/common/mcpManagement.js';
+import { IAllowedMcpServersService, IGalleryMcpServer, ILocalMcpServer, IMcpGalleryService, IMcpManagementService, IInstallableMcpServer } from '../../../../../platform/mcp/common/mcpManagement.js';
 import { McpManagementChannel, McpManagementChannelClient } from '../../../../../platform/mcp/common/mcpManagementIpc.js';
 import { McpManagementService } from '../../../../../platform/mcp/common/mcpManagementService.js';
 import { IMcpServerConfiguration, McpServerType, McpServerVariableType } from '../../../../../platform/mcp/common/mcpPlatformTypes.js';
@@ -37,7 +37,7 @@ import { IRemoteAgentConnection, IRemoteAgentService } from '../../../remote/com
 import { IUserDataProfileService } from '../../../userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../../../userDataProfile/common/userDataProfileService.js';
 import { IRemoteUserDataProfilesService } from '../../../userDataProfile/common/remoteUserDataProfiles.js';
-import { WorkbenchMcpManagementService, WorkspaceMcpConfigKind } from '../../common/mcpWorkbenchManagementService.js';
+import { LocalMcpServerScope, WorkbenchMcpManagementService, WorkspaceMcpConfigKind } from '../../common/mcpWorkbenchManagementService.js';
 import { IMcpWorkspaceInstallTargetService, McpWorkspaceInstallTargetService } from '../../common/mcpWorkspaceInstallTargetService.js';
 
 suite('WorkbenchMcpManagementService - workspace configurations', () => {
@@ -50,7 +50,7 @@ suite('WorkbenchMcpManagementService - workspace configurations', () => {
 	const remoteProfileResource = URI.from({ scheme: Schemas.inMemory, path: '/remote-user/profiles/other/mcp.json' });
 	const server: IInstallableMcpServer = { name: 'same', config: { type: McpServerType.LOCAL, command: 'node' } };
 
-	async function createFixture(options: { initialScan?: Promise<void>; beforeScan?: (resource: URI) => Promise<void>; allowed?: boolean; rootContent?: string; legacyContent?: string; userContent?: string; remoteUserContent?: string; nonDefaultProfile?: boolean; workspaceConfiguration?: URI; folderTargetsOnly?: boolean } = {}) {
+	async function createFixture(options: { initialScan?: Promise<void>; beforeScan?: (resource: URI) => Promise<void>; allowed?: boolean; rootContent?: string; legacyContent?: string; userContent?: string; remoteUserContent?: string; nonDefaultProfile?: boolean; workspaceConfiguration?: URI; folderTargetsOnly?: boolean; remoteChannel?: IChannel; localUserInstall?: boolean; calls?: string[]; localUserServers?: ILocalMcpServer[] } = {}) {
 		const logService = store.add(new NullLogService());
 		const fileService = store.add(new FileService(logService));
 		store.add(fileService.registerProvider(Schemas.inMemory, store.add(new InMemoryFileSystemProvider())));
@@ -114,8 +114,25 @@ suite('WorkbenchMcpManagementService - workspace configurations', () => {
 				call: (command, args) => channel.call(undefined, command, args),
 			};
 		};
-		const userManagement = store.add(instantiationService.createInstance(McpManagementService));
+		// FlowLeap (#593): a recording stub stands in for the local user management when a test
+		// tracks where installs go or seeds the local user servers.
+		const userManagement = options.calls || options.localUserServers
+			? upcastPartial<IMcpManagementService>({
+				onInstallMcpServer: Event.None,
+				onDidInstallMcpServers: Event.None,
+				onDidUpdateMcpServers: Event.None,
+				onUninstallMcpServer: Event.None,
+				onDidUninstallMcpServer: Event.None,
+				getInstalled: async () => options.localUserServers ?? [],
+				install: async installable => { options.calls?.push('local:install'); return upcastPartial<ILocalMcpServer>({ name: installable.name, mcpResource: profileService.currentProfile.mcpResource }); },
+				installFromGallery: async gallery => { options.calls?.push('local:installFromGallery'); return upcastPartial<ILocalMcpServer>({ name: gallery.name, mcpResource: profileService.currentProfile.mcpResource }); },
+			})
+			: store.add(instantiationService.createInstance(McpManagementService));
 		const userManagementClient = store.add(instantiationService.createInstance(McpManagementChannelClient, createChannel(userManagement)));
+		if (options.remoteChannel) {
+			const remoteChannel = options.remoteChannel;
+			remoteConnection = upcastPartial<IRemoteAgentConnection>({ getChannel: <T extends IChannel>() => remoteChannel as T });
+		}
 		if (options.remoteUserContent !== undefined) {
 			const remoteInstantiationService = store.add(instantiationService.createChild(new ServiceCollection(
 				[IUserDataProfilesService, upcastPartial<IUserDataProfilesService>({ defaultProfile: { ...defaultProfile, mcpResource: remoteUserResource } })],
@@ -127,7 +144,12 @@ suite('WorkbenchMcpManagementService - workspace configurations', () => {
 		const workspaceInstallTargetService = options.folderTargetsOnly
 			? upcastPartial<IMcpWorkspaceInstallTargetService>({ getTargets: () => workspace.folders })
 			: instantiationService.createInstance(McpWorkspaceInstallTargetService);
-		const service = store.add(new WorkbenchMcpManagementService(
+		const localUserInstall = options.localUserInstall ?? true;
+		const service = store.add(new class extends WorkbenchMcpManagementService {
+			protected override canInstallInLocalUser(): boolean {
+				return localUserInstall;
+			}
+		}(
 			userManagementClient,
 			instantiationService.get(IAllowedMcpServersService),
 			logService,
@@ -485,5 +507,67 @@ suite('WorkbenchMcpManagementService - workspace configurations', () => {
 			updated: results.map(result => result.local?.id),
 			installed: (await service.getInstalled()).map(local => local.id),
 		}, { updated: ['workspace-dot-mcp.0.same'], installed: ['workspace-dot-mcp.0.same'] });
+	});
+
+	suite('user target with a remote connection', () => {
+		// FlowLeap (#593): the web client (Hosted Workspace) cannot run a stdio server, so
+		// user-scope installs go to the remote user configuration and are listed once.
+		const remoteResource = URI.from({ scheme: Schemas.vscodeRemote, authority: 'hosted', path: '/home/flowleap/.flowleap-server/data/User/mcp.json' });
+
+		function createRemoteChannel(calls: string[], installed: string[] = []): IChannel {
+			return {
+				call: async <T>(command: string, arg?: unknown[]) => {
+					calls.push(`remote:${command}`);
+					const name = (arg?.[0] as { name: string } | undefined)?.name;
+					return (command === 'getInstalled' ? installed.map(name => ({ name, mcpResource: remoteResource.toJSON() })) : { name, mcpResource: remoteResource.toJSON() }) as T;
+				},
+				listen: <T>() => Event.None as Event<T>,
+			};
+		}
+
+		async function installAll(localUserInstall: boolean) {
+			const calls: string[] = [];
+			const { service } = await createFixture({ remoteChannel: createRemoteChannel(calls), localUserInstall, calls });
+			const gallery = upcastPartial<IGalleryMcpServer>({ name: 'filesystem' });
+			const installed = [
+				await service.installFromGallery(gallery),
+				await service.install(server),
+				await service.installFromGallery(gallery, { target: ConfigurationTarget.USER_LOCAL }),
+				await service.install(server, { target: folder }),
+			];
+			return { calls, scopes: installed.map(local => local.scope), resources: installed.map(local => local.mcpResource.toString()) };
+		}
+
+		test('web client installs user-scope servers in the remote user configuration', async () => {
+			assert.deepStrictEqual(await installAll(false), {
+				calls: ['remote:installFromGallery', 'remote:install', 'local:installFromGallery'],
+				scopes: [LocalMcpServerScope.RemoteUser, LocalMcpServerScope.RemoteUser, LocalMcpServerScope.User, LocalMcpServerScope.Workspace],
+				resources: [remoteResource.toString(), remoteResource.toString(), userResource.toString(), legacyResource.toString()],
+			});
+		});
+
+		test('desktop keeps user-scope servers in the local user configuration', async () => {
+			const result = await installAll(true);
+			assert.deepStrictEqual({ calls: result.calls, scopes: result.scopes }, {
+				calls: ['local:installFromGallery', 'local:install', 'local:installFromGallery'],
+				scopes: [LocalMcpServerScope.User, LocalMcpServerScope.User, LocalMcpServerScope.User, LocalMcpServerScope.Workspace],
+			});
+		});
+
+		test('web client asks the remote whether a server can be installed', async () => {
+			const { service } = await createFixture({ remoteChannel: createRemoteChannel([]), localUserInstall: false, allowed: false });
+			const result = service.canInstall(server);
+			assert.deepStrictEqual(result === true ? true : result.value, 'This mcp server cannot be installed because Blocked by policy');
+		});
+
+		for (const localUserInstall of [false, true]) {
+			test(`lists a user server that is also in the remote user configuration once on the web client: localUserInstall=${localUserInstall}`, async () => {
+				const localUserServers = ['filesystem', 'memory'].map(name => upcastPartial<ILocalMcpServer>({ name, mcpResource: userResource }));
+				const { service } = await createFixture({ remoteChannel: createRemoteChannel([], ['filesystem']), localUserInstall, localUserServers });
+				assert.deepStrictEqual((await service.getInstalled()).map(local => `${local.scope}:${local.name}`), localUserInstall
+					? ['user:filesystem', 'user:memory', 'remoteUser:filesystem']
+					: ['user:memory', 'remoteUser:filesystem']);
+			});
+		}
 	});
 });
