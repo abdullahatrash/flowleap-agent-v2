@@ -78,7 +78,6 @@ export const separateRootMembers: Readonly<Record<string, readonly string[]>> = 
 		'extensions/markdown-language-features/test-workspace/checkbox-count-extension',
 		'extensions/markdown-math',
 		'extensions/markdown-pdf',
-		'extensions/media-preview',
 		'extensions/merge-conflict',
 		'extensions/mermaid-markdown-features',
 		'extensions/notebook-renderers',
