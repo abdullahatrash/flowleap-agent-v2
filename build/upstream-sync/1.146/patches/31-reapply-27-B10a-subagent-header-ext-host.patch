@@ -11,10 +11,10 @@ index 34984295692..573e424456b 100644
  				prompt: data.prompt,
  				result: data.result,
 diff --git a/src/vs/workbench/api/common/extHostTypes.ts b/src/vs/workbench/api/common/extHostTypes.ts
-index a2127f67634..8413ea5e75b 100644
+index 8dd173e2409..90d0fadd786 100644
 --- a/src/vs/workbench/api/common/extHostTypes.ts
 +++ b/src/vs/workbench/api/common/extHostTypes.ts
-@@ -3190,6 +3190,8 @@ export class McpToolInvocationContentData {
+@@ -3193,6 +3193,8 @@ export class McpToolInvocationContentData {
  
  export class ChatSubagentToolInvocationData {
  	description?: string;
@@ -23,7 +23,7 @@ index a2127f67634..8413ea5e75b 100644
  	agentName?: string;
  	prompt?: string;
  	result?: string;
-@@ -3546,7 +3548,7 @@ export class ChatToolInvocationPart {
+@@ -3549,7 +3551,7 @@ export class ChatToolInvocationPart {
  	pastTenseMessage?: string | vscode.MarkdownString;
  	isConfirmed?: boolean;
  	isComplete?: boolean;
@@ -58,12 +58,12 @@ index 51ed4ede6a3..84aafb574b0 100644
  				prompt: 'npm test',
  				result: 'Passed',
 diff --git a/src/vs/workbench/contrib/chat/common/tools/builtinTools/runSubagentTool.ts b/src/vs/workbench/contrib/chat/common/tools/builtinTools/runSubagentTool.ts
-index f5e4780688a..106aba8f53f 100644
+index 5932ad84b80..6e687ccd4a2 100644
 --- a/src/vs/workbench/contrib/chat/common/tools/builtinTools/runSubagentTool.ts
 +++ b/src/vs/workbench/contrib/chat/common/tools/builtinTools/runSubagentTool.ts
-@@ -691,11 +691,13 @@ export class RunSubagentTool extends Disposable implements IToolImpl {
- 		const resolved = await this.resolveSubagentModel(subagent, context.modelId, args.model, currentModeInstructions, requestedAgentName ? undefined : callingSubagent?.model);
+@@ -598,11 +598,13 @@ export class RunSubagentTool extends Disposable implements IToolImpl {
  		this._resolvedModels.set(context.toolCallId, resolved);
+ 		const modelConfiguration = resolved.modeModelId ? this.languageModelsService.getModelConfiguration(resolved.modeModelId) : undefined;
  
 +		const agentDisplayName = subagentDisplayName(subagent?.name);
  		return {
@@ -75,7 +75,7 @@ index f5e4780688a..106aba8f53f 100644
  				agentName: subagent?.name ?? requestedAgentName ?? currentModeInstructions?.name,
  				prompt: args.prompt,
  				modelId: resolved.modeModelId,
-@@ -729,3 +731,18 @@ export class RunSubagentTool extends Disposable implements IToolImpl {
+@@ -637,3 +639,18 @@ export class RunSubagentTool extends Disposable implements IToolImpl {
  		}
  	}
  }
@@ -95,10 +95,10 @@ index f5e4780688a..106aba8f53f 100644
 +	return displayName !== agentName ? displayName : undefined;
 +}
 diff --git a/src/vs/workbench/contrib/chat/test/common/tools/builtinTools/runSubagentTool.test.ts b/src/vs/workbench/contrib/chat/test/common/tools/builtinTools/runSubagentTool.test.ts
-index 3be13727b31..ed4f2da82dd 100644
+index a2b404d0cf0..fa2f3f74846 100644
 --- a/src/vs/workbench/contrib/chat/test/common/tools/builtinTools/runSubagentTool.test.ts
 +++ b/src/vs/workbench/contrib/chat/test/common/tools/builtinTools/runSubagentTool.test.ts
-@@ -333,6 +333,41 @@ suite('RunSubagentTool', () => {
+@@ -306,6 +306,41 @@ suite('RunSubagentTool', () => {
  				modelName: undefined,
  			});
  		});
