@@ -257,7 +257,7 @@ suite('PromptsConfig', () => {
 			test('empty', () => {
 				assert.deepStrictEqual(
 					getPaths(PromptsConfig.promptSourceFolders(createMock({}), PromptsType.prompt)),
-					['.flowleap/prompts', '~/.flowleap/prompts', '.github/prompts'],
+					['.github/prompts'],
 					'Must read correct value.',
 				);
 			});
@@ -280,8 +280,6 @@ suite('PromptsConfig', () => {
 						'./.tempfile': true,
 					}), PromptsType.prompt)),
 					[
-						'.flowleap/prompts',
-						'~/.flowleap/prompts',
 						'.github/prompts',
 						'/root/.bashrc',
 						'../../folder/.hidden-folder/config.xml',
@@ -330,8 +328,6 @@ suite('PromptsConfig', () => {
 						'/dev/shm/.shared_resource': 2345,
 					}), PromptsType.prompt)),
 					[
-						'.flowleap/prompts',
-						'~/.flowleap/prompts',
 						'.github/prompts',
 						'../assets/img/logo.v2.png',
 						'../.local/bin/script.sh',
@@ -360,8 +356,6 @@ suite('PromptsConfig', () => {
 						'/dev/shm/.shared_resource': 7654,
 					}), PromptsType.prompt)),
 					[
-						'.flowleap/prompts',
-						'~/.flowleap/prompts',
 						'.github/prompts',
 					],
 					'Must read correct value.',
@@ -373,8 +367,6 @@ suite('PromptsConfig', () => {
 					getPaths(PromptsConfig.promptSourceFolders(createMock({
 						'/etc/hosts.backup': '\t\n\t',
 						'./run.tests.sh': '\v',
-						'.flowleap/prompts': false,
-						'~/.flowleap/prompts': false,
 						'.github/prompts': false,
 						'../assets/img/logo.v2.png': true,
 						'/mnt/storage/video.archive/episode.01.mkv': false,
@@ -436,7 +428,7 @@ suite('PromptsConfig', () => {
 			test('empty object returns default skill folders', () => {
 				assert.deepStrictEqual(
 					getPaths(PromptsConfig.promptSourceFolders(createMock({}), PromptsType.skill)),
-					['.flowleap/skills', '~/.flowleap/skills', '.agents/skills', '.github/skills', '.claude/skills', '~/.agents/skills', '~/.copilot/skills', '~/.claude/skills'],
+					['.agents/skills', '.github/skills', '.claude/skills', '~/.agents/skills', '~/.copilot/skills', '~/.claude/skills'],
 					'Must return default skill folders.',
 				);
 			});
@@ -448,8 +440,6 @@ suite('PromptsConfig', () => {
 						'./local/skills': true,
 					}), PromptsType.skill)),
 					[
-						'.flowleap/skills',
-						'~/.flowleap/skills',
 						'.agents/skills',
 						'.github/skills',
 						'.claude/skills',
@@ -470,8 +460,6 @@ suite('PromptsConfig', () => {
 						'/custom/skills': true,
 					}), PromptsType.skill)),
 					[
-						'.flowleap/skills',
-						'~/.flowleap/skills',
 						'.agents/skills',
 						'.claude/skills',
 						'~/.agents/skills',
@@ -486,8 +474,6 @@ suite('PromptsConfig', () => {
 			test('filters out all disabled default skill folders', () => {
 				assert.deepStrictEqual(
 					getPaths(PromptsConfig.promptSourceFolders(createMock({
-						'.flowleap/skills': false,
-						'~/.flowleap/skills': false,
 						'.github/skills': false,
 						'.agents/skills': false,
 						'.claude/skills': false,
@@ -513,8 +499,6 @@ suite('PromptsConfig', () => {
 						'\n': true,
 					}), PromptsType.skill)),
 					[
-						'.flowleap/skills',
-						'~/.flowleap/skills',
 						'.agents/skills',
 						'.github/skills',
 						'.claude/skills',
@@ -540,8 +524,6 @@ suite('PromptsConfig', () => {
 						'/extra/skills': true,
 					}), PromptsType.skill)),
 					[
-						'.flowleap/skills',
-						'~/.flowleap/skills',
 						'.agents/skills',
 						'.github/skills',
 						'.claude/skills',

@@ -1,0 +1,142 @@
+diff --git a/src/vs/workbench/api/common/extHostTypeConverters.ts b/src/vs/workbench/api/common/extHostTypeConverters.ts
+index 34984295692..573e424456b 100644
+--- a/src/vs/workbench/api/common/extHostTypeConverters.ts
++++ b/src/vs/workbench/api/common/extHostTypeConverters.ts
+@@ -3093,6 +3093,7 @@ export namespace ChatToolInvocationPart {
+ 			return {
+ 				kind: 'subagent',
+ 				description: data.description,
++				agentDisplayName: data.agentDisplayName,
+ 				agentName: data.agentName,
+ 				prompt: data.prompt,
+ 				result: data.result,
+diff --git a/src/vs/workbench/api/common/extHostTypes.ts b/src/vs/workbench/api/common/extHostTypes.ts
+index a2127f67634..8413ea5e75b 100644
+--- a/src/vs/workbench/api/common/extHostTypes.ts
++++ b/src/vs/workbench/api/common/extHostTypes.ts
+@@ -3190,6 +3190,8 @@ export class McpToolInvocationContentData {
+ 
+ export class ChatSubagentToolInvocationData {
+ 	description?: string;
++	/** Human-readable name of the subagent type, shown in the subagent's header. */
++	agentDisplayName?: string;
+ 	agentName?: string;
+ 	prompt?: string;
+ 	result?: string;
+@@ -3546,7 +3548,7 @@ export class ChatToolInvocationPart {
+ 	pastTenseMessage?: string | vscode.MarkdownString;
+ 	isConfirmed?: boolean;
+ 	isComplete?: boolean;
+-	toolSpecificData?: ChatTerminalToolInvocationData2;
++	toolSpecificData?: ChatTerminalToolInvocationData2 | ChatSubagentToolInvocationData;
+ 	subAgentInvocationId?: string;
+ 	subAgentName?: string;
+ 	presentation?: 'hidden' | 'hiddenAfterComplete' | undefined;
+diff --git a/src/vs/workbench/api/test/common/extHostTypeConverters.test.ts b/src/vs/workbench/api/test/common/extHostTypeConverters.test.ts
+index 51ed4ede6a3..84aafb574b0 100644
+--- a/src/vs/workbench/api/test/common/extHostTypeConverters.test.ts
++++ b/src/vs/workbench/api/test/common/extHostTypeConverters.test.ts
+@@ -294,8 +294,11 @@ suite('extHostTypeConverters', function () {
+ 	});
+ 
+ 	suite('ChatToolInvocationPart', function () {
+-		test('converts subagent data with its model name', function () {
++		test('converts subagent data with its display name and model name', function () {
++			// The subagent header titles a specialized subagent by its display name, so it has to
++			// survive the extension host boundary next to the internal agent name.
+ 			const data = new ChatSubagentToolInvocationData('Run tests', 'execution', 'npm test', 'Passed');
++			data.agentDisplayName = 'Execution';
+ 			data.modelName = 'Execution Model';
+ 			const part = new ExtHostChatToolInvocationPart('execution_subagent', 'tool-call-id');
+ 			(part as unknown as { toolSpecificData: ChatSubagentToolInvocationData }).toolSpecificData = data;
+@@ -303,6 +306,7 @@ suite('extHostTypeConverters', function () {
+ 			assert.deepStrictEqual(ChatToolInvocationPart.from(part as unknown as Parameters<typeof ChatToolInvocationPart.from>[0]).toolSpecificData, {
+ 				kind: 'subagent',
+ 				description: 'Run tests',
++				agentDisplayName: 'Execution',
+ 				agentName: 'execution',
+ 				prompt: 'npm test',
+ 				result: 'Passed',
+diff --git a/src/vs/workbench/contrib/chat/common/tools/builtinTools/runSubagentTool.ts b/src/vs/workbench/contrib/chat/common/tools/builtinTools/runSubagentTool.ts
+index f5e4780688a..106aba8f53f 100644
+--- a/src/vs/workbench/contrib/chat/common/tools/builtinTools/runSubagentTool.ts
++++ b/src/vs/workbench/contrib/chat/common/tools/builtinTools/runSubagentTool.ts
+@@ -691,11 +691,13 @@ export class RunSubagentTool extends Disposable implements IToolImpl {
+ 		const resolved = await this.resolveSubagentModel(subagent, context.modelId, args.model, currentModeInstructions, requestedAgentName ? undefined : callingSubagent?.model);
+ 		this._resolvedModels.set(context.toolCallId, resolved);
+ 
++		const agentDisplayName = subagentDisplayName(subagent?.name);
+ 		return {
+ 			invocationMessage: args.description,
+ 			toolSpecificData: {
+ 				kind: 'subagent',
+ 				description: args.description,
++				...(agentDisplayName ? { agentDisplayName } : {}),
+ 				agentName: subagent?.name ?? requestedAgentName ?? currentModeInstructions?.name,
+ 				prompt: args.prompt,
+ 				modelId: resolved.modeModelId,
+@@ -729,3 +731,18 @@ export class RunSubagentTool extends Disposable implements IToolImpl {
+ 		}
+ 	}
+ }
++
++/**
++ * A human-readable label for a subagent type: a custom agent named `patent-search` titles the
++ * subagent header `Patent Search`. Returns `undefined` when the label would equal the raw name,
++ * so the header falls back to the agent name. The extension host keeps its own copy of this,
++ * because core and the extension host cannot share code.
++ */
++function subagentDisplayName(agentName: string | undefined): string | undefined {
++	const words = agentName?.trim().split(/[-_\s]+/).filter(word => word.length > 0);
++	if (!words?.length) {
++		return undefined;
++	}
++	const displayName = words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
++	return displayName !== agentName ? displayName : undefined;
++}
+diff --git a/src/vs/workbench/contrib/chat/test/common/tools/builtinTools/runSubagentTool.test.ts b/src/vs/workbench/contrib/chat/test/common/tools/builtinTools/runSubagentTool.test.ts
+index 3be13727b31..ed4f2da82dd 100644
+--- a/src/vs/workbench/contrib/chat/test/common/tools/builtinTools/runSubagentTool.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/tools/builtinTools/runSubagentTool.test.ts
+@@ -333,6 +333,41 @@ suite('RunSubagentTool', () => {
+ 				modelName: undefined,
+ 			});
+ 		});
++
++		test('reads a custom agent name as a readable display name', async () => {
++			const tool = createTool({
++				customAgents: [{
++					id: 'file:///test/patent-search.md',
++					uri: URI.parse('file:///test/patent-search.md'),
++					name: 'patent-search',
++					description: 'Finds prior art',
++					agentInstructions: { content: 'Patent search body', toolReferences: [] },
++					source: { storage: PromptsStorage.local },
++					target: Target.Undefined,
++					visibility: { userInvocable: true, agentInvocable: true },
++					enabled: true
++				}]
++			});
++
++			const result = await tool.prepareToolInvocation(
++				{
++					parameters: { prompt: 'Find prior art', description: 'Search for prior art', agentName: 'patent-search' },
++					toolCallId: 'test-call-display-name',
++					chatSessionResource: URI.parse('test://session'),
++				},
++				CancellationToken.None
++			);
++
++			assert.deepStrictEqual(result?.toolSpecificData, {
++				kind: 'subagent',
++				description: 'Search for prior art',
++				agentDisplayName: 'Patent Search',
++				agentName: 'patent-search',
++				prompt: 'Find prior art',
++				modelId: undefined,
++				modelName: undefined,
++			});
++		});
+ 	});
+ 
+ 	suite('getToolData', () => {

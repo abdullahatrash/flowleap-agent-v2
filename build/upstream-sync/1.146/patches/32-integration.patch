@@ -1,0 +1,111 @@
+diff --git a/eslint.config.js b/eslint.config.js
+index 70de8bb2a62..42921dd783c 100644
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -2311,7 +2311,8 @@ export default defineConfig(
+ 			'src/vs/sessions/**/*.ts'
+ 		],
+ 		ignores: [
+-			'src/vs/sessions/contrib/providers/copilotChatSessions/**/*.ts'
++			'src/vs/sessions/contrib/providers/copilotChatSessions/**/*.ts',
++			'src/vs/sessions/contrib/providers/claudeChatSessions/**/*.ts'
+ 		],
+ 		languageOptions: {
+ 			parser: tseslint.parser,
+diff --git a/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts b/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts
+index a0e920635c4..d416f8a937b 100644
+--- a/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts
++++ b/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts
+@@ -6,6 +6,7 @@
+ import { DisposableStore, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
+ import { CustomizationHarnessServiceBase, createVSCodeHarnessDescriptor, IHarnessDescriptor } from '../../../../workbench/contrib/chat/common/customizationHarnessService.js';
+ import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
++import { IFileService } from '../../../../platform/files/common/files.js';
+ import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+ 
+ /**
+@@ -27,8 +28,9 @@ export class SessionsCustomizationHarnessService extends CustomizationHarnessSer
+ 	constructor(
+ 		@IPromptsService promptsService: IPromptsService,
+ 		@ISessionsManagementService sessionsManagementService: ISessionsManagementService,
++		@IFileService fileService: IFileService,
+ 	) {
+-		super([], '', promptsService);
++		super([], '', promptsService, fileService);
+ 
+ 		const localHarness = createVSCodeHarnessDescriptor();
+ 		const sync = () => {
+diff --git a/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts b/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts
+index a4724a28cb7..f54f780890e 100644
+--- a/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts
++++ b/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts
+@@ -10,6 +10,7 @@ import { mock } from '../../../../../base/test/common/mock.js';
+ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+ import { SessionType } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
+ import { IPromptsService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
++import { IFileService } from '../../../../../platform/files/common/files.js';
+ import { ISessionType, SessionTypeAuthRequirement } from '../../../../services/sessions/common/session.js';
+ import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+ import { SessionsCustomizationHarnessService } from '../../browser/customizationHarnessService.js';
+@@ -24,6 +25,10 @@ suite('SessionsCustomizationHarnessService', () => {
+ 		}();
+ 	}
+ 
++	function createFileService(): IFileService {
++		return new class extends mock<IFileService>() { }();
++	}
++
+ 	function createSessionsManagementService(sessionTypes: ISessionType[] = []): ISessionsManagementService {
+ 		return new class extends mock<ISessionsManagementService>() {
+ 			override readonly onDidChangeSessionTypes = Event.None;
+@@ -32,7 +37,7 @@ suite('SessionsCustomizationHarnessService', () => {
+ 	}
+ 
+ 	test('does not register the Local harness without a Local session type', () => {
+-		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService()));
++		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService(), createFileService()));
+ 
+ 		assert.deepStrictEqual({
+ 			availableHarnesses: service.availableHarnesses.get().map(harness => harness.id),
+@@ -45,13 +50,13 @@ suite('SessionsCustomizationHarnessService', () => {
+ 
+ 	test('registers the Local harness while a provider offers the Local session type', () => {
+ 		const localType: ISessionType = { id: 'local', label: 'Local', icon: Codicon.vm, authRequirement: SessionTypeAuthRequirement.None };
+-		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService([localType])));
++		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService([localType]), createFileService()));
+ 
+ 		assert.deepStrictEqual(service.availableHarnesses.get().map(harness => harness.id), [SessionType.Local]);
+ 	});
+ 
+ 	test('activates the first provider harness', () => {
+-		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService()));
++		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService(), createFileService()));
+ 		disposables.add(service.registerExternalHarness({
+ 			id: 'copilotcli',
+ 			label: 'Copilot CLI',
+diff --git a/src/vs/sessions/sessions.common.main.ts b/src/vs/sessions/sessions.common.main.ts
+index 31f390198d7..ebb3bf7f77c 100644
+--- a/src/vs/sessions/sessions.common.main.ts
++++ b/src/vs/sessions/sessions.common.main.ts
+@@ -501,7 +501,8 @@ import './contrib/customViewTest/browser/customViewTest.contribution.js';
+ // Onboarding: the engine + spotlight presentation (from the workbench layer) and
+ // the Agents window scenario data.
+ import '../workbench/contrib/onboarding/browser/onboarding.contribution.js';
+-import '../workbench/contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
++// FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
++// import '../workbench/contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
+ import '../workbench/contrib/codeEditor/browser/diffEditorTryout.contribution.js';
+ import './contrib/onboardingTours/browser/onboardingTours.contribution.js';
+ 
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
+index 7781f0354cb..ce7ef3ed13e 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
+@@ -56,7 +56,6 @@ import { ITelemetryService } from '../../../../../platform/telemetry/common/tele
+ import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+ import { SaveReason } from '../../../../common/editor.js';
+ import { ChatEntitlementContextKeys, IChatEntitlementService } from '../../../../services/chat/common/chatEntitlementService.js';
+-import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
+ import { IEditorService } from '../../../../services/editor/common/editorService.js';
+ import { IWorkbenchLayoutService } from '../../../../services/layout/browser/layoutService.js';
+ import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';

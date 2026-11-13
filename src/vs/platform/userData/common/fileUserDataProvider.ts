@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable, IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
-import { IFileSystemProviderWithFileReadWriteCapability, IFileChange, IWatchOptions, IStat, IFileOverwriteOptions, FileType, IFileWriteOptions, IFileDeleteOptions, FileSystemProviderCapabilities, IFileSystemProviderWithFileReadStreamCapability, IFileReadStreamOptions, IFileSystemProviderWithFileAtomicReadCapability, hasFileFolderCopyCapability, IFileSystemProviderWithOpenReadWriteCloseCapability, IFileOpenOptions, IFileSystemProviderWithFileAtomicWriteCapability, IFileSystemProviderWithFileAtomicDeleteCapability, IFileSystemProviderWithFileFolderCopyCapability, IFileSystemProviderWithFileCloneCapability, hasFileCloneCapability, IFileAtomicReadOptions, IFileAtomicOptions } from '../../files/common/files.js';
+import { IFileSystemProviderWithFileReadWriteCapability, IFileChange, IWatchOptions, IStat, IFileOverwriteOptions, FileType, IFileWriteOptions, IFileDeleteOptions, FileSystemProviderCapabilities, IFileSystemProviderWithFileReadStreamCapability, IFileReadStreamOptions, IFileSystemProviderWithFileAtomicReadCapability, hasFileFolderCopyCapability, IFileSystemProviderWithOpenReadWriteCloseCapability, IFileOpenOptions, IFileSystemProviderWithFileAtomicWriteCapability, IFileSystemProviderWithFileAtomicDeleteCapability, IFileSystemProviderWithFileFolderCopyCapability, IFileSystemProviderWithFileCloneCapability, hasFileCloneCapability, IFileAtomicReadOptions, IFileAtomicOptions, hasFileAtomicRenameCapability, IFileSystemProviderWithFileAtomicRenameCapability } from '../../files/common/files.js';
 import { URI } from '../../../base/common/uri.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { ReadableStreamEvents } from '../../../base/common/stream.js';
@@ -13,17 +13,11 @@ import { TernarySearchTree } from '../../../base/common/ternarySearchTree.js';
 import { IUserDataProfilesService } from '../../userDataProfile/common/userDataProfile.js';
 import { ResourceSet } from '../../../base/common/map.js';
 import { IUriIdentityService } from '../../uriIdentity/common/uriIdentity.js';
-import { isEqualOrParent, joinPath, relativePath } from '../../../base/common/resources.js';
 
 /**
  * This is a wrapper on top of the local filesystem provider which will
  * 	- Convert the user data resources to file system scheme and vice-versa
  *  - Enforces atomic reads for user data
- *
- * When `fileSystemHome` is given, user data resources are rebased onto it
- * (`vscode-userdata:/User/settings.json` -> `<fileSystemHome>/User/settings.json`)
- * instead of only changing their scheme. A Hosted Workspace uses this to keep the
- * web client's user data in the server's data folder (FlowLeap #547).
  */
 export class FileUserDataProvider extends Disposable implements
 	IFileSystemProviderWithFileReadWriteCapability,
@@ -33,6 +27,7 @@ export class FileUserDataProvider extends Disposable implements
 	IFileSystemProviderWithFileAtomicReadCapability,
 	IFileSystemProviderWithFileAtomicWriteCapability,
 	IFileSystemProviderWithFileAtomicDeleteCapability,
+	IFileSystemProviderWithFileAtomicRenameCapability,
 	IFileSystemProviderWithFileCloneCapability {
 
 	readonly capabilities: FileSystemProviderCapabilities;
@@ -51,7 +46,6 @@ export class FileUserDataProvider extends Disposable implements
 		private readonly userDataProfilesService: IUserDataProfilesService,
 		private readonly uriIdentityService: IUriIdentityService,
 		private readonly logService: ILogService,
-		private readonly fileSystemHome?: URI,
 	) {
 		super();
 		this.capabilities = this.fileSystemProvider.capabilities;
@@ -112,6 +106,13 @@ export class FileUserDataProvider extends Disposable implements
 		return this.fileSystemProvider.rename(this.toFileSystemResource(from), this.toFileSystemResource(to), opts);
 	}
 
+	renameFileAtomic(from: URI, to: URI, opts: IFileOverwriteOptions): Promise<void> {
+		if (!hasFileAtomicRenameCapability(this.fileSystemProvider)) {
+			throw new Error('Atomic rename not supported');
+		}
+		return this.fileSystemProvider.renameFileAtomic(this.toFileSystemResource(from), this.toFileSystemResource(to), opts);
+	}
+
 	readFile(resource: URI, opts?: IFileAtomicReadOptions): Promise<Uint8Array> {
 		return this.fileSystemProvider.readFile(this.toFileSystemResource(resource), opts);
 	}
@@ -166,7 +167,7 @@ export class FileUserDataProvider extends Disposable implements
 			}
 
 			const userDataResource = this.toUserDataResource(change.resource);
-			if (userDataResource && this.watchResources.findSubstr(userDataResource)) {
+			if (this.watchResources.findSubstr(userDataResource)) {
 				userDataChanges.push({
 					resource: userDataResource,
 					type: change.type,
@@ -181,19 +182,10 @@ export class FileUserDataProvider extends Disposable implements
 	}
 
 	private toFileSystemResource(userDataResource: URI): URI {
-		if (this.fileSystemHome) {
-			return joinPath(this.fileSystemHome, userDataResource.path);
-		}
 		return userDataResource.with({ scheme: this.fileSystemScheme });
 	}
 
-	private toUserDataResource(fileSystemResource: URI): URI | undefined {
-		if (this.fileSystemHome) {
-			if (!isEqualOrParent(fileSystemResource, this.fileSystemHome)) {
-				return undefined;
-			}
-			return URI.from({ scheme: this.userDataScheme, path: `/${relativePath(this.fileSystemHome, fileSystemResource) ?? ''}` });
-		}
+	private toUserDataResource(fileSystemResource: URI): URI {
 		return fileSystemResource.with({ scheme: this.userDataScheme });
 	}
 

@@ -1,0 +1,85 @@
+diff --git a/src/vs/base/common/product.ts b/src/vs/base/common/product.ts
+index 0767bb78c5a..2de672a95bc 100644
+--- a/src/vs/base/common/product.ts
++++ b/src/vs/base/common/product.ts
+@@ -281,6 +281,13 @@ export interface IProductConfiguration {
+ 
+ 	readonly remoteDefaultExtensionsIfInstalledLocally?: string[];
+ 
++	/**
++	 * View containers (by ID, e.g. `workbench.view.debug`) that start unpinned for new users.
++	 * They stay available via the activity/panel bar context menu and open transiently, but are
++	 * not shown by default. Only applies when no cached composite-bar state exists yet.
++	 */
++	readonly defaultHiddenViewContainers?: readonly string[];
++
+ 	/**
+ 	 * Maps an extension-contributed setting key to either a full enterprise {@link IPolicy}
+ 	 * (the setting owns/"parents" the policy — the original syntax) or an
+diff --git a/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts b/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts
+index e8edbe1bfdd..efe893ffca5 100644
+--- a/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts
++++ b/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts
+@@ -38,6 +38,7 @@ import { getContextMenuActions } from '../../../../platform/actions/browser/menu
+ import { IViewDescriptorService, ViewContainerLocation, ViewContainerLocationToString } from '../../../common/views.js';
+ import { IExtensionService } from '../../../services/extensions/common/extensions.js';
+ import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
++import { IProductService } from '../../../../platform/product/common/productService.js';
+ import { IViewsService } from '../../../services/views/common/viewsService.js';
+ import { SwitchCompositeViewAction } from '../compositeBarActions.js';
+ import { IHostService } from '../../../services/host/browser/host.js';
+@@ -450,6 +451,7 @@ export class ActivityBarCompositeBar extends PaneCompositeBar {
+ 		@IConfigurationService private readonly configurationService: IConfigurationService,
+ 		@IMenuService private readonly menuService: IMenuService,
+ 		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
++		@IProductService productService: IProductService,
+ 	) {
+ 		super(location,
+ 			{
+@@ -458,7 +460,7 @@ export class ActivityBarCompositeBar extends PaneCompositeBar {
+ 					options.fillExtraContextMenuActions(actions, e);
+ 					this.fillContextMenuActions(actions, e);
+ 				}
+-			}, part, paneCompositePart, instantiationService, storageService, extensionService, viewDescriptorService, viewService, contextKeyService, environmentService, layoutService);
++			}, part, paneCompositePart, instantiationService, storageService, extensionService, viewDescriptorService, viewService, contextKeyService, environmentService, layoutService, productService);
+ 
+ 		if (globalActivities) {
+ 			this.globalCompositeBar = this._register(instantiationService.createInstance(GlobalCompositeBar, () => this.getContextMenuActions(), (theme: IColorTheme) => this.options.colors(theme), this.options.activityHoverOptions));
+diff --git a/src/vs/workbench/browser/parts/paneCompositeBar.ts b/src/vs/workbench/browser/parts/paneCompositeBar.ts
+index 048de8a0c9f..f9b4f4102c1 100644
+--- a/src/vs/workbench/browser/parts/paneCompositeBar.ts
++++ b/src/vs/workbench/browser/parts/paneCompositeBar.ts
+@@ -22,6 +22,7 @@ import { IViewDescriptorService, ViewContainer, IViewContainerModel, ViewContain
+ import { IContextKeyService, ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
+ import { isString } from '../../../base/common/types.js';
+ import { IWorkbenchEnvironmentService } from '../../services/environment/common/environmentService.js';
++import { IProductService } from '../../../platform/product/common/productService.js';
+ import { isNative } from '../../../base/common/platform.js';
+ import { Before2D, ICompositeDragAndDrop } from '../dnd.js';
+ import { ThemeIcon } from '../../../base/common/themables.js';
+@@ -108,6 +109,7 @@ export class PaneCompositeBar extends Disposable {
+ 		@IContextKeyService protected readonly contextKeyService: IContextKeyService,
+ 		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService,
+ 		@IWorkbenchLayoutService protected readonly layoutService: IWorkbenchLayoutService,
++		@IProductService private readonly productService: IProductService,
+ 	) {
+ 		super();
+ 
+@@ -339,10 +341,15 @@ export class PaneCompositeBar extends Disposable {
+ 		for (const viewContainer of viewContainers) {
+ 			this.addComposite(viewContainer);
+ 
+-			// Pin it by default if it is new
++			// Pin it by default if it is new, unless the product hides it by default.
++			// Note: addComposite() auto-pins unknown composites, so hiding requires an explicit unpin.
+ 			const cachedViewContainer = this.cachedViewContainers.filter(({ id }) => id === viewContainer.id)[0];
+ 			if (!cachedViewContainer) {
+-				this.compositeBar.pin(viewContainer.id);
++				if (this.productService.defaultHiddenViewContainers?.includes(viewContainer.id)) {
++					this.compositeBar.unpin(viewContainer.id);
++				} else {
++					this.compositeBar.pin(viewContainer.id);
++				}
+ 			}
+ 
+ 			// Active

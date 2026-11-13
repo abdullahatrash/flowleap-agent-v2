@@ -11,7 +11,7 @@ import { ConsoleLogInAutomationLogger } from '../../platform/log/browser/log.js'
 import { Disposable, DisposableStore, toDisposable } from '../../base/common/lifecycle.js';
 import { BrowserWorkbenchEnvironmentService, IBrowserWorkbenchEnvironmentService } from '../services/environment/browser/environmentService.js';
 import { Workbench } from './workbench.js';
-import { REMOTE_FILE_SYSTEM_CHANNEL_NAME, RemoteFileSystemProviderClient } from '../services/remote/common/remoteFileSystemProviderClient.js';
+import { RemoteFileSystemProviderClient } from '../services/remote/common/remoteFileSystemProviderClient.js';
 import { IWorkbenchEnvironmentService } from '../services/environment/common/environmentService.js';
 import { IProductService } from '../../platform/product/common/productService.js';
 import product from '../../platform/product/common/product.js';
@@ -21,6 +21,7 @@ import { IRemoteAuthorityResolverService, RemoteConnectionType } from '../../pla
 import { IRemoteAgentService } from '../services/remote/common/remoteAgentService.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { FileService } from '../../platform/files/common/fileService.js';
+import { BrowserResourceService, IBrowserResourceService } from '../../platform/files/browser/browserResourceService.js';
 import { Schemas, connectionTokenCookieName } from '../../base/common/network.js';
 import { IAnyWorkspaceIdentifier, IWorkspaceContextService, UNKNOWN_EMPTY_WINDOW_WORKSPACE, isTemporaryWorkspace, isWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { IWorkbenchConfigurationService } from '../services/configuration/common/configuration.js';
@@ -31,7 +32,7 @@ import { WorkspaceService } from '../services/configuration/browser/configuratio
 import { ConfigurationCache } from '../services/configuration/common/configurationCache.js';
 import { ISignService } from '../../platform/sign/common/sign.js';
 import { SignService } from '../../platform/sign/browser/signService.js';
-import { IWorkbenchConstructionOptions, IWorkbench, IWorkspace, ITunnel, IHostedUserDataOptions } from './web.api.js';
+import { IWorkbenchConstructionOptions, IWorkbench, IWorkspace, ITunnel } from './web.api.js';
 import { BrowserStorageService } from '../services/storage/browser/storageService.js';
 import { IStorageService } from '../../platform/storage/common/storage.js';
 import { toLocalISOString } from '../../base/common/date.js';
@@ -59,6 +60,8 @@ import { BrowserWindow } from './window.js';
 import { ITimerService } from '../services/timer/browser/timerService.js';
 import { WorkspaceTrustEnablementService, WorkspaceTrustManagementService } from '../services/workspaces/common/workspaceTrust.js';
 import { IWorkspaceTrustEnablementService, IWorkspaceTrustManagementService } from '../../platform/workspace/common/workspaceTrust.js';
+import { CanonicalUriService } from '../services/workspaces/common/canonicalUriService.js';
+import { ICanonicalUriService } from '../../platform/workspace/common/canonicalUri.js';
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { mixin, safeStringify } from '../../base/common/objects.js';
@@ -90,10 +93,6 @@ import { BufferLogger } from '../../platform/log/common/bufferLog.js';
 import { FileLoggerService } from '../../platform/log/common/fileLog.js';
 import { IEmbedderTerminalService } from '../services/terminal/common/embedderTerminalService.js';
 import { BrowserSecretStorageService } from '../services/secrets/browser/secretStorageService.js';
-import { HostedStorageService } from '../services/storage/browser/hostedStorageService.js';
-import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
-import { DiskFileSystemProviderClient } from '../../platform/files/common/diskFileSystemProviderClient.js';
-import { getDelayedChannel, IChannel } from '../../base/parts/ipc/common/ipc.js';
 import { EncryptionService } from '../services/encryption/browser/encryptionService.js';
 import { IEncryptionService } from '../../platform/encryption/common/encryptionService.js';
 import { ISecretStorageService } from '../../platform/secrets/common/secrets.js';
@@ -114,12 +113,6 @@ export class BrowserMain extends Disposable {
 
 	private readonly onWillShutdownDisposables = this._register(new DisposableStore());
 	private readonly indexedDBFileSystemProviders: IndexedDBFileSystemProvider[] = [];
-
-	/**
-	 * Set when this is a Hosted Workspace (FlowLeap #547): user data, browser state and
-	 * secrets live in the server's user data folder instead of in the browser.
-	 */
-	private hostedUserData: { readonly options: IHostedUserDataOptions; readonly fileService: IFileService; readonly environmentService: IBrowserWorkbenchEnvironmentService } | undefined;
 
 	constructor(
 		private readonly domElement: HTMLElement,
@@ -322,10 +315,6 @@ export class BrowserMain extends Disposable {
 		const logService = new LogService(logger, otherLoggers);
 		serviceCollection.set(ILogService, logService);
 
-		if (this.configuration.hostedUserData && environmentService.remoteAuthority) {
-			this.hostedUserData = { options: this.configuration.hostedUserData, fileService, environmentService };
-		}
-
 		// Set the logger of the fileLogger after the log service is ready.
 		// This is to avoid cyclic dependency
 		fileLogger.logger = logService;
@@ -336,7 +325,12 @@ export class BrowserMain extends Disposable {
 
 
 		const connectionToken = environmentService.options.connectionToken || getCookieValue(connectionTokenCookieName);
-		const remoteResourceLoader = this.configuration.remoteResourceProvider ? new BrowserRemoteResourceLoader(fileService, this.configuration.remoteResourceProvider) : undefined;
+		const resourceProvider = this.configuration.remoteResourceProvider;
+		const browserResourceService = this._register(new BrowserResourceService(resourceProvider ? (resourceId, resource) => URI.parse(document.location.href).with({
+			path: resourceProvider.path, query: new URLSearchParams({ resourceId }).toString(), fragment: resource.fragment,
+		}) : undefined, fileService));
+		serviceCollection.set(IBrowserResourceService, browserResourceService);
+		const remoteResourceLoader = resourceProvider ? this._register(new BrowserRemoteResourceLoader(resourceProvider, fileService, browserResourceService)) : undefined;
 		const resourceUriProvider = this.configuration.resourceUriProvider ?? remoteResourceLoader?.getResourceUriProvider();
 		const remoteAuthorityResolverService = new RemoteAuthorityResolverService(!environmentService.expectsResolverExtension, connectionToken, resourceUriProvider, this.configuration.serverBasePath, productService, logService);
 		serviceCollection.set(IRemoteAuthorityResolverService, remoteAuthorityResolverService);
@@ -364,12 +358,6 @@ export class BrowserMain extends Disposable {
 		const userDataProfilesService = new BrowserUserDataProfilesService(environmentService, fileService, uriIdentityService, logService);
 		serviceCollection.set(IUserDataProfilesService, userDataProfilesService);
 
-		// Hosted Workspace: user data on the server
-		const remoteFileSystemChannel = new DeferredPromise<IChannel>();
-		if (this.hostedUserData) {
-			this.registerHostedUserDataProvider(this.hostedUserData.options, environmentService, fileService, remoteFileSystemChannel.p, userDataProfilesService, uriIdentityService, logService);
-		}
-
 		const currentProfile = await this.getCurrentProfile(workspace, userDataProfilesService, environmentService);
 		await userDataProfilesService.setProfileForWorkspace(workspace, currentProfile);
 		const userDataProfileService = new UserDataProfileService(currentProfile);
@@ -382,14 +370,6 @@ export class BrowserMain extends Disposable {
 		const remoteAgentService = this._register(new RemoteAgentService(remoteSocketFactoryService, userDataProfileService, environmentService, productService, remoteAuthorityResolverService, signService, logService));
 		serviceCollection.set(IRemoteAgentService, remoteAgentService);
 		this._register(RemoteFileSystemProviderClient.register(remoteAgentService, fileService, logService));
-		if (this.hostedUserData) {
-			const connection = remoteAgentService.getConnection();
-			if (connection) {
-				remoteFileSystemChannel.complete(connection.getChannel(REMOTE_FILE_SYSTEM_CHANNEL_NAME));
-			} else {
-				remoteFileSystemChannel.error(new Error('Hosted user data needs a remote connection'));
-			}
-		}
 
 		// Default Account
 		const defaultAccountService = this._register(new DefaultAccountService(productService));
@@ -456,7 +436,7 @@ export class BrowserMain extends Disposable {
 
 		const encryptionService = new EncryptionService();
 		serviceCollection.set(IEncryptionService, encryptionService);
-		const secretStorageService = new BrowserSecretStorageService(storageService, encryptionService, environmentService, logService, fileService);
+		const secretStorageService = new BrowserSecretStorageService(storageService, encryptionService, environmentService, logService);
 		serviceCollection.set(ISecretStorageService, secretStorageService);
 
 		// Userdata Initialize Service
@@ -482,10 +462,8 @@ export class BrowserMain extends Disposable {
 	}
 
 	/**
-	 * Creates and registers the workspace context, configuration, storage,
-	 * and workspace trust services. Override this to provide different
-	 * workspace/configuration implementations (e.g., sessions in-memory
-	 * workspace). Overrides must also register workspace trust services.
+	 * Creates and registers workspace, configuration, storage, canonical URI, and trust services.
+	 * Overrides must also register the canonical URI and workspace trust services.
 	 */
 	protected async createWorkspaceConfigAndStorageServices(
 		serviceCollection: ServiceCollection,
@@ -513,10 +491,13 @@ export class BrowserMain extends Disposable {
 		]);
 
 		// Workspace Trust Service
+		const canonicalUriService = this._register(new CanonicalUriService());
+		serviceCollection.set(ICanonicalUriService, canonicalUriService);
+
 		const workspaceTrustEnablementService = new WorkspaceTrustEnablementService(configurationService, environmentService);
 		serviceCollection.set(IWorkspaceTrustEnablementService, workspaceTrustEnablementService);
 
-		const workspaceTrustManagementService = new WorkspaceTrustManagementService(configurationService, remoteAuthorityResolverService, storageService, uriIdentityService, environmentService, configurationService, workspaceTrustEnablementService, fileService);
+		const workspaceTrustManagementService = new WorkspaceTrustManagementService(configurationService, remoteAuthorityResolverService, storageService, uriIdentityService, environmentService, configurationService, workspaceTrustEnablementService, fileService, canonicalUriService, logService);
 		serviceCollection.set(IWorkspaceTrustManagementService, workspaceTrustManagementService);
 
 		// Update workspace trust so that configuration is updated accordingly
@@ -568,10 +549,7 @@ export class BrowserMain extends Disposable {
 			fileService.registerProvider(logsPath.scheme, new InMemoryFileSystemProvider());
 		}
 
-		// User data (a Hosted Workspace registers its server-side provider later, see `registerHostedUserDataProvider`)
-		if (this.hostedUserData) {
-			return this.registerLocalFileAndTmpProviders(fileService, indexedDB, handlesStore, logService);
-		}
+		// User data
 		let userDataProvider;
 		if (indexedDB) {
 			userDataProvider = new IndexedDBFileSystemProvider(Schemas.vscodeUserData, indexedDB, userDataStore, true);
@@ -582,11 +560,6 @@ export class BrowserMain extends Disposable {
 			userDataProvider = new InMemoryFileSystemProvider();
 		}
 		fileService.registerProvider(Schemas.vscodeUserData, userDataProvider);
-
-		this.registerLocalFileAndTmpProviders(fileService, indexedDB, handlesStore, logService);
-	}
-
-	private registerLocalFileAndTmpProviders(fileService: IFileService, indexedDB: IndexedDB | undefined, handlesStore: string, logService: ILogService): void {
 
 		// Local file access (if supported by browser)
 		if (WebFileSystemAccess.supported(mainWindow)) {
@@ -636,23 +609,8 @@ export class BrowserMain extends Disposable {
 		}));
 	}
 
-	private registerHostedUserDataProvider(options: IHostedUserDataOptions, environmentService: IBrowserWorkbenchEnvironmentService, fileService: IFileService, remoteFileSystemChannel: Promise<IChannel>, userDataProfilesService: BrowserUserDataProfilesService, uriIdentityService: IUriIdentityService, logService: ILogService): void {
-
-		// `vscode-userdata:/User/settings.json` is `<server user data>/User/settings.json` on the
-		// remote. The remote file system channel is used directly (not the `vscode-remote`
-		// provider) because user data is read before the remote environment is resolved.
-		const remoteUserDataHome = URI.file(options.userDataPath).with({ scheme: Schemas.vscodeRemote, authority: environmentService.remoteAuthority });
-		const remoteFileSystemProvider = this._register(new DiskFileSystemProviderClient(getDelayedChannel(remoteFileSystemChannel), { pathCaseSensitive: true }));
-		const userDataProvider = this._register(new FileUserDataProvider(Schemas.vscodeRemote, remoteFileSystemProvider, Schemas.vscodeUserData, userDataProfilesService, uriIdentityService, logService, remoteUserDataHome));
-		fileService.registerProvider(Schemas.vscodeUserData, userDataProvider);
-
-		logService.info(`Using hosted user data at ${remoteUserDataHome.toString()}`);
-	}
-
 	protected async createStorageService(workspace: IAnyWorkspaceIdentifier, logService: ILogService, userDataProfileService: IUserDataProfileService): Promise<IStorageService> {
-		const storageService = this.hostedUserData
-			? new HostedStorageService(workspace, userDataProfileService, this.hostedUserData.environmentService.userRoamingDataHome, this.hostedUserData.environmentService.workspaceStorageHome, this.hostedUserData.fileService, logService)
-			: new BrowserStorageService(workspace, userDataProfileService, logService);
+		const storageService = new BrowserStorageService(workspace, userDataProfileService, logService);
 
 		try {
 			await storageService.initialize();

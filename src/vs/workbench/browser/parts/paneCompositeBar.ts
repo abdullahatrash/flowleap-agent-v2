@@ -22,7 +22,6 @@ import { IViewDescriptorService, ViewContainer, IViewContainerModel, ViewContain
 import { IContextKeyService, ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { isString } from '../../../base/common/types.js';
 import { IWorkbenchEnvironmentService } from '../../services/environment/common/environmentService.js';
-import { IProductService } from '../../../platform/product/common/productService.js';
 import { isNative } from '../../../base/common/platform.js';
 import { Before2D, ICompositeDragAndDrop } from '../dnd.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
@@ -83,6 +82,7 @@ export interface IPaneCompositeBarOptions {
 	readonly preventLoopNavigation?: boolean;
 	readonly activityHoverOptions: IActivityHoverOptions;
 	readonly fillExtraContextMenuActions: (actions: IAction[], e?: MouseEvent | GestureEvent) => void;
+	readonly transformContextMenuActionsForComposite?: (actions: IAction[], compositeId: string) => IAction[];
 	readonly colors: (theme: IColorTheme) => ICompositeBarColors;
 }
 
@@ -109,7 +109,6 @@ export class PaneCompositeBar extends Disposable {
 		@IContextKeyService protected readonly contextKeyService: IContextKeyService,
 		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService,
 		@IWorkbenchLayoutService protected readonly layoutService: IWorkbenchLayoutService,
-		@IProductService private readonly productService: IProductService,
 	) {
 		super();
 
@@ -147,7 +146,10 @@ export class PaneCompositeBar extends Disposable {
 			getCompositeBadgeAction: compositeId => this.getCompositeActions(compositeId).badgeAction,
 			getOnCompositeClickAction: compositeId => this.getCompositeActions(compositeId).activityAction,
 			fillExtraContextMenuActions: (actions, e) => this.options.fillExtraContextMenuActions(actions, e),
-			getContextMenuActionsForComposite: compositeId => this.getContextMenuActionsForComposite(compositeId),
+			getContextMenuActionsForComposite: compositeId => {
+				const actions = this.getContextMenuActionsForComposite(compositeId);
+				return this.options.transformContextMenuActionsForComposite?.(actions, compositeId) ?? actions;
+			},
 			getDefaultCompositeId: () => this.viewDescriptorService.getDefaultViewContainer(this.location)?.id,
 			dndHandler: this.dndHandler,
 			compositeSize: this.options.compositeSize,
@@ -341,15 +343,10 @@ export class PaneCompositeBar extends Disposable {
 		for (const viewContainer of viewContainers) {
 			this.addComposite(viewContainer);
 
-			// Pin it by default if it is new, unless the product hides it by default.
-			// Note: addComposite() auto-pins unknown composites, so hiding requires an explicit unpin.
+			// Pin it by default if it is new
 			const cachedViewContainer = this.cachedViewContainers.filter(({ id }) => id === viewContainer.id)[0];
 			if (!cachedViewContainer) {
-				if (this.productService.defaultHiddenViewContainers?.includes(viewContainer.id)) {
-					this.compositeBar.unpin(viewContainer.id);
-				} else {
-					this.compositeBar.pin(viewContainer.id);
-				}
+				this.compositeBar.pin(viewContainer.id);
 			}
 
 			// Active

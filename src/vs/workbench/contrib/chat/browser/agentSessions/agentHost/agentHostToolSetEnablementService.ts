@@ -9,7 +9,8 @@ import { parseRemoteAgentHostHarness } from '../../../../../../platform/agentHos
 import { InstantiationType, registerSingleton } from '../../../../../../platform/instantiation/common/extensions.js';
 import { createDecorator } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
-import { isCustomizationToolSet } from './agentHostCustomizationToolSets.js';
+import { IUserDataProfileService } from '../../../../../services/userDataProfile/common/userDataProfile.js';
+import { AGENT_HOST_TOOL_SET_ENABLEMENT_STORAGE_KEY, migrateCustomizationEnablementToApplicationStorage } from '../../../common/customizationEnablementStorage.js';
 
 export const IAgentHostToolSetEnablementService = createDecorator<IAgentHostToolSetEnablementService>('agentHostToolSetEnablementService');
 
@@ -65,19 +66,14 @@ export function getToolSetTriState(state: IToolEnablementState, toolSetId: strin
 export interface ICountableToolSet {
 	readonly id: string;
 	readonly deprecated?: boolean;
-	readonly source?: { readonly type: string };
 	getTools(reader?: IReader): Iterable<{ readonly id: string }>;
 }
 
-/**
- * Counts the enabled tools across the tool sets surfaced in Chat Customizations → Tools. Pass
- * `getCustomizationToolSets(...)` so the count matches what the section renders; sets outside the
- * section ({@link isCustomizationToolSet}) are skipped either way.
- */
+/** Counts the enabled tools across the non-deprecated tool sets surfaced in Chat Customizations → Tools. */
 export function countEnabledCustomizationTools(toolSets: Iterable<ICountableToolSet>, state: IToolEnablementState, reader?: IReader): number {
 	const enabled = new Set<string>();
 	for (const ts of toolSets) {
-		if (!isCustomizationToolSet(ts)) {
+		if (ts.deprecated) {
 			continue;
 		}
 		for (const tool of ts.getTools(reader)) {
@@ -91,7 +87,7 @@ export function countEnabledCustomizationTools(toolSets: Iterable<ICountableTool
 
 /**
  * Per-session-type tool / tool-set enablement for the Chat Customizations → Tools section,
- * persisted profile-wide. Settings are consumed by the agent host (the only target for Tools
+ * persisted in application storage so every window and profile shares it. Settings are consumed by the agent host (the only target for Tools
  * customizations today).
  */
 export interface IAgentHostToolSetEnablementService {
@@ -110,7 +106,7 @@ export interface IAgentHostToolSetEnablementService {
 	setToolEnabled(sessionType: string, toolSetId: string, toolId: string, enabled: boolean): void;
 }
 
-const STORAGE_KEY = 'chat.agentHost.toolSetEnablement';
+const STORAGE_KEY = AGENT_HOST_TOOL_SET_ENABLEMENT_STORAGE_KEY;
 const EMPTY_STATE: IToolEnablementState = { toolSets: new Map(), tools: new Map() };
 
 interface IStoredShape {
@@ -127,11 +123,13 @@ export class AgentHostToolSetEnablementService extends Disposable implements IAg
 
 	constructor(
 		@IStorageService private readonly _storageService: IStorageService,
+		@IUserDataProfileService userDataProfileService: IUserDataProfileService,
 	) {
 		super();
+		migrateCustomizationEnablementToApplicationStorage(this._storageService, userDataProfileService.currentProfile);
 		this._state = observableValue('agentHostToolSetEnablement', this._load());
 		const storeForListener = this._register(new DisposableStore());
-		this._register(this._storageService.onDidChangeValue(StorageScope.PROFILE, STORAGE_KEY, storeForListener)(() => {
+		this._register(this._storageService.onDidChangeValue(StorageScope.APPLICATION, STORAGE_KEY, storeForListener)(() => {
 			this._state.set(this._load(), undefined);
 		}));
 	}
@@ -186,7 +184,7 @@ export class AgentHostToolSetEnablementService extends Disposable implements IAg
 	}
 
 	private _load(): ReadonlyMap<string, IToolEnablementState> {
-		const raw = this._storageService.get(STORAGE_KEY, StorageScope.PROFILE);
+		const raw = this._storageService.get(STORAGE_KEY, StorageScope.APPLICATION);
 		if (!raw) {
 			return new Map();
 		}
@@ -214,7 +212,7 @@ export class AgentHostToolSetEnablementService extends Disposable implements IAg
 
 	private _save(state: ReadonlyMap<string, IToolEnablementState>): void {
 		if (state.size === 0) {
-			this._storageService.remove(STORAGE_KEY, StorageScope.PROFILE);
+			this._storageService.remove(STORAGE_KEY, StorageScope.APPLICATION);
 			return;
 		}
 		const out: Record<string, { toolSets: Record<string, boolean>; tools: Record<string, boolean> }> = {};
@@ -224,7 +222,7 @@ export class AgentHostToolSetEnablementService extends Disposable implements IAg
 				tools: Object.fromEntries(entry.tools),
 			};
 		}
-		this._storageService.store(STORAGE_KEY, JSON.stringify(out), StorageScope.PROFILE, StorageTarget.MACHINE);
+		this._storageService.store(STORAGE_KEY, JSON.stringify(out), StorageScope.APPLICATION, StorageTarget.MACHINE);
 	}
 }
 

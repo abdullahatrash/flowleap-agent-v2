@@ -24,31 +24,15 @@ export interface IResolvedAccountInfo {
 }
 
 /**
- * Resolves the current account info. FlowLeap: reads the `flowleap`
- * authentication provider first, because the default account service and the
- * GitHub sessions are empty in this product by design. Then tries the default
- * account service, then raw GitHub sessions from the authentication service.
- * The GitHub fallback covers the window between session creation and
+ * Resolves the current account info by trying the default account service
+ * first, then falling back to raw GitHub sessions from the authentication
+ * service. The fallback covers the window between session creation and
  * {@link IDefaultAccountService} initialization.
  */
 export async function resolveAccountInfo(
 	defaultAccountService: IDefaultAccountService,
 	authenticationService: IAuthenticationService,
 ): Promise<IResolvedAccountInfo | undefined> {
-	try {
-		const flowLeapSessions = await authenticationService.getSessions('flowleap');
-		if (flowLeapSessions.length > 0) {
-			return {
-				accountName: flowLeapSessions[0].account.label,
-				accountProviderId: 'flowleap',
-				accountProviderLabel: 'FlowLeap',
-				accountIcon: flowLeapSessions[0].account.icon,
-			};
-		}
-	} catch {
-		// Provider not available yet (extension still activating)
-	}
-
 	const account = await defaultAccountService.getDefaultAccount();
 	if (account) {
 		return {
@@ -103,13 +87,6 @@ export interface IAccountTitleBarStateContext {
 		readonly chat?: IQuotaSnapshot;
 		readonly completions?: IQuotaSnapshot;
 	};
-	/**
-	 * Whether the conditional-auth opt-in permits signed-out operation.
-	 * When true, a signed-out account shows a calm opt-in sign-in instead of the
-	 * alarming "Agents Signed Out". Defaults to `false`, so the opt-in being off
-	 * keeps today's behavior.
-	 */
-	readonly allowSignedOutWhenUsable: boolean;
 }
 
 export interface IAccountTitleBarState {
@@ -155,7 +132,7 @@ export function getAccountTitleBarState(context: IAccountTitleBarStateContext): 
 		};
 	}
 
-	const copilotState = getCopilotPresentation(context.entitlement, context.sentiment, context.quotas, context.allowSignedOutWhenUsable);
+	const copilotState = getCopilotPresentation(context.entitlement, context.sentiment, context.quotas);
 	if (copilotState) {
 		return copilotState;
 	}
@@ -186,29 +163,18 @@ function getCopilotPresentation(
 	entitlement: ChatEntitlement,
 	sentiment: IChatSentiment,
 	quotas: { readonly chat?: IQuotaSnapshot; readonly completions?: IQuotaSnapshot },
-	allowSignedOutWhenUsable: boolean
 ): IAccountTitleBarState | undefined {
 	if (sentiment.hidden) {
 		return undefined;
 	}
 
 	if (entitlement === ChatEntitlement.Unknown) {
-		if (allowSignedOutWhenUsable) {
-			// Signing in is optional, so present a calm affordance.
-			return {
-				source: 'copilot',
-				kind: 'default',
-				icon: Codicon.account,
-				label: localize('agentsSignInOptional', "Sign In"),
-				ariaLabel: localize('agentsSignInOptionalAria', "Sign in to GitHub to use more agents"),
-			};
-		}
 		return {
 			source: 'copilot',
-			kind: 'prominent',
+			kind: 'default',
 			icon: Codicon.account,
-			label: localize('agentsSignedOut', "Agents Signed Out"),
-			ariaLabel: localize('agentsSignedOutAria', "Agents is signed out"),
+			label: localize('agentsSignInOptional', "Sign In"),
+			ariaLabel: localize('agentsSignInOptionalAria', "Sign in to GitHub to use more agents"),
 		};
 	}
 
@@ -217,10 +183,10 @@ function getCopilotPresentation(
 			source: 'copilot',
 			kind: 'warning',
 			icon: Codicon.account,
-			label: localize('copilotUnavailable', "FlowLeap Unavailable"),
+			label: localize('copilotUnavailable', "Copilot Unavailable"),
 			ariaLabel: sentiment.untrusted
-				? localize('copilotUnavailableUntrustedAria', "FlowLeap is unavailable in untrusted workspaces")
-				: localize('copilotUnavailableDisabledAria', "FlowLeap is disabled"),
+				? localize('copilotUnavailableUntrustedAria', "GitHub Copilot is unavailable in untrusted workspaces")
+				: localize('copilotUnavailableDisabledAria', "GitHub Copilot is disabled"),
 		};
 	}
 
@@ -246,7 +212,7 @@ function getCopilotPresentation(
 			label: localize('copilotTokensRemaining', "Tokens Remaining"),
 			badge: `${remainingPercent}%`,
 			dotBadge: remainingPercent <= 10 ? 'error' : 'warning',
-			ariaLabel: localize('copilotTokensRemainingAria', "{0}% FlowLeap tokens remaining", remainingPercent),
+			ariaLabel: localize('copilotTokensRemainingAria', "{0}% GitHub Copilot tokens remaining", remainingPercent),
 		};
 	}
 
@@ -270,12 +236,12 @@ function getLowestPositivePercent(...quotas: Array<IQuotaSnapshot | undefined>):
 
 function getQuotaReachedAriaLabel(chatQuotaExceeded: boolean, completionsQuotaExceeded: boolean): string {
 	if (chatQuotaExceeded && completionsQuotaExceeded) {
-		return localize('copilotAllQuotaReachedAria', "FlowLeap chat and inline suggestion quota reached");
+		return localize('copilotAllQuotaReachedAria', "GitHub Copilot chat and inline suggestion quota reached");
 	}
 
 	if (chatQuotaExceeded) {
-		return localize('copilotChatQuotaReachedAria', "FlowLeap chat quota reached");
+		return localize('copilotChatQuotaReachedAria', "GitHub Copilot chat quota reached");
 	}
 
-	return localize('copilotCompletionsQuotaReachedAria', "FlowLeap inline suggestion quota reached");
+	return localize('copilotCompletionsQuotaReachedAria', "GitHub Copilot inline suggestion quota reached");
 }

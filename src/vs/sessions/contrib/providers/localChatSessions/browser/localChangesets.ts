@@ -10,7 +10,7 @@ import { localize } from '../../../../../nls.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IChatSessionFileChange2 } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
 import { GitDiffChange, IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
-import { BRANCH_CHANGES_CHANGESET_ID, IChat, ISessionChangeset, ISessionChangesetOperation, ISessionChangesetOperationTarget, ISessionFileChange, ISessionWorkspace, sessionFileChangesEqual } from '../../../../services/sessions/common/session.js';
+import { BRANCH_CHANGES_CHANGESET_ID, IChat, ISessionChangeset, ISessionChangesetOperation, ISessionChangesetOperationTarget, ISessionFileChange, ISessionWorkspace, sessionFileChangesEqual } from '../../../../../workbench/services/sessions/common/session.js';
 
 /**
  * The chat fields a changeset reads. Sessions build their chats' changesets from

@@ -10,7 +10,6 @@ import { mock } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { SessionType } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
 import { IPromptsService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
-import { IFileService } from '../../../../../platform/files/common/files.js';
 import { SessionsCustomizationHarnessService } from '../../browser/customizationHarnessService.js';
 
 suite('SessionsCustomizationHarnessService', () => {
@@ -24,7 +23,7 @@ suite('SessionsCustomizationHarnessService', () => {
 	}
 
 	test('does not register the Local harness', () => {
-		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), new class extends mock<IFileService>() { }()));
+		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService()));
 
 		assert.deepStrictEqual({
 			availableHarnesses: service.availableHarnesses.get().map(harness => harness.id),
@@ -36,7 +35,7 @@ suite('SessionsCustomizationHarnessService', () => {
 	});
 
 	test('activates the first provider harness', () => {
-		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), new class extends mock<IFileService>() { }()));
+		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService()));
 		disposables.add(service.registerExternalHarness({
 			id: 'copilotcli',
 			label: 'Copilot CLI',

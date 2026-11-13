@@ -33,10 +33,10 @@ suite('claudeInteractiveTools', () => {
 				status: ToolCallStatus.PendingConfirmation,
 				toolCallId: 'tool_use_42',
 				toolName: 'ExitPlanMode',
-				displayName: 'Approve the plan?',
+				displayName: 'Ready to code?',
 				invocationMessage: { markdown: '# step 1' },
 				toolInput: '{"plan":"# step 1"}',
-				confirmationTitle: 'Approve the plan?',
+				confirmationTitle: 'Ready to code?',
 				options: [
 					{ id: 'approve', label: 'Approve', kind: ConfirmationOptionKind.Approve },
 					{ id: 'deny', label: 'Deny', kind: ConfirmationOptionKind.Deny },

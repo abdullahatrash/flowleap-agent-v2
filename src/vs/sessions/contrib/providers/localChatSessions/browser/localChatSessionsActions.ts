@@ -12,14 +12,14 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
 import { ChatPermissionLevel } from '../../../../../workbench/contrib/chat/common/constants.js';
-import { Menus } from '../../../../browser/menus.js';
-import { SessionProviderIdContext, SessionTypeContext } from '../../../../common/contextkeys.js';
+import { Menus } from '../../../../../workbench/contrib/sessions/browser/menus.js';
+import { SessionProviderIdContext, SessionTypeContext } from '../../../../../workbench/contrib/sessions/common/contextkeys.js';
 import { ISessionContext } from '../../../../services/sessions/browser/sessionContext.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
-import { ISession } from '../../../../services/sessions/common/session.js';
-import { IActiveSession } from '../../../../services/sessions/common/sessionsManagement.js';
-import { ModePicker, ScopedModePickerModelCache } from '../../copilotChatSessions/browser/modePicker.js';
-import { IPermissionLevelMeta, IPermissionPickerDelegate, PermissionPicker } from '../../copilotChatSessions/browser/permissionPicker.js';
+import { ISession } from '../../../../../workbench/services/sessions/common/session.js';
+import { IActiveSession } from '../../../../../workbench/contrib/sessions/common/sessionsManagement.js';
+import { ModePicker, ScopedModePickerModelCache } from '../../../../../workbench/contrib/sessions/providers/copilotChatSessions/browser/modePicker.js';
+import { IPermissionLevelMeta, IPermissionPickerDelegate, PermissionPicker } from '../../../../../workbench/contrib/sessions/providers/copilotChatSessions/browser/permissionPicker.js';
 import { ILocalSessionConfiguration, LOCAL_PROVIDER_ID, LocalChatSessionsProvider, LocalSessionType } from './localChatSessionsProvider.js';
 
 /*

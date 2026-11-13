@@ -1,0 +1,482 @@
+diff --git a/src/vs/platform/agentHost/common/agentHostEnablementService.ts b/src/vs/platform/agentHost/common/agentHostEnablementService.ts
+index 7e980cedd5f..57128d6b6e6 100644
+--- a/src/vs/platform/agentHost/common/agentHostEnablementService.ts
++++ b/src/vs/platform/agentHost/common/agentHostEnablementService.ts
+@@ -50,7 +50,7 @@ configurationRegistry.registerConfiguration({
+ 	properties: {
+ 		'chat.editor.preferCopilotHarness': {
+ 			type: 'boolean',
+-			description: nls.localize('chat.editor.preferCopilotHarness', "When enabled, uses the Agent Host Copilot SDK whenever the local harness would otherwise be selected for a new editor chat session. Claude and Codex selections are unaffected."),
++			description: nls.localize('chat.editor.preferCopilotHarness', "When enabled, uses the Agent Host SDK whenever the local harness would otherwise be selected for a new editor chat session. Claude and Codex selections are unaffected."),
+ 			default: false,
+ 			tags: ['experimental'],
+ 			experiment: { mode: 'startup' },
+@@ -61,14 +61,14 @@ configurationRegistry.registerConfiguration({
+ 				localization: {
+ 					description: {
+ 						key: 'chat.editor.preferCopilotHarness.policy',
+-						value: nls.localize('chat.editor.preferCopilotHarness.policy', "Configure whether VS Code uses the Agent Host Copilot SDK instead of the local harness for new editor chat sessions."),
++						value: nls.localize('chat.editor.preferCopilotHarness.policy', "Configure whether VS Code uses the Agent Host SDK instead of the local harness for new editor chat sessions."),
+ 					},
+ 				},
+ 			},
+ 		},
+ 		'chat.defaultToCopilotHarness': {
+ 			type: 'boolean',
+-			description: nls.localize('chat.defaultToCopilotHarness', "When enabled, new editor and panel chat sessions default to the Agent Host Copilot SDK instead of the local harness."),
++			description: nls.localize('chat.defaultToCopilotHarness', "When enabled, new editor and panel chat sessions default to the Agent Host SDK instead of the local harness."),
+ 			default: false,
+ 			tags: ['experimental'],
+ 			experiment: { mode: 'startup' },
+diff --git a/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts b/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
+index 9af24c2756f..385d319d357 100644
+--- a/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
++++ b/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
+@@ -216,7 +216,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[AgentHostSystemProxyEnabledSettingId]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.agentHost.systemProxy.enabled', "When enabled, Copilot sessions automatically discover and use the operating system's proxy configuration when no proxy environment variable is set."),
++			description: nls.localize('chat.agentHost.systemProxy.enabled', "When enabled, Agent Host sessions automatically discover and use the operating system's proxy configuration when no proxy environment variable is set."),
+ 			default: true,
+ 			tags: ['experimental', 'advanced'],
+ 			experiment: { mode: 'startup' },
+@@ -232,7 +232,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[AgentHostCopilotMultiRootEnabledSettingId]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.agentHost.copilotAgent.multiRootEnabled', "When enabled, Copilot agent-host sessions advertise support for multiple working directories, so a session created in a multi-root workspace can span every workspace folder. Experimental; newly created sessions pick up a change without restarting the agent host."),
++			description: nls.localize('chat.agentHost.copilotAgent.multiRootEnabled', "When enabled, agent-host sessions advertise support for multiple working directories, so a session created in a multi-root workspace can span every workspace folder. Experimental; newly created sessions pick up a change without restarting the agent host."),
+ 			default: false,
+ 			// Hidden from the Settings UI while the feature is dogfooded internally.
+ 			// Still settable via `settings.json`; flip `default` (e.g. to
+diff --git a/src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts b/src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts
+index 027b95d0625..ae6a1aff827 100644
+--- a/src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts
++++ b/src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts
+@@ -574,7 +574,7 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
+ 		const identities = append(panel, $('.sessions-account-titlebar-panel-identities'));
+ 		if (this.accountName || this.isAccountLoading) {
+ 			const copilotAccount = append(identities, $('section.sessions-account-titlebar-panel-provider-account', {
+-				'aria-label': localize('copilotAccountSectionLabel', "Copilot account")
++				'aria-label': localize('copilotAccountSectionLabel', "Account")
+ 			}));
+ 			const copilotIdentity = append(copilotAccount, $('.sessions-account-titlebar-panel-provider-identity'));
+ 			const loadedAvatarUrl = !this.isAccountLoading ? this.loadedAvatarUrl : undefined;
+@@ -600,14 +600,14 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
+ 			}));
+ 			copilotActionBar.push(panelStore.add(new Action(
+ 				'copilot.manageModels',
+-				localize('manageCopilotModels', "Manage Copilot Models"),
++				localize('manageCopilotModels', "Manage Models"),
+ 				ThemeIcon.asClassName(Codicon.copilot),
+ 				true,
+ 				() => this.commandService.executeCommand(MANAGE_CHAT_COMMAND_ID, '@provider:"Copilot"'),
+ 			)), { icon: true, label: false });
+ 			copilotActionBar.push(panelStore.add(new Action(
+ 				'copilot.openAgentCustomizations',
+-				localize('openCopilotAgentCustomizations', "Agent Customizations for Copilot"),
++				localize('openCopilotAgentCustomizations', "Agent Customizations"),
+ 				ThemeIcon.asClassName(Codicon.settingsGear),
+ 				true,
+ 				() => this.commandService.executeCommand(AICustomizationManagementCommands.OpenEditor, {
+@@ -621,7 +621,7 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
+ 			this.appendCopilotUsage(copilotAccount, panelStore);
+ 		} else if (partitioned.signIn) {
+ 			const copilotAccount = append(identities, $('section.sessions-account-titlebar-panel-provider-account.signed-out', {
+-				'aria-label': localize('copilotAccountSectionLabel', "Copilot account")
++				'aria-label': localize('copilotAccountSectionLabel', "Account")
+ 			}));
+ 			const copilotIdentity = append(copilotAccount, $('.sessions-account-titlebar-panel-provider-identity'));
+ 			const accountIcon = append(copilotIdentity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
+diff --git a/src/vs/sessions/contrib/chat/browser/sessionsChatAccessibilityHelp.ts b/src/vs/sessions/contrib/chat/browser/sessionsChatAccessibilityHelp.ts
+index 25793af51c3..839e6413640 100644
+--- a/src/vs/sessions/contrib/chat/browser/sessionsChatAccessibilityHelp.ts
++++ b/src/vs/sessions/contrib/chat/browser/sessionsChatAccessibilityHelp.ts
+@@ -49,7 +49,7 @@ export class SessionsChatAccessibilityHelp implements IAccessibleViewImplementat
+ 		const content: string[] = [];
+ 		content.push(localize('sessionsChat.overview', "You are in the Agents window. The Agents window is a dedicated workspace for working with AI agents. It provides a chat interface, a changes view for reviewing agent-generated changes, a file explorer, and customization options."));
+ 		content.push(localize('sessionsChat.input', "You are in the chat input. Type a message and press Enter to send it."));
+-		content.push(localize('sessionsChat.harnessSwitchFeedbackSurvey', "After you switch from Copilot to Local, a two-step feedback survey may appear above the chat input. Use Shift+Tab to reach it. In the first step, use Up and Down Arrow to choose why you switched, then press Enter or Space. In the second step, enter any optional feedback and use Tab to reach Submit. Dismiss Survey or Escape closes the survey. After submission, the questions are replaced above the input by a message that your feedback was recorded. Use Dismiss Feedback Acknowledgement or Escape to close it."));
++		content.push(localize('sessionsChat.harnessSwitchFeedbackSurvey', "After you switch from the agent host to Local, a two-step feedback survey may appear above the chat input. Use Shift+Tab to reach it. In the first step, use Up and Down Arrow to choose why you switched, then press Enter or Space. In the second step, enter any optional feedback and use Tab to reach Submit. Dismiss Survey or Escape closes the survey. After submission, the questions are replaced above the input by a message that your feedback was recorded. Use Dismiss Feedback Acknowledgement or Escape to close it."));
+ 		if (configurationService.getValue<boolean>(NEW_SESSION_WELCOME_PHRASES_SETTING)) {
+ 			content.push(localize('sessionsChat.welcomeName', "In a new session, the welcome heading is announced when shown. To disable this announcement, set accessibility.verbosity.newSessionWelcome to false. Press Tab to reach Set Welcome Name beside the welcome heading, or open its context menu{0}. Enter a custom name, or clear it to use your GitHub first name when available.", '<keybinding:editor.action.showContextMenu>'));
+ 		}
+diff --git a/src/vs/workbench/contrib/chat/browser/actions/chatAccessibilityHelp.ts b/src/vs/workbench/contrib/chat/browser/actions/chatAccessibilityHelp.ts
+index 5397fa01942..3b5e69b1046 100644
+--- a/src/vs/workbench/contrib/chat/browser/actions/chatAccessibilityHelp.ts
++++ b/src/vs/workbench/contrib/chat/browser/actions/chatAccessibilityHelp.ts
+@@ -72,8 +72,8 @@ export function getAccessibilityHelpText(type: 'panelChat' | 'inlineChat' | 'qui
+ 		content.push(localize('chat.sessionPreparation', "While a session is being prepared, a progress message appears in the transcript. Use Tab or Shift+Tab to reach Show Log, when available, and press Enter or Space to open the output log. Use Stop to cancel preparation. The chat input and attachment controls are disabled until preparation finishes."));
+ 	}
+ 	if (!isSessionsWindow && type !== 'inlineChat' && type !== 'quickChat') {
+-		content.push(localize('chat.copilotHarnessIntroduction', "Depending on the active experiment, a new Copilot harness chat may show an introduction to the new Copilot experience when the session starts or after the first request is submitted. Once shown, sending messages does not dismiss it. Use Tab to reach let us know, Learn More, Got it!, or Not Helpful. Learn More opens documentation without hiding the introduction. Got it! and Not Helpful turn off future introductions."));
+-		content.push(localize('chat.harnessSwitchFeedbackSurvey', "After you switch from Copilot to Local, a two-step feedback survey may appear above the chat input. Use Shift+Tab to reach it. In the first step, use Up and Down Arrow to choose why you switched, then press Enter or Space. In the second step, enter any optional feedback and use Tab to reach Submit. Dismiss Survey or Escape closes the survey. After submission, the questions are replaced above the input by a message that your feedback was recorded. Use Dismiss Feedback Acknowledgement or Escape to close it."));
++		content.push(localize('chat.copilotHarnessIntroduction', "Depending on the active experiment, a new agent harness chat may show an introduction to the new agent experience when the session starts or after the first request is submitted. Once shown, sending messages does not dismiss it. Use Tab to reach let us know, Learn More, Got it!, or Not Helpful. Learn More opens documentation without hiding the introduction. Got it! and Not Helpful turn off future introductions."));
++		content.push(localize('chat.harnessSwitchFeedbackSurvey', "After you switch from the agent host to Local, a two-step feedback survey may appear above the chat input. Use Shift+Tab to reach it. In the first step, use Up and Down Arrow to choose why you switched, then press Enter or Space. In the second step, enter any optional feedback and use Tab to reach Submit. Dismiss Survey or Escape closes the survey. After submission, the questions are replaced above the input by a message that your feedback was recorded. Use Dismiss Feedback Acknowledgement or Escape to close it."));
+ 		content.push(localize('chat.agentsParallelWork', "When another Agent Host session is running, a new Agent Host chat may show an invitation to run agents side by side. Only one chat input notification is shown at a time. Use Tab to reach Open Agents Window, Ignore, or Dismiss notification. Open Agents Window copies the current prompt and attachments from that input without sending them or clearing it. An existing draft in the Agents Window is kept. Ignore turns off future invitations; Dismiss notification only hides the invitation for this chat until the window reloads."));
+ 	}
+ 	if (type === 'panelChat') {
+@@ -85,7 +85,7 @@ export function getAccessibilityHelpText(type: 'panelChat' | 'inlineChat' | 'qui
+ 			: localize('chat.sessionArchiveNudge', "An archive suggestion appears above the chat input when the session's pull requests are merged. Use Tab or Shift+Tab to reach Archive, Configure Automatic Cleanup, or Dismiss Archive Suggestion, then press Enter or Space. Configure Automatic Cleanup opens the settings for automatically archiving inactive merged sessions and permanently deleting automatically archived merged sessions. The explanation under What Does \"Archive\" Do? is collapsed by default. Use Tab to reach it and Enter or Space to expand or collapse it. Dismissing the suggestion, including with Escape while it is focused, returns to the chat input. Archiving the session hides it from the sessions list so you can focus on your remaining tasks. The session is not deleted. Ask your agent to find it, or look in the \"Archived\" section of the sessions list. You can unarchive it anytime. The worktree created for the session, if any, will be deleted. You can recreate it by unarchiving the session."));
+ 	}
+ 	if (type === 'panelChat' || type === 'quickChat' || type === 'editsView' || type === 'agentView') {
+-		content.push(localize('chat.modelPicker.autoMode', "In the tabbed model picker, the active Copilot tab has an Auto switch beside the provider name. The provider button and switch are separate keyboard targets. Turning Auto on replaces Copilot's individual models with automatic routing choices; provider tabs and search remain available. Turn Auto off to restore the previous manual Copilot model. The switch is disabled when no individual Copilot model is available. Browsing another provider does not change the selected model."));
++		content.push(localize('chat.modelPicker.autoMode', "In the tabbed model picker, the active provider tab has an Auto switch beside the provider name. The provider button and switch are separate keyboard targets. Turning Auto on replaces Copilot's individual models with automatic routing choices; provider tabs and search remain available. Turn Auto off to restore the previous manual Copilot model. The switch is disabled when no individual Copilot model is available. Browsing another provider does not change the selected model."));
+ 		content.push(localize('chat.modelPicker.managedDefault', "In the tabbed model picker, Org default identifies the model your organization sets for new chats. It remains on that model when you choose another model for this chat; the checkmark identifies your current selection. The Auto section carries the same label when Auto is the organization default."));
+ 		content.push(localize('chat.modelPicker.detailsPage', "In the tabbed model picker, thinking effort and context appear as a configuration button on the hovered, selected, or keyboard-focused model. Use Up and Down Arrow to focus a model, then Tab to reach its configuration button and Enter or Space to open its information and configuration page without selecting it. The button shows Details when no readout is available. Models without configurable settings still open their information page. The thinking effort and context readout beside the model name in the chat input opens the same page for the current model. Opening a configuration button focuses its configuration controls when available. Known values are shown even at their defaults. The Back to Models arrow is beside the model name; navigation and model actions stay at the top while details scroll. Back to Models returns to the previous provider, search, and model list. Escape closes the picker from any page and restores focus."));
+ 		content.push(localize('chat.modelPicker.optimizeFor', "In Auto mode, use Up and Down Arrow to focus an \"Optimize for\" preference: Efficiency, Balance, or Intelligence. Enter or Space applies the preference and keeps the picker open. HydraFusion, when available, is an alternative routing choice, not an additional toggle. Focus HydraFusion and press Right Arrow to open its description and focus Learn more. Selecting it clears the active Auto tier; selecting a tier returns to Auto. Turning Auto off preserves the preference and routing choice. Auto has no separate details page: both the Auto name and preference readout in the chat input open these routing choices."));
+@@ -106,7 +106,7 @@ export function getAccessibilityHelpText(type: 'panelChat' | 'inlineChat' | 'qui
+ 			content.push(localize('workbench.action.openAgentsWindow', 'To open the Agents Window, invoke the Open Agents Window command{0}. In screen reader mode, this keybinding includes Alt to avoid conflicts with screen reader shortcuts.', '<keybinding:workbench.action.openAgentsWindow>'));
+ 			content.push(localize('workbench.action.chat.openAgentHostFolderPicker', 'When starting an agent session in a multi-root workspace, you can choose which root folder it runs in by invoking the Folder command{0}, then selecting a folder from the list.', '<keybinding:workbench.action.chat.openAgentHostFolderPicker>'));
+ 			content.push(localize('chat.agentHostApprovalsPicker', 'When an agent session exposes approval presets, use Tab to reach the Approvals picker and choose how it handles workspace access, commands, and the internet.'));
+-			content.push(localize('chat.agentHostSandboxPolicy', "In Copilot agent-host sessions, use /sandbox-policy to view the effective sandbox policy. In the response, use Tab to focus Open Sandbox Policy and Enter to open the formatted report."));
++			content.push(localize('chat.agentHostSandboxPolicy', "In agent-host sessions, use /sandbox-policy to view the effective sandbox policy. In the response, use Tab to focus Open Sandbox Policy and Enter to open the formatted report."));
+ 			content.push(getModePickerAccessibilityHelp());
+ 		}
+ 		if (sessionStatusPillsSupported) {
+diff --git a/src/vs/workbench/contrib/chat/browser/agentSessionsConfiguration.ts b/src/vs/workbench/contrib/chat/browser/agentSessionsConfiguration.ts
+index 9bd31f22bc3..0c56a976623 100644
+--- a/src/vs/workbench/contrib/chat/browser/agentSessionsConfiguration.ts
++++ b/src/vs/workbench/contrib/chat/browser/agentSessionsConfiguration.ts
+@@ -33,18 +33,18 @@ export const agentsWindowHandoffConfigurationProperties = {
+ 		type: 'string',
+ 		enum: [CopilotHarnessIntroductionMode.Off, CopilotHarnessIntroductionMode.NewSession, CopilotHarnessIntroductionMode.AfterRequest],
+ 		enumDescriptions: [
+-			nls.localize('chat.copilotHarnessIntroduction.off', "Do not show the Copilot harness introduction."),
+-			nls.localize('chat.copilotHarnessIntroduction.newSession', "Show the introduction when a new Copilot harness session starts."),
+-			nls.localize('chat.copilotHarnessIntroduction.afterRequest', "Show the introduction after the first request is submitted in a new Copilot harness session."),
++			nls.localize('chat.copilotHarnessIntroduction.off', "Do not show the agent harness introduction."),
++			nls.localize('chat.copilotHarnessIntroduction.newSession', "Show the introduction when a new agent harness session starts."),
++			nls.localize('chat.copilotHarnessIntroduction.afterRequest', "Show the introduction after the first request is submitted in a new agent harness session."),
+ 		],
+-		description: nls.localize('chat.copilotHarnessIntroduction.mode', "Controls when the introduction to the new Copilot experience is shown."),
++		description: nls.localize('chat.copilotHarnessIntroduction.mode', "Controls when the introduction to the new agent experience is shown."),
+ 		default: product.quality === 'insider' ? CopilotHarnessIntroductionMode.NewSession : CopilotHarnessIntroductionMode.Off,
+ 		tags: ['experimental'],
+ 		experiment: { mode: 'auto' },
+ 	},
+ 	[ChatConfiguration.HarnessSwitchFeedbackSurveyEnabled]: {
+ 		type: 'boolean',
+-		description: nls.localize('chat.harnessSwitchFeedbackSurvey.enabled', "Show a one-time feedback survey after switching from Copilot to Local."),
++		description: nls.localize('chat.harnessSwitchFeedbackSurvey.enabled', "Show a one-time feedback survey after switching from the agent host to Local."),
+ 		default: false,
+ 		tags: ['experimental'],
+ 		experiment: { mode: 'auto' },
+diff --git a/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts b/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
+index 3061fd33db5..858195cff6f 100644
+--- a/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
++++ b/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
+@@ -323,7 +323,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[ChatConfiguration.ExperimentalModePermissionsPicker]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.experimentalModePermissionsPicker', "Shows mode and permissions in a combined picker with expandable permission choices for Copilot Agent Host sessions."),
++			description: nls.localize('chat.experimentalModePermissionsPicker', "Shows mode and permissions in a combined picker with expandable permission choices for Agent Host sessions."),
+ 			default: product.quality !== 'stable',
+ 			tags: ['experimental'],
+ 		},
+@@ -410,7 +410,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		'dictation.experimental.llmCleanup': {
+ 			type: 'boolean',
+-			markdownDescription: nls.localize('dictation.experimental.llmCleanup', "Experimental: when dictation ends, the final transcript is passed through a small language model to restore punctuation, capitalization, paragraphs, and lists. Requires Copilot to be enabled; the transcript is sent to the language model for cleanup. Falls back to the raw transcript when no model is available. Use [dictation instructions](command:{0}) to customize terminology and formatting.", CONFIGURE_DICTATION_INSTRUCTIONS_ACTION_ID),
++			markdownDescription: nls.localize('dictation.experimental.llmCleanup', "Experimental: when dictation ends, the final transcript is passed through a small language model to restore punctuation, capitalization, paragraphs, and lists. Requires AI features to be enabled; the transcript is sent to the language model for cleanup. Falls back to the raw transcript when no model is available. Use [dictation instructions](command:{0}) to customize terminology and formatting.", CONFIGURE_DICTATION_INSTRUCTIONS_ACTION_ID),
+ 			default: true,
+ 			tags: ['experimental'],
+ 			policy: {
+@@ -487,7 +487,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[ChatConfiguration.MigrateLegacyCopilotCliSessions]: {
+ 			type: 'boolean',
+-			markdownDescription: nls.localize('chat.agentSessions.migrateLegacyCopilotCli', "Controls whether legacy extension host Copilot CLI chat sessions are migrated in place to the Agent host when opened, so their history becomes editable. When disabled, legacy sessions open as before.\n\nChanging this setting requires a restart to take effect."),
++			markdownDescription: nls.localize('chat.agentSessions.migrateLegacyCopilotCli', "Controls whether legacy extension host CLI Agent chat sessions are migrated in place to the Agent host when opened, so their history becomes editable. When disabled, legacy sessions open as before.\n\nChanging this setting requires a restart to take effect."),
+ 			default: false,
+ 			tags: ['experimental'],
+ 			// Migration is a global, one-time behavior over the shared agent host, so it is a
+@@ -562,7 +562,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		'chat.implicitContext.includeActiveEditor': {
+ 			type: 'boolean',
+-			markdownDescription: nls.localize('chat.implicitContext.includeActiveEditor', "When enabled, the active editor is automatically forwarded as context, even when it would otherwise only be suggested. Selections and explicitly attached files are always included regardless of this setting.\n\nNote: this setting currently only applies to Agent Host sessions (such as Copilot)."),
++			markdownDescription: nls.localize('chat.implicitContext.includeActiveEditor', "When enabled, the active editor is automatically forwarded as context, even when it would otherwise only be suggested. Selections and explicitly attached files are always included regardless of this setting.\n\nNote: this setting currently only applies to Agent Host sessions."),
+ 			default: true,
+ 			tags: ['experimental'],
+ 			agentsWindow: { default: false },
+@@ -750,7 +750,7 @@ configurationRegistry.registerConfiguration({
+ 		[ChatConfiguration.PermissionsSandboxToggleEnabled]: {
+ 			type: 'boolean',
+ 			default: true,
+-			markdownDescription: nls.localize('chat.experimental.permissionsSandboxToggle.enabled', "Controls whether the permissions picker shows a \"Sandboxing for terminal\" toggle. Local sessions show it on the Default permissions option. Local and remote Copilot Agent Host sessions show it as a session-specific setting that applies to every permission mode; changing it saves the choice only for that session. New Copilot Agent Host sessions initially follow `#chat.agent.sandbox.enabled#` or `#chat.agent.sandbox.enabledWindows#` based on the host's operating system, for both the SDK's built-in shell tool and the Agent Host terminal tool."),
++			markdownDescription: nls.localize('chat.experimental.permissionsSandboxToggle.enabled', "Controls whether the permissions picker shows a \"Sandboxing for terminal\" toggle. Local sessions show it on the Default permissions option. Local and remote Agent Host sessions show it as a session-specific setting that applies to every permission mode; changing it saves the choice only for that session. New Agent Host sessions initially follow `#chat.agent.sandbox.enabled#` or `#chat.agent.sandbox.enabledWindows#` based on the host's operating system, for both the SDK's built-in shell tool and the Agent Host terminal tool."),
+ 			tags: ['experimental'],
+ 			experiment: {
+ 				mode: 'auto'
+@@ -1664,14 +1664,14 @@ configurationRegistry.registerConfiguration({
+ 				localization: {
+ 					description: {
+ 						key: 'chat.agentHost.customTerminalTool.enabled.policy',
+-						value: nls.localize('chat.agentHost.customTerminalTool.enabled.policy', "Enable the Agent Host custom terminal tool override for Copilot SDK sessions."),
++						value: nls.localize('chat.agentHost.customTerminalTool.enabled.policy', "Enable the Agent Host custom terminal tool override for agent SDK sessions."),
+ 					}
+ 				}
+ 			},
+ 		},
+ 		[AgentHostShellToolInitScriptEnabledSettingId]: {
+ 			type: 'boolean',
+-			markdownDescription: nls.localize('chat.agentHost.shellTool.initScript.enabled', "When enabled, Copilot SDK sessions load your shell profile (`~/.bashrc` on macOS and Linux, PowerShell profiles on Windows) and activate the Python environment selected for the workspace before each shell command. Python activation requires the Python Environments extension with `#python-envs.terminal.autoActivationType#` set to `shellStartup`. Local windows only."),
++			markdownDescription: nls.localize('chat.agentHost.shellTool.initScript.enabled', "When enabled, agent SDK sessions load your shell profile (`~/.bashrc` on macOS and Linux, PowerShell profiles on Windows) and activate the Python environment selected for the workspace before each shell command. Python activation requires the Python Environments extension with `#python-envs.terminal.autoActivationType#` set to `shellStartup`. Local windows only."),
+ 			default: false,
+ 			tags: ['experimental', 'advanced'],
+ 			scope: ConfigurationScope.APPLICATION,
+@@ -1680,17 +1680,17 @@ configurationRegistry.registerConfiguration({
+ 			type: 'string',
+ 			enum: [...copilotSdkLogLevelSettingValues],
+ 			enumDescriptions: [
+-				nls.localize('chat.agentHost.copilotSdk.logLevel.info', "Log informational messages. Running VS Code with trace logging still enables all Copilot SDK runtime diagnostics."),
+-				nls.localize('chat.agentHost.copilotSdk.logLevel.trace', "Log all Copilot SDK runtime diagnostics."),
++				nls.localize('chat.agentHost.copilotSdk.logLevel.info', "Log informational messages. Running VS Code with trace logging still enables all agent SDK runtime diagnostics."),
++				nls.localize('chat.agentHost.copilotSdk.logLevel.trace', "Log all agent SDK runtime diagnostics."),
+ 			],
+-			markdownDescription: nls.localize('chat.agentHost.copilotSdk.logLevel', "Controls the log level for the Copilot SDK runtime used by the local agent host. Changing this setting restarts the Copilot SDK client; active sessions are reloaded when next used."),
++			markdownDescription: nls.localize('chat.agentHost.copilotSdk.logLevel', "Controls the log level for the agent SDK runtime used by the local agent host. Changing this setting restarts the agent SDK client; active sessions are reloaded when next used."),
+ 			default: 'info',
+ 			scope: ConfigurationScope.APPLICATION,
+ 			tags: ['experimental', 'advanced'],
+ 		},
+ 		[AgentHostCopilotRuntimePathSettingId]: {
+ 			type: 'string',
+-			markdownDescription: nls.localize('chat.agentHost.copilot.runtimePath', "Absolute path to a local `copilot-runtime` executable. The bundled Copilot SDK wrapper remains in use. Empty uses the bundled runtime. Changing this setting restarts the Copilot SDK client after active turns finish."),
++			markdownDescription: nls.localize('chat.agentHost.copilot.runtimePath', "Absolute path to a local `copilot-runtime` executable. The bundled agent SDK wrapper remains in use. Empty uses the bundled runtime. Changing this setting restarts the agent SDK client after active turns finish."),
+ 			default: '',
+ 			scope: ConfigurationScope.APPLICATION,
+ 			ignoreSync: true,
+@@ -1703,14 +1703,14 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[CopilotClaudeAdvisorEnabledSettingId]: {
+ 			type: 'boolean',
+-			markdownDescription: nls.localize('chat.copilot.claudeAdvisor.enabled', "When enabled, Copilot Agent Host sessions using a supported Claude model can call the provider-native Advisor tool. Changing this setting restarts the Copilot SDK client after active turns finish."),
++			markdownDescription: nls.localize('chat.copilot.claudeAdvisor.enabled', "When enabled, Agent Host sessions using a supported Claude model can call the provider-native Advisor tool. Changing this setting restarts the agent SDK client after active turns finish."),
+ 			default: false,
+ 			tags: ['experimental', 'advanced'],
+ 			scope: ConfigurationScope.APPLICATION,
+ 		},
+ 		[CopilotTgrepEnabledSettingId]: {
+ 			type: 'boolean',
+-			markdownDescription: nls.localize('chat.copilot.tgrep.enabled', "When enabled, local Copilot Agent Host sessions force-enable tgrep indexed search, bypassing the repository-size threshold. Requires a local Git repository on a non-virtual filesystem. Changing this setting restarts the Copilot SDK client after active turns finish."),
++			markdownDescription: nls.localize('chat.copilot.tgrep.enabled', "When enabled, local Agent Host sessions force-enable tgrep indexed search, bypassing the repository-size threshold. Requires a local Git repository on a non-virtual filesystem. Changing this setting restarts the agent SDK client after active turns finish."),
+ 			default: false,
+ 			experiment: { mode: 'auto' },
+ 			tags: ['experimental', 'advanced'],
+@@ -1718,7 +1718,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[AgentHostMapLegacySettingsToManagedSettingsSettingId]: {
+ 			type: 'boolean',
+-			markdownDescription: nls.localize('chat.agentHost.copilot.mapLegacySettingsToManagedSettings', "When enabled, maps supported legacy VS Code settings to equivalent Copilot SDK managed settings for local Agent Host sessions. Only restrictions are mapped, and only from globally-scoped values — workspace and folder values are ignored. Applies to local sessions using the Copilot agent; remote hosts and other agents are unaffected. This compatibility bridge is temporary and is not used for new settings."),
++			markdownDescription: nls.localize('chat.agentHost.copilot.mapLegacySettingsToManagedSettings', "When enabled, maps supported legacy VS Code settings to equivalent agent SDK managed settings for local Agent Host sessions. Only restrictions are mapped, and only from globally-scoped values — workspace and folder values are ignored. Applies to local Agent Host sessions; remote hosts and other agents are unaffected. This compatibility bridge is temporary and is not used for new settings."),
+ 			default: false,
+ 			scope: ConfigurationScope.APPLICATION_MACHINE,
+ 			tags: ['experimental', 'advanced'],
+@@ -1731,7 +1731,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[AgentHostToolSearchEnabledSettingId]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.agentHost.copilot.toolSearch.enabled', "When enabled, Copilot SDK sessions defer MCP and non-core VS Code tools behind a tool-search tool so the model discovers them on demand instead of loading every tool definition up front."),
++			description: nls.localize('chat.agentHost.copilot.toolSearch.enabled', "When enabled, agent SDK sessions defer MCP and non-core VS Code tools behind a tool-search tool so the model discovers them on demand instead of loading every tool definition up front."),
+ 			default: true,
+ 			tags: ['experimental', 'advanced'],
+ 		},
+@@ -1744,7 +1744,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[CopilotSkillCharBudgetSettingId]: {
+ 			type: 'number',
+-			description: nls.localize('chat.copilot.skillCharBudget', "Maximum number of characters available for skill descriptions in the Copilot SDK system message."),
++			description: nls.localize('chat.copilot.skillCharBudget', "Maximum number of characters available for skill descriptions in the agent SDK system message."),
+ 			default: DEFAULT_COPILOT_SKILL_CHAR_BUDGET,
+ 			minimum: 1,
+ 			experiment: { mode: 'startup' },
+@@ -1758,14 +1758,14 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[CopilotSemanticSearchEnabledSettingId]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.copilot.semanticSearch.enabled', "Controls whether Copilot Agent Host sessions can use VS Code's semantic workspace search. When disabled, semantic search is unavailable."),
++			description: nls.localize('chat.copilot.semanticSearch.enabled', "Controls whether Agent Host sessions can use VS Code's semantic workspace search. When disabled, semantic search is unavailable."),
+ 			default: false,
+ 			experiment: { mode: 'auto' },
+ 			tags: ['experimental', 'advanced'],
+ 		},
+ 		[AgentHostHydraFusionEnabledSettingId]: {
+ 			type: 'boolean',
+-			markdownDescription: nls.localize('chat.copilot.hydraFusion.enabled', "When enabled, makes the experimental HydraFusion model available to local Copilot Agent Host sessions. Changing this setting restarts the local Copilot runtime."),
++			markdownDescription: nls.localize('chat.copilot.hydraFusion.enabled', "When enabled, makes the experimental HydraFusion model available to local Agent Host sessions. Changing this setting restarts the local agent runtime."),
+ 			default: true,
+ 			experiment: { mode: 'startup' },
+ 			scope: ConfigurationScope.APPLICATION_MACHINE,
+@@ -1773,13 +1773,13 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[CopilotAutoModeTierOverrideSettingId]: {
+ 			type: ['string', 'null'],
+-			markdownDescription: nls.localize('chat.copilot.autoModeTierOverride', "Override Auto's \"Optimize for\" preference for evals and debugging. Accepts `efficiency`, `balance`, or `intelligence` in both Copilot Chat and Copilot SDK sessions; `fast` is extension-only. Set to `null` to clear."),
++			markdownDescription: nls.localize('chat.copilot.autoModeTierOverride', "Override Auto's \"Optimize for\" preference for evals and debugging. Accepts `efficiency`, `balance`, or `intelligence` in both Copilot Chat and agent SDK sessions; `fast` is extension-only. Set to `null` to clear."),
+ 			default: null,
+ 			tags: ['advanced'],
+ 		},
+ 		[AgentHostCopilotModelCapabilityOverridesSettingId]: {
+ 			type: 'object',
+-			markdownDescription: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides', "Per-model overrides for Copilot Agent Host sessions. Use `*` to match every model. Supports model family, reasoning effort, tool filters, model capabilities, and YAML prompt overrides."),
++			markdownDescription: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides', "Per-model overrides for Agent Host sessions. Use `*` to match every model. Supports model family, reasoning effort, tool filters, model capabilities, and YAML prompt overrides."),
+ 			additionalProperties: {
+ 				type: 'object',
+ 				properties: {
+@@ -1795,7 +1795,7 @@ configurationRegistry.registerConfiguration({
+ 					availableTools: {
+ 						type: 'array',
+ 						items: { type: 'string' },
+-						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.availableTools', "When set, only matching tools are available to sessions on this model. Patterns: bare tool names, `builtin:*` or `builtin:<name>` (Copilot runtime tools), `mcp:*` or `mcp:<name>` (MCP server tools), and `custom:*` or `custom:<name>` (every tool VS Code registers with the SDK, including the agent host's own terminal tools); a bare `*` expands to all three sources."),
++						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.availableTools', "When set, only matching tools are available to sessions on this model. Patterns: bare tool names, `builtin:*` or `builtin:<name>` (agent runtime tools), `mcp:*` or `mcp:<name>` (MCP server tools), and `custom:*` or `custom:<name>` (every tool VS Code registers with the SDK, including the agent host's own terminal tools); a bare `*` expands to all three sources."),
+ 					},
+ 					excludedTools: {
+ 						type: 'array',
+@@ -1805,7 +1805,7 @@ configurationRegistry.registerConfiguration({
+ 					modelCapabilities: {
+ 						type: 'object',
+ 						additionalProperties: true,
+-						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.modelCapabilities', "Per-property model capability overrides passed through to the Copilot SDK's `modelCapabilities` session field (e.g. `{ \"supports\": { \"vision\": false }, \"limits\": { \"max_context_window_tokens\": 64000 } }`), deep-merged over the runtime's resolved defaults for this model. Applied when the session launches or resumes."),
++						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.modelCapabilities', "Per-property model capability overrides passed through to the agent SDK's `modelCapabilities` session field (e.g. `{ \"supports\": { \"vision\": false }, \"limits\": { \"max_context_window_tokens\": 64000 } }`), deep-merged over the runtime's resolved defaults for this model. Applied when the session launches or resumes."),
+ 					},
+ 					promptOverrideString: {
+ 						type: 'string',
+@@ -1823,7 +1823,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[AgentHostAllowSignedOutWhenUsableSettingId]: {
+ 			type: 'boolean',
+-			markdownDescription: nls.localize('chat.agentHost.allowSignedOutWhenUsable', "When enabled, Agent Host sessions remain available while signed out. The Agents window opens without forcing GitHub sign-in, and editor chat lets you select the Copilot harness. Agents usable without GitHub (for example Codex with ChatGPT authentication or Claude in native mode with your own Anthropic credentials) work while signed out; agents that require GitHub prompt you to add a model or sign in. When disabled (the default), GitHub sign-in is required before the Agents window opens."),
++			markdownDescription: nls.localize('chat.agentHost.allowSignedOutWhenUsable', "When enabled, Agent Host sessions remain available while signed out. The Agents window opens without forcing GitHub sign-in, and editor chat lets you select the Agent Host harness. Agents usable without GitHub (for example Codex with ChatGPT authentication or Claude in native mode with your own Anthropic credentials) work while signed out; agents that require GitHub prompt you to add a model or sign in. When disabled (the default), GitHub sign-in is required before the Agents window opens."),
+ 			default: false,
+ 			scope: ConfigurationScope.APPLICATION,
+ 			tags: ['experimental', 'advanced'],
+@@ -1842,7 +1842,7 @@ configurationRegistry.registerConfiguration({
+ 		[AgentHostSdkSandboxEnabledSettingId]: {
+ 			type: 'string',
+ 			enum: [AgentSandboxEnabledValue.Off, AgentSandboxEnabledValue.On],
+-			markdownDescription: nls.localize('chat.agentHost.sdkSandbox.enabled.description', "Deprecated sandbox mode for the Copilot SDK's built-in shell tool on macOS and Linux."),
++			markdownDescription: nls.localize('chat.agentHost.sdkSandbox.enabled.description', "Deprecated sandbox mode for the agent SDK's built-in shell tool on macOS and Linux."),
+ 			markdownDeprecationMessage: nls.localize('chat.agentHost.sdkSandbox.enabled.deprecated', "This setting no longer has any effect. Use `#chat.agent.sandbox.enabled#` for both the SDK's built-in shell tool and the Agent Host's custom terminal tool."),
+ 			default: AgentSandboxEnabledValue.Off,
+ 			tags: ['experimental', 'advanced'],
+@@ -1850,7 +1850,7 @@ configurationRegistry.registerConfiguration({
+ 		[AgentHostSdkSandboxWindowsEnabledSettingId]: {
+ 			type: 'string',
+ 			enum: [AgentSandboxEnabledValue.Off, AgentSandboxEnabledValue.On],
+-			markdownDescription: nls.localize('chat.agentHost.sdkSandbox.enabledWindows.description', "Deprecated sandbox mode for the Copilot SDK's built-in shell tool on Windows."),
++			markdownDescription: nls.localize('chat.agentHost.sdkSandbox.enabledWindows.description', "Deprecated sandbox mode for the agent SDK's built-in shell tool on Windows."),
+ 			markdownDeprecationMessage: nls.localize('chat.agentHost.sdkSandbox.enabledWindows.deprecated', "This setting no longer has any effect. Use `#chat.agent.sandbox.enabledWindows#` for both the SDK's built-in shell tool and the Agent Host's custom terminal tool."),
+ 			default: AgentSandboxEnabledValue.Off,
+ 			tags: ['experimental', 'advanced'],
+@@ -1900,12 +1900,12 @@ configurationRegistry.registerConfiguration({
+ 			enumItemLabels: [
+ 				nls.localize('chat.byokUtilityModelDefault.none.label', "None"),
+ 				nls.localize('chat.byokUtilityModelDefault.mainAgent.label', "Main Agent Model"),
+-				nls.localize('chat.byokUtilityModelDefault.copilot.label', "GitHub Copilot"),
++				nls.localize('chat.byokUtilityModelDefault.copilot.label', "Default"),
+ 			],
+ 			markdownEnumDescriptions: [
+ 				nls.localize('chat.byokUtilityModelDefault.none.description', "Do not use a default utility model."),
+ 				nls.localize('chat.byokUtilityModelDefault.mainAgent.description', "Use the selected BYOK main agent model."),
+-				nls.localize('chat.byokUtilityModelDefault.copilot.description', "Use the default GitHub Copilot utility models."),
++				nls.localize('chat.byokUtilityModelDefault.copilot.description', "Use the default utility models."),
+ 			],
+ 			default: BYOKUtilityModelDefault.Copilot,
+ 		},
+@@ -2489,13 +2489,13 @@ configurationRegistry.registerConfiguration({
+ 			enum: [ChatClosedPromoNotification.None, ChatClosedPromoNotification.CopilotIconPopup],
+ 			enumItemLabels: [
+ 				nls.localize('chat.closedPromoNotification.none.label', "None"),
+-				nls.localize('chat.closedPromoNotification.copilotIconPopup.label', "Copilot Icon Popup"),
++				nls.localize('chat.closedPromoNotification.copilotIconPopup.label', "FlowLeap Icon Popup"),
+ 			],
+ 			enumDescriptions: [
+-				nls.localize('chat.closedPromoNotification.none.description', "Do not show a promo on the Copilot icon when Chat is closed."),
+-				nls.localize('chat.closedPromoNotification.copilotIconPopup.description', "Show a promo tooltip when hovering or clicking the Copilot status icon while Chat is closed. Viewing the offer clears its indicator; the offer remains available for the current window session. Choosing Try dismisses the offer and its chat banner."),
++				nls.localize('chat.closedPromoNotification.none.description', "Do not show a promo on the FlowLeap icon when Chat is closed."),
++				nls.localize('chat.closedPromoNotification.copilotIconPopup.description', "Show a promo tooltip when hovering or clicking the FlowLeap status icon while Chat is closed. Viewing the offer clears its indicator; the offer remains available for the current window session. Choosing Try dismisses the offer and its chat banner."),
+ 			],
+-			description: nls.localize('chat.closedPromoNotification', "Controls whether a live model promo is shown on the Copilot icon when Chat is closed. When explicitly set, this overrides the experiment without an experiment lookup. Otherwise, eligible promos use the experiment treatment."),
++			description: nls.localize('chat.closedPromoNotification', "Controls whether a live model promo is shown on the FlowLeap icon when Chat is closed. When explicitly set, this overrides the experiment without an experiment lookup. Otherwise, eligible promos use the experiment treatment."),
+ 			default: ChatClosedPromoNotification.None,
+ 			tags: ['experimental'],
+ 		},
+diff --git a/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts b/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts
+index 2201103b561..2fc944899ce 100644
+--- a/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts
++++ b/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts
+@@ -276,7 +276,7 @@ export class ResetCopilotHarnessIntroductionAction extends Action2 {
+ 	constructor() {
+ 		super({
+ 			id: ResetCopilotHarnessIntroductionAction.ID,
+-			title: localize2('chat.resetCopilotHarnessIntroduction', "Reset Copilot Harness Introduction"),
++			title: localize2('chat.resetCopilotHarnessIntroduction', "Reset Agent Harness Introduction"),
+ 			category: Categories.Developer,
+ 			f1: true,
+ 			precondition: ChatContextKeys.enabled,
+diff --git a/src/vs/workbench/contrib/chat/test/browser/accessibility/chatAccessibilityHelp.test.ts b/src/vs/workbench/contrib/chat/test/browser/accessibility/chatAccessibilityHelp.test.ts
+index 710c026794d..e6cc5861b73 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/accessibility/chatAccessibilityHelp.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/accessibility/chatAccessibilityHelp.test.ts
+@@ -94,7 +94,7 @@ suite('Chat Accessibility Help', () => {
+ 	test('documents the Copilot tab switch and independent provider navigation', () => {
+ 		const help = getAccessibilityHelpText('agentView', new MockKeybindingService(), true);
+ 		assert.deepStrictEqual({
+-			switch: help.includes('active Copilot tab has an Auto switch beside the provider name'),
++			switch: help.includes('active provider tab has an Auto switch beside the provider name'),
+ 			keyboardTargets: help.includes('provider button and switch are separate keyboard targets'),
+ 			providers: help.includes('provider tabs and search remain available'),
+ 			restored: help.includes('Turn Auto off to restore the previous manual Copilot model'),
+diff --git a/src/vs/workbench/contrib/inlineChat/browser/inlineChatEditReviewSession.ts b/src/vs/workbench/contrib/inlineChat/browser/inlineChatEditReviewSession.ts
+index 6bc327089bf..95d358050bf 100644
+--- a/src/vs/workbench/contrib/inlineChat/browser/inlineChatEditReviewSession.ts
++++ b/src/vs/workbench/contrib/inlineChat/browser/inlineChatEditReviewSession.ts
+@@ -323,7 +323,7 @@ export class InlineChatEditReviewSession extends Disposable implements IChatEdit
+ 	}
+ 
+ 	private _getReadonlyMessage(): IMarkdownString {
+-		return { value: localize('inlineChatReadonly', "Editor is read-only while Copilot is editing this file.") };
++		return { value: localize('inlineChatReadonly', "Editor is read-only while FlowLeap is editing this file.") };
+ 	}
+ 
+ 	private async _resetReadonlyLocks(): Promise<void> {
+diff --git a/src/vs/workbench/contrib/inlineChat/test/browser/inlineChatEditReviewSession.test.ts b/src/vs/workbench/contrib/inlineChat/test/browser/inlineChatEditReviewSession.test.ts
+index 0456b2deb37..c9f42e8d0d9 100644
+--- a/src/vs/workbench/contrib/inlineChat/test/browser/inlineChatEditReviewSession.test.ts
++++ b/src/vs/workbench/contrib/inlineChat/test/browser/inlineChatEditReviewSession.test.ts
+@@ -206,7 +206,7 @@ suite('InlineChatEditReviewSession', () => {
+ 			resource: update.resource.toString(),
+ 			value: update.value,
+ 		})), [
+-			{ resource: targetUri.toString(), value: { value: 'Editor is read-only while Copilot is editing this file.' } },
++			{ resource: targetUri.toString(), value: { value: 'Editor is read-only while FlowLeap is editing this file.' } },
+ 			{ resource: targetUri.toString(), value: 'reset' },
+ 		]);
+ 	});
+@@ -219,7 +219,7 @@ suite('InlineChatEditReviewSession', () => {
+ 		await Promise.resolve();
+ 
+ 		assert.deepStrictEqual(readonlyUpdates.map(update => update.value), [
+-			{ value: 'Editor is read-only while Copilot is editing this file.' },
++			{ value: 'Editor is read-only while FlowLeap is editing this file.' },
+ 			'reset',
+ 		]);
+ 	});
+diff --git a/src/vs/workbench/contrib/mcp/common/mcpConfigurationGeneration.ts b/src/vs/workbench/contrib/mcp/common/mcpConfigurationGeneration.ts
+index 0779efb44dc..aaf439501ee 100644
+--- a/src/vs/workbench/contrib/mcp/common/mcpConfigurationGeneration.ts
++++ b/src/vs/workbench/contrib/mcp/common/mcpConfigurationGeneration.ts
+@@ -76,7 +76,7 @@ export function normalizeMcpGeneratedConfiguration(result: McpGeneratedConfigura
+ 		return result.server;
+ 	}
+ 	if (result.format !== format) {
+-		throw new Error(localize('mcp.generation.formatMismatch', "The MCP setup extension returned an unexpected configuration format. Update the Copilot extension and try again."));
++		throw new Error(localize('mcp.generation.formatMismatch', "The MCP setup extension returned an unexpected configuration format. Update the FlowLeap extension and try again."));
+ 	}
+ 	const normalized = format === McpResourceFormat.CopilotGlobal
+ 		? fromCopilotMcpServerConfiguration(result.server)

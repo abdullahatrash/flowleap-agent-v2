@@ -24,7 +24,6 @@ import { CommandsRegistry, ICommandService } from '../../../../../platform/comma
 import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IsWebContext } from '../../../../../platform/contextkey/common/contextkeys.js';
-import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
 import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
@@ -37,6 +36,7 @@ import { GitHubPaths, IDefaultAccountService } from '../../../../../platform/def
 import { IProductService } from '../../../../../platform/product/common/productService.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { ToggleTitleBarConfigAction } from '../../../../browser/parts/titlebar/titlebarActions.js';
+import { ACCOUNTS_SHARED_SIGN_IN_GROUP } from '../../../../common/activity.js';
 import { IWorkbenchContribution } from '../../../../common/contributions.js';
 import { IViewDescriptorService, ViewContainerLocation } from '../../../../common/views.js';
 import { ChatEntitlement, ChatEntitlementContext, ChatEntitlementContextKeys, ChatEntitlementRequests, ChatEntitlementService, IChatEntitlementService, isProUser } from '../../../../services/chat/common/chatEntitlementService.js';
@@ -69,6 +69,12 @@ const defaultChat = {
 };
 
 const SIGN_IN_TITLE_BAR_ACTION_ID = 'workbench.action.chat.signInIndicator';
+
+export const ChatSetupFromAccountsWhen = ContextKeyExpr.and(
+	ChatContextKeys.Setup.hidden.negate(),
+	ChatContextKeys.Setup.disabledInWorkspace.negate(),
+	CONTEXT_DEFAULT_ACCOUNT_STATE.notEqualsTo(DefaultAccountStatus.Available),
+);
 
 export class ChatSetupContribution extends Disposable implements IWorkbenchContribution {
 
@@ -225,7 +231,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 
 		class ChatSetupTriggerAction extends Action2 {
 
-			static CHAT_SETUP_ACTION_LABEL = localize2('triggerChatSetup', "Use AI Features with FlowLeap for free...");
+			static CHAT_SETUP_ACTION_LABEL = localize2('triggerChatSetup', "Use AI Features with Copilot for free...");
 
 			constructor() {
 				super({
@@ -233,15 +239,12 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 					title: ChatSetupTriggerAction.CHAT_SETUP_ACTION_LABEL,
 					category: CHAT_CATEGORY,
 					f1: true,
-					precondition: ContextKeyExpr.and(
-						ContextKeyExpr.or(
-							ChatContextKeys.Setup.hidden,
-							ChatContextKeys.Setup.disabledInWorkspace,
-							ChatContextKeys.Setup.untrusted,
-							ChatContextKeys.Setup.completed.negate(),
-							ChatContextKeys.Entitlement.canSignUp
-						),
-						PatentIdeContextKeys.Mode.negate() // FlowLeap: hide the GitHub "Use AI Features with Copilot" setup command in Patent IDE mode
+					precondition: ContextKeyExpr.or(
+						ChatContextKeys.Setup.hidden,
+						ChatContextKeys.Setup.disabledInWorkspace,
+						ChatContextKeys.Setup.untrusted,
+						ChatContextKeys.Setup.completed.negate(),
+						ChatContextKeys.Entitlement.canSignUp
 					)
 				});
 			}
@@ -336,7 +339,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.triggerSetupForceSignIn',
-					title: localize2('forceSignIn', "Sign in to use FlowLeap")
+					title: localize2('forceSignIn', "Sign in to use GitHub Copilot")
 				});
 			}
 
@@ -374,18 +377,12 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.triggerSetupFromAccounts',
-					title: localize2('triggerChatSetupFromAccounts', "Sign in to use FlowLeap..."),
+					title: localize2('triggerChatSetupFromAccounts', "Sign in to use GitHub Copilot..."),
 					menu: {
 						id: MenuId.AccountsContext,
-						group: '2_copilot',
-						when: ContextKeyExpr.and(
-							ChatContextKeys.Setup.hidden.negate(),
-							ChatContextKeys.Setup.disabledInWorkspace.negate(),
-							CONTEXT_DEFAULT_ACCOUNT_STATE.notEqualsTo(DefaultAccountStatus.Available), // hide only when signed in (a default GitHub account is present); still shown while signed out or before the account state resolves, incl. untrusted workspaces — no auth prompt
-							ChatContextKeys.Setup.completed.negate(),
-							ChatContextKeys.Entitlement.signedOut,
-							PatentIdeContextKeys.Mode.negate() // FlowLeap: the FlowLeap Accounts CTA (patentAuth.contribution) is the only sign-in entry in Patent IDE mode
-						)
+						group: ACCOUNTS_SHARED_SIGN_IN_GROUP,
+						// Keep Copilot sign-in available after prior setup and alongside non-Copilot models.
+						when: ChatSetupFromAccountsWhen,
 					}
 				});
 			}
@@ -422,7 +419,6 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 							ContextKeyExpr.equals(`config.${ChatConfiguration.TitleBarSignInEnabled}`, true),
 							UpdateTitleBarEditorVisibleContext.negate(),
 							InEditorZenModeContext.negate(),
-							PatentIdeContextKeys.Mode.negate(), // FlowLeap: hide the GitHub title-bar Sign In in Patent IDE mode
 						),
 					}]
 				});
@@ -442,8 +438,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super(
 					ChatConfiguration.TitleBarSignInEnabled,
-					localize('toggle.chatSignIn', 'FlowLeap Sign In'),
-					localize('toggle.chatSignInDescription', "Toggle visibility of the FlowLeap Sign In button in title bar"),
+					localize('toggle.chatSignIn', 'Copilot Sign In'),
+					localize('toggle.chatSignInDescription', "Toggle visibility of the Copilot Sign In button in title bar"),
 					3,
 					ContextKeyExpr.and(
 						IsWebContext.negate(),
@@ -460,7 +456,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.upgradePlan',
-					title: localize2('managePlan', "Upgrade to FlowLeap Pro"),
+					title: localize2('managePlan', "Upgrade to GitHub Copilot Pro"),
 					category: localize2('chat.category', 'Chat'),
 					f1: true,
 					precondition: ContextKeyExpr.and(
@@ -469,8 +465,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 						ContextKeyExpr.or(
 							ChatContextKeys.Entitlement.canSignUp,
 							ChatContextKeys.Entitlement.planFree
-						),
-						PatentIdeContextKeys.Mode.negate() // FlowLeap: GitHub plan-upgrade command, hidden in Patent IDE mode
+						)
 					),
 					menu: {
 						id: MenuId.ChatTitleBarMenu,
@@ -529,7 +524,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.manageAdditionalSpend',
-					title: localize2('manageAdditionalSpend', "Manage FlowLeap Budget"),
+					title: localize2('manageAdditionalSpend', "Manage GitHub Copilot Budget"),
 					category: localize2('chat.category', 'Chat'),
 					f1: true,
 					precondition: ContextKeyExpr.and(
@@ -540,8 +535,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 							ChatContextKeys.Entitlement.planProPlus,
 							ChatContextKeys.Entitlement.planMax,
 							ChatContextKeys.Entitlement.planEdu,
-						),
-						PatentIdeContextKeys.Mode.negate() // FlowLeap: GitHub budget command, hidden in Patent IDE mode
+						)
 					),
 					menu: {
 						id: MenuId.ChatTitleBarMenu,
@@ -635,7 +629,6 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			ChatContextKeys.Setup.hidden.negate(),
 			ChatContextKeys.Setup.disabledInWorkspace.negate(),
 			ChatContextKeys.Setup.completed.negate(),
-			PatentIdeContextKeys.Mode.negate() // FlowLeap: hide the GitHub editor context-menu Explain/Fix/Code Review entries in Patent IDE mode
 		);
 
 		MenuRegistry.appendMenuItem(MenuId.EditorContext, {

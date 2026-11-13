@@ -1,0 +1,93 @@
+diff --git a/src/vs/sessions/browser/sessionsSetUpService.ts b/src/vs/sessions/browser/sessionsSetUpService.ts
+index bec71c8e93c..9a45df705c7 100644
+--- a/src/vs/sessions/browser/sessionsSetUpService.ts
++++ b/src/vs/sessions/browser/sessionsSetUpService.ts
+@@ -42,6 +42,14 @@ import { ISessionsManagementService } from '../services/sessions/common/sessions
+ 
+ const AIDisabledConfig = 'chat.disableAIFeatures';
+ 
++/**
++ * FlowLeap: completion key of the onboarding wizard, owned by
++ * `workbench/contrib/welcomeOnboarding/common/onboardingTypes` (`ONBOARDING_STORAGE_KEY`).
++ * Read by string so this layer can skip the duplicate welcome dialog without
++ * importing a workbench contribution.
++ */
++const ONBOARDING_WIZARD_STATE_KEY = 'welcomeOnboarding.state';
++
+ export const ISessionsSetUpService = createDecorator<ISessionsSetUpService>('sessionsSetUpService');
+ 
+ export interface ISessionsSetUpService {
+@@ -163,6 +171,14 @@ class SessionsSetUpWidget extends Disposable {
+ 			return;
+ 		}
+ 
++		// FlowLeap: the default chat provider is not GitHub. Agents run on
++		// Claude-native credentials or a BYOK key, so the window has no
++		// GitHub/Copilot sign-in gate (PRD 0017 A1).
++		if (!this._usesGitHubSignIn()) {
++			void this._runWithoutGitHubGate();
++			return;
++		}
++
+ 		// Learn when the default account resolves so the conditional-auth reaction
+ 		// can tell "signed out" from "not resolved yet". On first load the account
+ 		// is populated silently (no change event fires), so awaiting it once is the
+@@ -194,6 +210,49 @@ class SessionsSetUpWidget extends Disposable {
+ 		}
+ 	}
+ 
++	private _usesGitHubSignIn(): boolean {
++		return this.productService.defaultChatAgent?.provider?.default?.id === 'github';
++	}
++
++	/**
++	 * First launch shows the welcome dialog, unless the onboarding wizard already
++	 * ran its own welcome; afterwards the window opens straight into the sessions
++	 * list. The welcome dialog is desktop-only; on web the window opens directly.
++	 */
++	private async _runWithoutGitHubGate(): Promise<void> {
++		await this._ensureAIFeaturesEnabled();
++		if (this._store.isDisposed) {
++			return;
++		}
++
++		const isFirstLaunch = !this.storageService.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.APPLICATION, false);
++		const onboardingWizardRan = this.storageService.getBoolean(ONBOARDING_WIZARD_STATE_KEY, StorageScope.APPLICATION, false);
++		if (onboardingWizardRan) {
++			this.storageService.store(WELCOME_COMPLETE_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
++			this.serviceMarkDone();
++		} else if (isFirstLaunch && !isWeb && !this.dialogRef.value) {
++			const disposables = new DisposableStore();
++			this.dialogRef.value = disposables;
++			const welcomeVisibleKey = SessionsWelcomeVisibleContext.bindTo(this.contextKeyService);
++			welcomeVisibleKey.set(true);
++			disposables.add(toDisposable(() => welcomeVisibleKey.reset()));
++			await this._showWelcomeDialog();
++			this.dialogRef.clear();
++		}
++
++		this._initialSetupFlow = false;
++		this.onCompleted();
++		this.watcherRef.value = this.configurationService.onDidChangeConfiguration(e => {
++			if (e.affectsConfiguration(AIDisabledConfig)) {
++				if (this.configurationService.getValue<boolean>(AIDisabledConfig)) {
++					this._showAIDisabledDialog();
++				} else {
++					this.dialogRef.clear();
++				}
++			}
++		});
++	}
++
+ 	private async _checkWebAuth(): Promise<void> {
+ 		try {
+ 			const sessions = await this.authenticationService.getSessions('github');
+@@ -570,7 +629,7 @@ class SessionsSetUpWidget extends Disposable {
+ 				alignment: DialogContentsAlignment.Vertical,
+ 				cancelId: 1,
+ 				disableCloseButton: true,
+-				renderFooter: footer => footer.appendChild(this._createWelcomeFooter(disposables)),
++				renderFooter: this._usesGitHubSignIn() ? footer => footer.appendChild(this._createWelcomeFooter(disposables)) : undefined,
+ 			}, this.keybindingService, this.layoutService, this.hostService)
+ 		));
+ 

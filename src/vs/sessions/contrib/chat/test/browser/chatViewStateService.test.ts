@@ -7,7 +7,7 @@ import assert from 'assert';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT } from '../../../../../workbench/contrib/chat/browser/chat.js';
-import { SessionsChatViewStateService } from '../../browser/chatViewStateService.js';
+import { SessionsChatViewStateService } from '../../../../../workbench/contrib/sessions/browser/chat/chatViewStateService.js';
 
 suite('Sessions - Chat ViewState', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

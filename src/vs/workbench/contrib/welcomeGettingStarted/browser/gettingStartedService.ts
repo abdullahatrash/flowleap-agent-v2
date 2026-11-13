@@ -38,7 +38,6 @@ import { IWorkbenchLayoutService, Parts } from '../../../services/layout/browser
 import { extensionDefaultIcon } from '../../../services/extensionManagement/common/extensionsIcons.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { GettingStartedInput } from './gettingStartedInput.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 export const HasMultipleNewFileEntries = new RawContextKey<boolean>('hasMultipleNewFileEntries', false);
 
@@ -332,11 +331,8 @@ export class WalkthroughsService extends Disposable implements IWalkthroughsServ
 				new Promise<string | undefined>(resolve => setTimeout(() => resolve(walkthrough.when), 5000))
 			]);
 
-			// FlowLeap Patent IDE: extension walkthroughs do not auto-open in patent mode
-			const whenWithPatentIdeFilter = ContextKeyExpr.and(ContextKeyExpr.deserialize(override ?? walkthrough.when) ?? ContextKeyExpr.true(), PatentIdeContextKeys.Mode.toNegated()) ?? ContextKeyExpr.true();
-
 			if (this.sessionInstalledExtensions.has(extension.identifier.value.toLowerCase())
-				&& this.contextService.contextMatchesRules(whenWithPatentIdeFilter)
+				&& this.contextService.contextMatchesRules(ContextKeyExpr.deserialize(override ?? walkthrough.when) ?? ContextKeyExpr.true())
 			) {
 				this.sessionInstalledExtensions.delete(extension.identifier.value.toLowerCase());
 				if (index < sectionToOpenIndex && isNewlyInstalled) {
@@ -441,8 +437,7 @@ export class WalkthroughsService extends Disposable implements IWalkthroughsServ
 		this.storageService.store(walkthroughMetadataConfigurationKey, JSON.stringify([...this.metadata.entries()]), StorageScope.PROFILE, StorageTarget.USER);
 
 		const hadLastFoucs = await this.hostService.hadLastFocus();
-		const startupEditor = this.configurationService.getValue<string>('workbench.startupEditor');
-		if (hadLastFoucs && sectionToOpen && this.configurationService.getValue<string>('workbench.welcomePage.walkthroughs.openOnInstall') && startupEditor !== 'agentSessionsWelcomePage') {
+		if (hadLastFoucs && sectionToOpen && this.configurationService.getValue<string>('workbench.welcomePage.walkthroughs.openOnInstall')) {
 			type GettingStartedAutoOpenClassification = {
 				owner: 'lramos15';
 				comment: 'When a walkthrough is opened upon extension installation';

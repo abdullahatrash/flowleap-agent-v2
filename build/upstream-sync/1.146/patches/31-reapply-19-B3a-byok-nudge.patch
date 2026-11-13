@@ -1,0 +1,72 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/chatListRenderer.ts b/src/vs/workbench/contrib/chat/browser/widget/chatListRenderer.ts
+index 79ca3e0bcfc..65efc6d8fe5 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/chatListRenderer.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/chatListRenderer.ts
+@@ -66,7 +66,7 @@ import { getChatSessionType } from '../../common/model/chatUri.js';
+ import { getExplicitFileOrImageAttachmentSummary, IChatRequestVariableEntry, isExplicitFileOrImageVariableEntry, isPasteVariableEntry } from '../../common/attachments/chatVariableEntries.js';
+ import { getStickyScrollTargetItem, IChatChangesSummaryPart, IChatCodeCitations, IChatErrorDetailsPart, IChatReferences, IChatRendererContent, IChatRequestViewModel, IChatResponseViewModel, IChatViewModel, IChatWorkingProgress, isRequestVM, isResponseVM, IChatPendingDividerViewModel, isPendingDividerVM, IChatTurnPillsPart } from '../../common/model/chatViewModel.js';
+ import { getNWords } from '../../common/model/chatWordCounter.js';
+-import { CHAT_OPEN_AGENT_HOST_CHAT_COMMAND_ID, ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatProgressAnimation, ChatProgressVerbosity, CollapsedToolsDisplayMode, ThinkingDisplayMode } from '../../common/constants.js';
++import { CHAT_OPEN_AGENT_HOST_CHAT_COMMAND_ID, ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatProgressAnimation, ChatProgressVerbosity, CollapsedToolsDisplayMode, MANAGE_CHAT_COMMAND_ID, ThinkingDisplayMode } from '../../common/constants.js';
+ import { getConfiguredProgressAnimation } from './chatWorkingLogo.js';
+ import { formatChatRequestTimestamp, formatChatResponseDetails, formatChatResponseElapsedTime } from '../../common/chatProgressFormatting.js';
+ import { ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
+@@ -4569,7 +4569,10 @@ export class ChatListItemRenderer extends Disposable implements ITreeRenderer<Ch
+ 			return errorConfirmation;
+ 		} else {
+ 			const level = content.errorDetails.level ?? ChatErrorLevel.Error;
+-			return this.instantiationService.createInstance(ChatErrorContentPart, level, new MarkdownString(content.errorDetails.message), content, this.chatContentMarkdownRenderer);
++			// Error text can echo model/provider output, so it must stay untrusted — except for the
++			// benign manage-models command, so a "no connected model" error can link straight to the
++			// Manage Language Models editor.
++			return this.instantiationService.createInstance(ChatErrorContentPart, level, new MarkdownString(content.errorDetails.message, { isTrusted: { enabledCommands: [MANAGE_CHAT_COMMAND_ID] } }), content, this.chatContentMarkdownRenderer);
+ 		}
+ 	}
+ 
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
+index 27de231ca99..461b34bd992 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
+@@ -53,6 +53,7 @@ import { ITelemetryService } from '../../../../../platform/telemetry/common/tele
+ import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+ import { SaveReason } from '../../../../common/editor.js';
+ import { ChatEntitlementContextKeys, IChatEntitlementService } from '../../../../services/chat/common/chatEntitlementService.js';
++import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
+ import { IEditorService } from '../../../../services/editor/common/editorService.js';
+ import { IWorkbenchLayoutService } from '../../../../services/layout/browser/layoutService.js';
+ import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
+@@ -76,7 +77,7 @@ import { IChatTodoListService } from '../../common/tools/chatTodoListService.js'
+ import { ChatRequestVariableSet, IChatRequestTranscriptContextVariableEntry, IChatRequestVariableEntry, isPastedTextArtifact, isPromptFileVariableEntry, isPromptTextVariableEntry, isWorkspaceVariableEntry, PromptFileVariableKind, toPromptFileVariableEntry } from '../../common/attachments/chatVariableEntries.js';
+ import { ChatViewModel, IChatResponseViewModel, isRequestVM, isResponseVM } from '../../common/model/chatViewModel.js';
+ import { ChatMessageRole, IChatMessage } from '../../common/languageModels.js';
+-import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, IResolvedNewChatSessionType, ThinkingDisplayMode } from '../../common/constants.js';
++import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, IResolvedNewChatSessionType, MANAGE_CHAT_COMMAND_ID, ThinkingDisplayMode } from '../../common/constants.js';
+ import { IChatGoalSummaryService } from '../chatGoalSummaryService.js';
+ import { ILanguageModelToolsService, isToolSet } from '../../common/tools/languageModelToolsService.js';
+ import { IHandOff, PromptHeader } from '../../common/promptSyntax/promptFileParser.js';
+@@ -1637,6 +1638,14 @@ export class ChatWidget extends Disposable implements IChatWidget {
+ 				if (this.chatEntitlementService.anonymous && !this.chatEntitlementService.sentiment.completed) {
+ 					const providers = product.defaultChatAgent.provider;
+ 					additionalMessage = new MarkdownString(localize({ key: 'settings', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0} Copilot, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3}).", providers.default.name, providers.default.name, product.defaultChatAgent.termsStatementUrl, product.defaultChatAgent.privacyStatementUrl), { isTrusted: true });
++				} else if (PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false && this.chatEntitlementService.clientByokEnabled && !this.chatEntitlementService.hasByokModels) {
++					// FlowLeap Patent IDE is BYOK-only: with no model connected a chat turn cannot run,
++					// so the empty state must carry the one-click path to the Manage Language Models editor.
++					additionalMessage = new MarkdownString(localize(
++						'chatWidget.connectModel',
++						"No AI model connected yet. [Add your AI model]({0}) with your own API key to start chatting.",
++						`command:${MANAGE_CHAT_COMMAND_ID}`
++					), { isTrusted: { enabledCommands: [MANAGE_CHAT_COMMAND_ID] } });
+ 				} else {
+ 					additionalMessage = defaultAgent?.metadata.additionalWelcomeMessage;
+ 				}
+@@ -2730,7 +2739,9 @@ export class ChatWidget extends Disposable implements IChatWidget {
+ 				this.renderGettingStartedTipIfNeeded();
+ 			}
+ 			if (e.affectsSome(hasByokModelsContextKeys)) {
+-				this.updateChatViewVisibility();
++				// Also refreshes the welcome content: the empty-state "add your AI model" nudge
++				// must appear/disappear as the key flips (this ends in updateChatViewVisibility).
++				this.renderWelcomeViewContentIfNeeded();
+ 			}
+ 		}));
+ 		let previousModelIdentifier: string | undefined;

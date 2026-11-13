@@ -1,0 +1,1351 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/actions/chatActions.ts b/src/vs/workbench/contrib/chat/browser/actions/chatActions.ts
+index 7b9e3b0b3c5..ca13fcbb19f 100644
+--- a/src/vs/workbench/contrib/chat/browser/actions/chatActions.ts
++++ b/src/vs/workbench/contrib/chat/browser/actions/chatActions.ts
+@@ -1176,7 +1176,7 @@ export function registerChatActions() {
+ 		constructor() {
+ 			super({
+ 				id: 'workbench.action.chat.manageSettings',
+-				title: localize2('manageChat', "Manage Copilot Settings"),
++				title: localize2('manageChat', "Manage FlowLeap Settings"),
+ 				category: CHAT_CATEGORY,
+ 				f1: true,
+ 				precondition: ContextKeyExpr.and(
+@@ -1214,7 +1214,7 @@ export function registerChatActions() {
+ 		constructor() {
+ 			super({
+ 				id: 'workbench.action.chat.showExtensionsUsingCopilot',
+-				title: localize2('showCopilotUsageExtensions', "Show Extensions using Copilot"),
++				title: localize2('showCopilotUsageExtensions', "Show Extensions using FlowLeap"),
+ 				f1: true,
+ 				category: EXTENSIONS_CATEGORY,
+ 				precondition: ChatContextKeys.enabled
+@@ -1257,7 +1257,7 @@ export function registerChatActions() {
+ 		constructor() {
+ 			super({
+ 				id: OPEN_CHAT_QUOTA_EXCEEDED_DIALOG,
+-				title: localize('upgradeChat', "Upgrade GitHub Copilot Plan")
++				title: localize('upgradeChat', "Upgrade FlowLeap Plan")
+ 			});
+ 		}
+ 
+@@ -1285,18 +1285,18 @@ export function registerChatActions() {
+ 			}
+ 
+ 			const free = chatEntitlementService.entitlement === ChatEntitlement.Free;
+-			const upgradeToPro = free ? localize('upgradeToPro', "Upgrade to GitHub Copilot Pro for:\n- Unlimited inline suggestions\n- Unlimited chat messages\n- Access to premium models") : undefined;
++			const upgradeToPro = free ? localize('upgradeToPro', "Upgrade to FlowLeap Pro for:\n- Unlimited inline suggestions\n- Unlimited chat messages\n- Access to premium models") : undefined;
+ 
+ 			await dialogService.prompt({
+ 				type: 'none',
+-				message: localize('copilotQuotaReached', "GitHub Copilot Quota Reached"),
++				message: localize('copilotQuotaReached', "FlowLeap Quota Reached"),
+ 				cancelButton: {
+ 					label: localize('dismiss', "Dismiss"),
+ 					run: () => { /* noop */ }
+ 				},
+ 				buttons: [
+ 					{
+-						label: free ? localize('upgradePro', "Upgrade to GitHub Copilot Pro") : localize('upgradePlan', "Upgrade GitHub Copilot Plan"),
++						label: free ? localize('upgradePro', "Upgrade to FlowLeap Pro") : localize('upgradePlan', "Upgrade FlowLeap Plan"),
+ 						run: () => {
+ 							const commandId = 'workbench.action.chat.upgradePlan';
+ 							telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: commandId, from: 'chat-dialog' });
+diff --git a/src/vs/workbench/contrib/chat/browser/agentSessions/agentSessions.ts b/src/vs/workbench/contrib/chat/browser/agentSessions/agentSessions.ts
+index 025edcf177a..c7b30ce8d2e 100644
+--- a/src/vs/workbench/contrib/chat/browser/agentSessions/agentSessions.ts
++++ b/src/vs/workbench/contrib/chat/browser/agentSessions/agentSessions.ts
+@@ -61,7 +61,7 @@ export function getAgentSessionProviderName(provider: AgentSessionTarget): strin
+ 		case AgentSessionProviders.Local:
+ 			return localize('chat.session.providerLabel.local', "Local");
+ 		case AgentSessionProviders.Background:
+-			return localize('chat.session.providerLabel.background', "Copilot CLI");
++			return localize('chat.session.providerLabel.background', "CLI Agent");
+ 		case AgentSessionProviders.Cloud:
+ 			return localize('chat.session.providerLabel.cloud', "Cloud");
+ 		case AgentSessionProviders.AgentHostClaude:
+@@ -176,17 +176,17 @@ export function getAgentSessionProviderDescription(provider: AgentSessionTarget)
+ 		case AgentSessionProviders.Local:
+ 			return localize('chat.session.providerDescription.local', "Run tasks within VS Code chat. The agent iterates via chat and works interactively to implement changes on your main workspace.");
+ 		case AgentSessionProviders.Background:
+-			return localize('chat.session.providerDescription.background', "Delegate tasks to a background agent running locally on your machine. The agent iterates via chat and works asynchronously in a Git worktree to implement changes isolated from your main workspace using the GitHub Copilot CLI.");
++			return localize('chat.session.providerDescription.background', "Delegate tasks to a background agent running locally on your machine. The agent iterates via chat and works asynchronously in a Git worktree to implement changes isolated from your main workspace using the CLI Agent.");
+ 		case AgentSessionProviders.Cloud:
+-			return localize('chat.session.providerDescription.cloud', "Delegate tasks to the GitHub Copilot coding agent. The agent iterates via chat and works asynchronously in the cloud to implement changes and pull requests as needed.");
++			return localize('chat.session.providerDescription.cloud', "Delegate tasks to the cloud coding agent. The agent iterates via chat and works asynchronously in the cloud to implement changes and pull requests as needed.");
+ 		case AgentSessionProviders.AgentHostClaude:
+-			return localize('chat.session.providerDescription.claude', "Delegate tasks to the Claude Agent SDK using the Claude models included in your GitHub Copilot subscription. The agent iterates via chat and works interactively to implement changes on your main workspace.");
++			return localize('chat.session.providerDescription.claude', "Delegate tasks to the Claude Agent SDK using your configured Claude models. The agent iterates via chat and works interactively to implement changes on your main workspace.");
+ 		case AgentSessionProviders.Codex:
+ 			return localize('chat.session.providerDescription.codex', "Open a new Codex session using the Codex extension from OpenAI. Codex sessions can be managed from the chat sessions view.");
+ 		case AgentSessionProviders.AgentHostCodex:
+ 			return localize('chat.session.providerDescription.agentHostCodex', "Work with OpenAI's Codex agent using your ChatGPT or GitHub Copilot subscription.");
+ 		case AgentSessionProviders.Growth:
+-			return localize('chat.session.providerDescription.growth', "Learn about Copilot features.");
++			return localize('chat.session.providerDescription.growth', "Learn about FlowLeap features.");
+ 		case AgentSessionProviders.AgentHostCopilot:
+ 			return localize('chat.session.providerDescription.agentHostCopilot', "Run a Copilot SDK agent in the local agent host process.");
+ 		default:
+diff --git a/src/vs/workbench/contrib/chat/browser/agentSessions/sessionTypeAvailability.ts b/src/vs/workbench/contrib/chat/browser/agentSessions/sessionTypeAvailability.ts
+index ea86fe1e6db..a0c1b50fe5e 100644
+--- a/src/vs/workbench/contrib/chat/browser/agentSessions/sessionTypeAvailability.ts
++++ b/src/vs/workbench/contrib/chat/browser/agentSessions/sessionTypeAvailability.ts
+@@ -176,12 +176,12 @@ export function getSessionTypeUnavailableHover(availability: SessionTypeAvailabi
+ 	switch (availability) {
+ 		case SessionTypeAvailability.SignInRequired: {
+ 			const hover = new MarkdownString('', { isTrusted: { enabledCommands: ['workbench.action.chat.triggerSetup'] }, supportThemeIcons: true });
+-			hover.appendMarkdown(localize('chat.sessionType.signInHover', "[Sign in to GitHub Copilot](command:workbench.action.chat.triggerSetup) to use this agent."));
++			hover.appendMarkdown(localize('chat.sessionType.signInHover', "[Sign in to FlowLeap](command:workbench.action.chat.triggerSetup) to use this agent."));
+ 			return hover;
+ 		}
+ 		case SessionTypeAvailability.UpgradeRequired: {
+ 			const hover = new MarkdownString('', { isTrusted: { enabledCommands: ['workbench.action.chat.upgradePlan'] }, supportThemeIcons: true });
+-			hover.appendMarkdown(localize('chat.sessionType.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan) to use this agent."));
++			hover.appendMarkdown(localize('chat.sessionType.upgradeHover', "[Upgrade to FlowLeap Pro](command:workbench.action.chat.upgradePlan) to use this agent."));
+ 			return hover;
+ 		}
+ 		case SessionTypeAvailability.NoModels:
+@@ -200,7 +200,7 @@ export function getSessionTypeUnavailableLabel(availability: SessionTypeAvailabi
+ 		case SessionTypeAvailability.SignInRequired:
+ 			return localize('chat.sessionType.signInMobile', "Requires sign in");
+ 		case SessionTypeAvailability.UpgradeRequired:
+-			return localize('chat.sessionType.upgradeMobile', "Requires GitHub Copilot Pro");
++			return localize('chat.sessionType.upgradeMobile', "Requires FlowLeap Pro");
+ 		case SessionTypeAvailability.NoModels:
+ 			return localize('chat.sessionType.noModels', "No models available");
+ 		default:
+diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationListWidget.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationListWidget.ts
+index e6cabe86c9e..4fa33370934 100644
+--- a/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationListWidget.ts
++++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationListWidget.ts
+@@ -1050,7 +1050,7 @@ export class AICustomizationListWidget extends Disposable {
+ 				break;
+ 			case AICustomizationManagementSection.Skills:
+ 				title = localize('skills', "Skills");
+-				description = localize('skillsDescription', "Folders of instructions, scripts, and resources that Copilot loads when relevant to perform specialized tasks.");
++				description = localize('skillsDescription', "Folders of instructions, scripts, and resources that FlowLeap loads when relevant to perform specialized tasks.");
+ 				docsUrl = 'https://code.visualstudio.com/docs/agent-customization/agent-skills?referrer=in-product';
+ 				learnMoreLabel = localize('learnMoreSkills', "Learn more about agent skills");
+ 				break;
+@@ -1708,7 +1708,7 @@ export class AICustomizationListWidget extends Disposable {
+ 			case AICustomizationManagementSection.Instructions:
+ 				return {
+ 					title: localize('noInstructions', "No instructions yet"),
+-					description: localize('createFirstInstructions', "Add instructions to teach Copilot about your codebase"),
++					description: localize('createFirstInstructions', "Add instructions to teach FlowLeap about your codebase"),
+ 				};
+ 			case AICustomizationManagementSection.Hooks:
+ 				return {
+diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/toolsListWidget.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/toolsListWidget.ts
+index de7605f8d59..26fa2322da0 100644
+--- a/src/vs/workbench/contrib/chat/browser/aiCustomization/toolsListWidget.ts
++++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/toolsListWidget.ts
+@@ -521,7 +521,7 @@ export class ToolsListWidget extends Disposable {
+ 		DOM.append(DOM.append(this._header, $('.section-title-row')), $('h2.section-title')).textContent = localize('toolsListTitle', "Tools");
+ 
+ 		const description = DOM.append(this._header, $('p.section-title-description'));
+-		DOM.append(description, $('span.section-title-description-text')).textContent = localize('toolsListSubtitle', "Enable or disable the tools available to chat. Disabled tools are not advertised to the agent. Tools other than Copilot's built-in tools run on the client and require it to be connected.");
++		DOM.append(description, $('span.section-title-description-text')).textContent = localize('toolsListSubtitle', "Enable or disable the tools available to chat. Disabled tools are not advertised to the agent. Tools other than the CLI Agent's built-in tools run on the client and require it to be connected.");
+ 		// Whitespace node so the gap collapses when the link wraps.
+ 		description.appendChild(document.createTextNode(' '));
+ 
+@@ -685,8 +685,8 @@ export class ToolsListWidget extends Disposable {
+ 			referenceName: 'copilotCli',
+ 			icon: Codicon.copilot,
+ 			source: ToolDataSource.Internal,
+-			description: localize('clientToolSet.copilotCli.description', "Copilot"),
+-			detail: localize('clientToolSet.copilotCli.detail', "Built-in tools the Copilot agent runs inside its own runtime."),
++			description: localize('clientToolSet.copilotCli.description', "CLI Agent"),
++			detail: localize('clientToolSet.copilotCli.detail', "Built-in tools the CLI Agent runs inside its own runtime."),
+ 			getTools: () => tools,
+ 		};
+ 		return [copilotCliSet];
+diff --git a/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts b/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
+index 05d339f82b9..3061fd33db5 100644
+--- a/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
++++ b/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
+@@ -784,12 +784,12 @@ configurationRegistry.registerConfiguration({
+ 				},
+ 			},
+ 			default: { mode: 'interactive', approvals: ChatDefaultPermissionLevel.Manual },
+-			markdownDescription: nls.localize('chat.defaultConfiguration.settingDescription', "Controls the default configuration for new agent sessions (such as Copilot). You can still change the mode and approval behavior per session, and each session remembers what was used."),
++			markdownDescription: nls.localize('chat.defaultConfiguration.settingDescription', "Controls the default configuration for new agent sessions (such as the CLI Agent). You can still change the mode and approval behavior per session, and each session remembers what was used."),
+ 		},
+ 		[ChatConfiguration.DefaultModel]: {
+ 			type: 'string',
+ 			default: '',
+-			markdownDescription: nls.localize('chat.defaultModel.description', "The default model for new chat conversations. Use \"auto\" to let Copilot pick a model, a model family name (such as \"opus\" or \"gemini\") to use the latest available model in that family, or a full model id. You can still switch the model within a conversation; each new conversation starts at this model."),
++			markdownDescription: nls.localize('chat.defaultModel.description', "The default model for new chat conversations. Use \"auto\" to let FlowLeap pick a model, a model family name (such as \"opus\" or \"gemini\") to use the latest available model in that family, or a full model id. You can still switch the model within a conversation; each new conversation starts at this model."),
+ 			experiment: {
+ 				mode: 'auto'
+ 			},
+@@ -835,7 +835,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[ChatConfiguration.SessionSyncEnabled]: {
+ 			default: false,
+-			markdownDescription: nls.localize('chat.sessionSync.enabled', "Enable session sync to GitHub.com. When enabled, Copilot session data is synced to your GitHub account for cross-device access and richer insights. Requires `#github.copilot.chat.localIndex.enabled#` to also be enabled."),
++			markdownDescription: nls.localize('chat.sessionSync.enabled', "Enable session sync. When enabled, FlowLeap session data is synced to your FlowLeap account for cross-device access and richer insights. Requires `#github.copilot.chat.localIndex.enabled#` to also be enabled."),
+ 			type: 'boolean',
+ 			tags: ['experimental'],
+ 			experiment: {
+@@ -849,7 +849,7 @@ configurationRegistry.registerConfiguration({
+ 				localization: {
+ 					description: {
+ 						key: 'chat.sessionSync.enabled.policy',
+-						value: nls.localize('chat.sessionSync.enabled.policy', "Enable session sync to GitHub.com for cross-device Copilot session history. When disabled by organization policy, session data is kept local only."),
++						value: nls.localize('chat.sessionSync.enabled.policy', "Enable session sync for cross-device FlowLeap session history. When disabled by organization policy, session data is kept local only."),
+ 					}
+ 				},
+ 			},
+@@ -1653,7 +1653,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[AgentHostCustomTerminalToolEnabledSettingId]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.agentHost.customTerminalTool.enabled', "When enabled, Copilot SDK sessions use the Agent Host terminal tool override instead of the SDK's default terminal behavior."),
++			description: nls.localize('chat.agentHost.customTerminalTool.enabled', "When enabled, agent SDK sessions use the Agent Host terminal tool override instead of the SDK's default terminal behavior."),
+ 			default: false,
+ 			tags: ['experimental', 'advanced'],
+ 			policy: {
+@@ -1725,7 +1725,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[AgentHostOpus48PromptEnabledSettingId]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.agentHost.opus48Prompt.enabled', "When enabled, Copilot SDK sessions running a Claude Opus 4.8 model apply Opus 4.8-tuned system-prompt section overrides on top of the default system message."),
++			description: nls.localize('chat.agentHost.opus48Prompt.enabled', "When enabled, agent SDK sessions running a Claude Opus 4.8 model apply Opus 4.8-tuned system-prompt section overrides on top of the default system message."),
+ 			default: false,
+ 			tags: ['experimental', 'advanced'],
+ 		},
+@@ -2245,7 +2245,7 @@ configurationRegistry.registerConfiguration({
+ 			title: nls.localize('chat.hookFilesLocations.title', "Hook File Locations",),
+ 			markdownDescription: nls.localize(
+ 				'chat.hookFilesLocations.description',
+-				"Specify paths to hook configuration files that define custom shell commands to execute at strategic points in an agent's workflow. [Learn More]({0}).\n\nRelative paths are resolved from the root folder(s) of your workspace. Supports Copilot hooks (`*.json`) and Claude Code hooks (`settings.json`, `settings.local.json`).\n\nThis setting is only used by the Local agent harness.",
++				"Specify paths to hook configuration files that define custom shell commands to execute at strategic points in an agent's workflow. [Learn More]({0}).\n\nRelative paths are resolved from the root folder(s) of your workspace. Supports FlowLeap hooks (`*.json`) and Claude Code hooks (`settings.json`, `settings.local.json`).\n\nThis setting is only used by the Local agent harness.",
+ 				getDocumentationUrl(PromptsType.hook),
+ 			),
+ 			default: {
+@@ -2293,7 +2293,7 @@ configurationRegistry.registerConfiguration({
+ 		[PromptsConfig.USE_CLAUDE_HOOKS]: {
+ 			type: 'boolean',
+ 			title: nls.localize('chat.useClaudeHooks.title', "Use Claude Hooks",),
+-			markdownDescription: nls.localize('chat.useClaudeHooks.description', "Controls whether hooks from Claude configuration files can execute. When disabled, only Copilot-format hooks are used. Hooks are loaded from the files configured in `#chat.hookFilesLocations#`. This setting is only used by the Local agent harness.",),
++			markdownDescription: nls.localize('chat.useClaudeHooks.description', "Controls whether hooks from Claude configuration files can execute. When disabled, only FlowLeap-format hooks are used. Hooks are loaded from the files configured in `#chat.hookFilesLocations#`. This setting is only used by the Local agent harness.",),
+ 			default: false,
+ 			restricted: true,
+ 			disallowConfigurationDefault: true,
+@@ -2418,13 +2418,13 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[ChatAIDisabledSettingId]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.disableAIFeatures', "Disable and hide built-in AI features provided by GitHub Copilot, including chat and inline suggestions."),
++			description: nls.localize('chat.disableAIFeatures', "Disable and hide built-in AI features provided by FlowLeap, including chat and inline suggestions."),
+ 			default: false,
+ 			scope: ConfigurationScope.WINDOW,
+ 		},
+ 		[ChatConfiguration.TitleBarSignInEnabled]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.titleBar.signIn.enabled', "Controls whether the Copilot Sign In button is shown in the title bar when signed out. When disabled, the Sign In affordance falls back to the status bar."),
++			description: nls.localize('chat.titleBar.signIn.enabled', "Controls whether the FlowLeap Sign In button is shown in the title bar when signed out. When disabled, the Sign In affordance falls back to the status bar."),
+ 			default: true,
+ 		},
+ 		[ChatConfiguration.WelcomePageSignInEnabled]: {
+@@ -2450,7 +2450,7 @@ configurationRegistry.registerConfiguration({
+ 		'chat.approvedAccountOrganizations': {
+ 			type: 'array',
+ 			items: { type: 'string' },
+-			description: nls.localize('chat.approvedAccountOrganizations', "List of GitHub organization logins whose members are permitted to use AI features. When set to a non-empty list, AI features are disabled until the user signs into a GitHub account that belongs to one of the specified organizations and account-level policy data has been resolved. Set to '*' to allow any authenticated GitHub or GitHub Enterprise account."),
++			description: nls.localize('chat.approvedAccountOrganizations', "List of organization logins whose members are permitted to use AI features. When set to a non-empty list, AI features are disabled until the user signs into an account that belongs to one of the specified organizations and account-level policy data has been resolved. Set to '*' to allow any authenticated account."),
+ 			default: [],
+ 			included: false,
+ 			policy: {
+@@ -2460,7 +2460,7 @@ configurationRegistry.registerConfiguration({
+ 				localization: {
+ 					description: {
+ 						key: 'chat.approvedAccountOrganizations.policy.description',
+-						value: nls.localize('chat.approvedAccountOrganizations.policy.description', "Setting this policy to a non-empty list activates the Approved Account gate: all AI features are disabled until the user signs into a GitHub account whose organizations intersect this list AND the account-side policy data has resolved. Comparison is case-insensitive. Use '*' as a wildcard to accept any signed-in GitHub or GHE account (use this for GHE deployments where the organization list is not surfaced).")
++						value: nls.localize('chat.approvedAccountOrganizations.policy.description', "Setting this policy to a non-empty list activates the Approved Account gate: all AI features are disabled until the user signs into an account whose organizations intersect this list AND the account-side policy data has resolved. Comparison is case-insensitive. Use '*' as a wildcard to accept any signed-in account (use this for deployments where the organization list is not surfaced).")
+ 					}
+ 				}
+ 			}
+@@ -2477,7 +2477,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[ChatConfiguration.GrowthNotificationEnabled]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.growthNotification', "Controls whether to show a growth notification in the agent sessions view to encourage new users to try Copilot."),
++			description: nls.localize('chat.growthNotification', "Controls whether to show a growth notification in the agent sessions view to encourage new users to try FlowLeap."),
+ 			default: false,
+ 			tags: ['experimental'],
+ 			experiment: {
+@@ -2512,7 +2512,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		'chat.extensionUnification.enabled': {
+ 			type: 'boolean',
+-			description: nls.localize('chat.extensionUnification.enabled', "Enables the unification of GitHub Copilot extensions. When enabled, all GitHub Copilot functionality is served from the GitHub Copilot Chat extension. When disabled, the GitHub Copilot and GitHub Copilot Chat extensions operate independently."),
++			description: nls.localize('chat.extensionUnification.enabled', "Enables the unification of FlowLeap extensions. When enabled, all FlowLeap functionality is served from the FlowLeap Chat extension. When disabled, the FlowLeap and FlowLeap Chat extensions operate independently."),
+ 			default: true,
+ 			tags: ['experimental'],
+ 			experiment: {
+@@ -2562,7 +2562,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[ChatConfiguration.CollectInstructionsInExtension]: {
+ 			type: 'boolean',
+-			description: nls.localize('chat.experimental.collectInstructionsInExtension', "When enabled, automatic instruction collection (.instructions.md, agent instructions, customizations index) is performed by the GitHub Copilot Chat extension instead of the core workbench."),
++			description: nls.localize('chat.experimental.collectInstructionsInExtension', "When enabled, automatic instruction collection (.instructions.md, agent instructions, customizations index) is performed by the FlowLeap Chat extension instead of the core workbench."),
+ 			default: false,
+ 			tags: ['experimental'],
+ 		},
+diff --git a/src/vs/workbench/contrib/chat/browser/chatDebug/chatDebugHomeView.ts b/src/vs/workbench/contrib/chat/browser/chatDebug/chatDebugHomeView.ts
+index 6198a050139..9471bfe9049 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatDebug/chatDebugHomeView.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatDebug/chatDebugHomeView.ts
+@@ -189,7 +189,7 @@ export class ChatDebugHomeView extends Disposable {
+ 				} else if (getChatSessionType(sessionResource) === 'copilotcli') {
+ 					const pathId = sessionResource.path.replace(/^\//, '').split('-')[0];
+ 					const shortId = pathId || sessionResource.authority || sessionResource.toString();
+-					sessionTitle = localize('chatDebug.copilotCliSessionWithId', "Copilot CLI: {0}", shortId);
++					sessionTitle = localize('chatDebug.copilotCliSessionWithId', "CLI Agent: {0}", shortId);
+ 				} else {
+ 					sessionTitle = localize('chatDebug.newSession', "New Chat");
+ 				}
+diff --git a/src/vs/workbench/contrib/chat/browser/chatDebug/chatDebugOverviewView.ts b/src/vs/workbench/contrib/chat/browser/chatDebug/chatDebugOverviewView.ts
+index 9dc0d0a1626..81daab7a15c 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatDebug/chatDebugOverviewView.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatDebug/chatDebugOverviewView.ts
+@@ -338,7 +338,7 @@ export class ChatDebugOverviewView extends Disposable {
+ 
+ 		if (totalCopilotUsageNanoAiu > 0) {
+ 			const aic = totalCopilotUsageNanoAiu / NANO_AIU_PER_AIC;
+-			metrics.push({ label: localize('chatDebug.metric.copilotUsage', "Copilot Usage (AIC)"), value: aicFormatter.value.format(aic) });
++			metrics.push({ label: localize('chatDebug.metric.copilotUsage', "FlowLeap Usage (AIC)"), value: aicFormatter.value.format(aic) });
+ 		}
+ 
+ 		for (const metric of metrics) {
+diff --git a/src/vs/workbench/contrib/chat/browser/chatParticipant.contribution.ts b/src/vs/workbench/contrib/chat/browser/chatParticipant.contribution.ts
+index 89200842232..834525caeda 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatParticipant.contribution.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatParticipant.contribution.ts
+@@ -380,7 +380,7 @@ export class ChatCompatibilityNotifier extends Disposable implements IWorkbenchC
+ 
+ 		this.registeredWelcomeView = true;
+ 		const showExtensionLabel = localize('showExtension', "Show Extension");
+-		const mainMessage = localize('chatFailErrorMessage', "Chat failed to load because the installed version of the Copilot Chat extension is not compatible with this version of {0}. Please ensure that the Copilot Chat extension is up to date.", this.productService.nameLong);
++		const mainMessage = localize('chatFailErrorMessage', "Chat failed to load because the installed version of the FlowLeap Chat extension is not compatible with this version of {0}. Please ensure that the FlowLeap Chat extension is up to date.", this.productService.nameLong);
+ 		const commandButton = `[${showExtensionLabel}](${createCommandUri(showExtensionsWithIdsCommandId, [this.productService.defaultChatAgent?.chatExtensionId])})`;
+ 		const versionMessage = `Copilot Chat version: ${chatExtension.version}`;
+ 		const viewsRegistry = Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry);
+diff --git a/src/vs/workbench/contrib/chat/browser/chatQuotaNotification.ts b/src/vs/workbench/contrib/chat/browser/chatQuotaNotification.ts
+index 58eb58d6aab..60cb8fdbf6c 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatQuotaNotification.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatQuotaNotification.ts
+@@ -469,7 +469,7 @@ export class ChatQuotaNotificationContribution extends Disposable implements IWo
+ 			telemetryId: 'managedPlanBlocked',
+ 			severity: ChatInputNotificationSeverity.Info,
+ 			message: localize('quota.blocked.managed.title', "Usage Blocked"),
+-			description: localize('quota.blocked.managed', "Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage."),
++			description: localize('quota.blocked.managed', "Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage."),
+ 			actions: [],
+ 			dismissible: true,
+ 			autoDismissOnMessage: true,
+diff --git a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetup.ts b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetup.ts
+index 47c0175aead..dabf1d9da7d 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetup.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetup.ts
+@@ -175,7 +175,7 @@ export async function maybeEnableAuthExtension(
+ 		logService.info(`[chat setup] auth provider extension '${defaultChat.providerExtensionId}' is disabled, re-enabling it`);
+ 		try {
+ 			await extensionsWorkbenchService.setEnablement([providerExtension], EnablementState.EnabledGlobally);
+-			await extensionsWorkbenchService.updateRunningExtensions(localize('enableAuthExtension', "Enabling GitHub Authentication"));
++			await extensionsWorkbenchService.updateRunningExtensions(localize('enableAuthExtension', "Enabling FlowLeap Authentication"));
+ 			return true;
+ 		} catch (error) {
+ 			logService.error(`[chat setup] failed to re-enable auth provider extension '${defaultChat.providerExtensionId}'`, error);
+diff --git a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts
+index 013e039c9d1..b162ae4f059 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts
+@@ -225,7 +225,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
+ 
+ 		class ChatSetupTriggerAction extends Action2 {
+ 
+-			static CHAT_SETUP_ACTION_LABEL = localize2('triggerChatSetup', "Use AI Features with Copilot for free...");
++			static CHAT_SETUP_ACTION_LABEL = localize2('triggerChatSetup', "Use AI Features with FlowLeap for free...");
+ 
+ 			constructor() {
+ 				super({
+@@ -336,7 +336,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
+ 			constructor() {
+ 				super({
+ 					id: 'workbench.action.chat.triggerSetupForceSignIn',
+-					title: localize2('forceSignIn', "Sign in to use GitHub Copilot")
++					title: localize2('forceSignIn', "Sign in to use FlowLeap")
+ 				});
+ 			}
+ 
+@@ -374,7 +374,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
+ 			constructor() {
+ 				super({
+ 					id: 'workbench.action.chat.triggerSetupFromAccounts',
+-					title: localize2('triggerChatSetupFromAccounts', "Sign in to use GitHub Copilot..."),
++					title: localize2('triggerChatSetupFromAccounts', "Sign in to use FlowLeap..."),
+ 					menu: {
+ 						id: MenuId.AccountsContext,
+ 						group: '2_copilot',
+@@ -460,7 +460,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
+ 			constructor() {
+ 				super({
+ 					id: 'workbench.action.chat.upgradePlan',
+-					title: localize2('managePlan', "Upgrade to GitHub Copilot Pro"),
++					title: localize2('managePlan', "Upgrade to FlowLeap Pro"),
+ 					category: localize2('chat.category', 'Chat'),
+ 					f1: true,
+ 					precondition: ContextKeyExpr.and(
+@@ -529,7 +529,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
+ 			constructor() {
+ 				super({
+ 					id: 'workbench.action.chat.manageAdditionalSpend',
+-					title: localize2('manageAdditionalSpend', "Manage GitHub Copilot Budget"),
++					title: localize2('manageAdditionalSpend', "Manage FlowLeap Budget"),
+ 					category: localize2('chat.category', 'Chat'),
+ 					f1: true,
+ 					precondition: ContextKeyExpr.and(
+diff --git a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupGrowthSession.ts b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupGrowthSession.ts
+index 1382c23832e..f436d275b2f 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupGrowthSession.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupGrowthSession.ts
+@@ -77,8 +77,8 @@ export class GrowthSessionController extends Disposable implements IChatSessionI
+ 
+ 		return [{
+ 			resource: GrowthSessionController.SESSION_URI,
+-			label: localize('growthSession.label', "Try Copilot"),
+-			description: localize('growthSession.description', "GitHub Copilot is available. Try it for free."),
++			label: localize('growthSession.label', "Try FlowLeap"),
++			description: localize('growthSession.description', "FlowLeap is available. Try it for free."),
+ 			status: ChatSessionStatus.NeedsInput,
+ 			iconPath: Codicon.lightbulb,
+ 			timing: {
+@@ -128,9 +128,9 @@ export class GrowthSessionOpenerParticipant implements ISessionOpenerParticipant
+ 			query: '',
+ 			isPartialQuery: true,
+ 			previousRequests: [{
+-				request: localize('growthSession.previousRequest', "Tell me about GitHub Copilot!"),
++				request: localize('growthSession.previousRequest', "Tell me about FlowLeap!"),
+ 				// allow-any-unicode-next-line
+-				response: localize('growthSession.previousResponse', "Welcome to GitHub Copilot, your AI coding assistant! Here are some things you can try:\n\n- 🐛 *\"Help me debug this error\"* — paste an error message and get a fix\n- 🧪 *\"Write tests for my function\"* — select code and ask for unit tests\n- 💡 *\"Explain this code\"* — highlight something unfamiliar and ask what it does\n- 🚀 *\"Scaffold a REST API\"* — describe what you want and let Agent mode build it\n- 🎨 *\"Refactor this to be more readable\"* — select messy code and clean it up\n\nType anything below to get started!"),
++				response: localize('growthSession.previousResponse', "Welcome to FlowLeap, your AI patent assistant! Here are some things you can try:\n\n- 🔍 *\"Run a prior-art search for my invention\"* — describe the invention and get relevant references\n- 📋 *\"Assess the patentability of an idea\"* — get a novelty and non-obviousness read with citations\n- ⚖️ *\"Analyze this claim against a reference\"* — paste a claim and a document for an element-by-element comparison\n- 🗺️ *\"Map the patent landscape for a technology\"* — see who is filing what in your field\n- ✍️ *\"Draft claims from my disclosure\"* — turn an invention disclosure into a first claim set\n\nType anything below to get started!"),
+ 			}],
+ 		};
+ 		await commandService.executeCommand(CHAT_OPEN_ACTION_ID, opts);
+diff --git a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupProviders.ts b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupProviders.ts
+index 899c849dba2..693c254e303 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupProviders.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupProviders.ts
+@@ -175,7 +175,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
+ 		return { agent, disposable: disposables };
+ 	}
+ 
+-	private static readonly SETUP_NEEDED_MESSAGE = new MarkdownString(localize('settingUpCopilotNeeded', "You need to set up GitHub Copilot and be signed in to use Chat."));
++	private static readonly SETUP_NEEDED_MESSAGE = new MarkdownString(localize('settingUpCopilotNeeded', "You need to set up FlowLeap and be signed in to use Chat."));
+ 	private static readonly TRUST_NEEDED_MESSAGE = new MarkdownString(localize('trustNeeded', "You need to trust this workspace to use Chat."));
+ 
+ 	private static readonly CHAT_RETRY_COMMAND_ID = 'workbench.action.chat.retrySetup';
+diff --git a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupRunner.ts b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupRunner.ts
+index 075980b88a1..ce546db9da7 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupRunner.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupRunner.ts
+@@ -303,7 +303,7 @@ export function getChatSetupDialogFooter(
+ 		return localize({ key: 'settingsWithoutLink', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}', '{Locked="]({4})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}). {3} Copilot may show [public code]({4}) suggestions and use your data to improve the product. You can change these settings anytime.", content.providerName, content.termsStatementUrl, content.privacyStatementUrl, content.providerName, content.publicCodeMatchesUrl);
+ 	}
+ 
+-	return localize({ key: 'settings', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}', '{Locked="]({4})"}', '{Locked="]({5})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}). {3} Copilot may show [public code]({4}) suggestions and use your data to improve the product. You can change these [settings]({5}) anytime.", content.providerName, content.termsStatementUrl, content.privacyStatementUrl, content.providerName, content.publicCodeMatchesUrl, settingsUrl);
++	return localize({ key: 'settings', comment: ['{Locked="["}', '{Locked="]({1})"}', '{Locked="]({2})"}', '{Locked="]({4})"}', '{Locked="]({5})"}'] }, "By continuing, you agree to {0}'s [Terms]({1}) and [Privacy Statement]({2}). {3} may show [public code]({4}) suggestions and use your data to improve the product. You can change these [settings]({5}) anytime.", content.providerName, content.termsStatementUrl, content.privacyStatementUrl, content.providerName, content.publicCodeMatchesUrl, settingsUrl);
+ }
+ 
+ export class ChatSetup {
+@@ -550,7 +550,7 @@ export class ChatSetup {
+ 		}
+ 
+ 		if (this.context.state.entitlement === ChatEntitlement.Unknown || options?.forceSignInDialog) {
+-			return localize('signIn', "Sign in to use GitHub Copilot");
++			return localize('signIn', "Sign in to use FlowLeap");
+ 		}
+ 
+ 		return localize('startUsing', "Start using AI Features");
+diff --git a/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts b/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts
+index ebe916fe9b6..647127f80d7 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts
+@@ -172,8 +172,8 @@ export class ChatStatusDashboard extends DomWidget {
+ 			const headerHost = this.options?.titleHeaderContainer ?? this.element;
+ 			const header = this.renderHeader(headerHost, this._store, planName, toAction({
+ 				id: 'workbench.action.manageCopilot',
+-				label: localize('quotaLabel', "Manage Copilot Settings"),
+-				tooltip: localize('quotaTooltip', "Manage Copilot Settings"),
++				label: localize('quotaLabel', "Manage FlowLeap Settings"),
++				tooltip: localize('quotaTooltip', "Manage FlowLeap Settings"),
+ 				class: ThemeIcon.asClassName(Codicon.settings),
+ 				run: () => this.runCommandAndClose(() => this.openGitHubUrl(GitHubPaths.copilotSettings)),
+ 			}));
+@@ -596,16 +596,16 @@ export class ChatStatusDashboard extends DomWidget {
+ 		let descriptionText: string | MarkdownString;
+ 		let descriptionClass = '.description';
+ 		if (newUser && anonymousUser) {
+-			descriptionText = new MarkdownString(localize({ key: 'activeDescriptionAnonymous', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0} Copilot, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3})", defaultChat.provider.default.name, defaultChat.provider.default.name, defaultChat.termsStatementUrl, defaultChat.privacyStatementUrl), { isTrusted: true });
++			descriptionText = new MarkdownString(localize({ key: 'activeDescriptionAnonymous', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0}, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3})", defaultChat.provider.default.name, defaultChat.provider.default.name, defaultChat.termsStatementUrl, defaultChat.privacyStatementUrl), { isTrusted: true });
+ 			descriptionClass = `${descriptionClass}.terms`;
+ 		} else if (newUser) {
+-			descriptionText = localize('activateDescription', "Set up Copilot to use AI features.");
++			descriptionText = localize('activateDescription', "Set up FlowLeap to use AI features.");
+ 		} else if (anonymousUser) {
+-			descriptionText = localize('enableMoreDescription', "Sign in to enable more Copilot AI features.");
++			descriptionText = localize('enableMoreDescription', "Sign in to enable more FlowLeap AI features.");
+ 		} else if (disabled) {
+-			descriptionText = localize('enableDescription', "Enable Copilot to use AI features.");
++			descriptionText = localize('enableDescription', "Enable FlowLeap to use AI features.");
+ 		} else {
+-			descriptionText = localize('signInDescription', "Sign in to use GitHub Copilot AI features.");
++			descriptionText = localize('signInDescription', "Sign in to use FlowLeap AI features.");
+ 		}
+ 
+ 		let buttonLabel: string;
+@@ -616,7 +616,7 @@ export class ChatStatusDashboard extends DomWidget {
+ 		} else if (disabled) {
+ 			buttonLabel = localize('enableCopilotButton', "Enable AI Features");
+ 		} else {
+-			buttonLabel = localize('signInToUseAIFeatures', "Sign in to use GitHub Copilot");
++			buttonLabel = localize('signInToUseAIFeatures', "Sign in to use FlowLeap");
+ 		}
+ 
+ 		let commandId: string;
+@@ -932,13 +932,13 @@ export class ChatStatusDashboard extends DomWidget {
+ 				quotaCallout.style.display = '';
+ 				quotaCallout.className = 'quota-callout info';
+ 				calloutIcon.className = `callout-icon ${ThemeIcon.asClassName(Codicon.info)}`;
+-				calloutText.textContent = localize('quotaBudgetExceededEnterprise', "Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.");
++				calloutText.textContent = localize('quotaBudgetExceededEnterprise', "Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.");
+ 			} else if (maxUsedPercentage >= 100 && additionalUsageEnabled) {
+ 				quotaCallout.style.display = '';
+ 				quotaCallout.className = 'quota-callout info';
+ 				calloutIcon.className = `callout-icon ${ThemeIcon.asClassName(Codicon.info)}`;
+ 				calloutText.textContent = isEnterpriseUser
+-					? localize('quotaAdditionalUsageActiveEnterprise', "Copilot has paused because your limits are reached. Please contact your admin to increase your limits.")
++					? localize('quotaAdditionalUsageActiveEnterprise', "FlowLeap has paused because your limits are reached. Please contact your admin to increase your limits.")
+ 					: isUsageBasedBilling
+ 						? localize('quotaAdditionalUsageActive', "Additional budget is configured. Usage will continue until limits reset.")
+ 						: localize('quotaBudgetActive', "Premium request budget is configured. Usage will continue until limits reset.");
+@@ -947,7 +947,7 @@ export class ChatStatusDashboard extends DomWidget {
+ 				quotaCallout.className = 'quota-callout info';
+ 				calloutIcon.className = `callout-icon ${ThemeIcon.asClassName(Codicon.info)}`;
+ 				calloutText.textContent = isEnterpriseUser
+-					? localize('quotaAdditionalUsageApproachingEnterprise', "Copilot will pause when your limits are reached. Please contact your admin to increase your limits.")
++					? localize('quotaAdditionalUsageApproachingEnterprise', "FlowLeap will pause when your limits are reached. Please contact your admin to increase your limits.")
+ 					: isUsageBasedBilling
+ 						? localize('quotaAdditionalUsageApproaching', "Once the limit is reached, additional budget will be used.")
+ 						: localize('quotaBudgetApproaching', "Once the limit is reached, premium request budget will be used.");
+@@ -956,15 +956,15 @@ export class ChatStatusDashboard extends DomWidget {
+ 				quotaCallout.className = 'quota-callout info';
+ 				calloutIcon.className = `callout-icon ${ThemeIcon.asClassName(Codicon.info)}`;
+ 				calloutText.textContent = isEnterpriseUser
+-					? localize('quotaPausedEnterprise', "Copilot is paused until the limit resets. Contact your administrator for more information.")
+-					: localize('quotaPaused', "Copilot is paused until the limit resets.");
++					? localize('quotaPausedEnterprise', "FlowLeap is paused until the limit resets. Contact your administrator for more information.")
++					: localize('quotaPaused', "FlowLeap is paused until the limit resets.");
+ 			} else if (maxUsedPercentage >= 75 && !additionalUsageEnabled) {
+ 				quotaCallout.style.display = '';
+ 				quotaCallout.className = 'quota-callout info';
+ 				calloutIcon.className = `callout-icon ${ThemeIcon.asClassName(Codicon.info)}`;
+ 				calloutText.textContent = isEnterpriseUser
+-					? localize('quotaWarningEnterprise', "Copilot will pause when the limit is reached. Contact your administrator for more information.")
+-					: localize('quotaWarning', "Copilot will pause when the limit is reached.");
++					? localize('quotaWarningEnterprise', "FlowLeap will pause when the limit is reached. Contact your administrator for more information.")
++					: localize('quotaWarning', "FlowLeap will pause when the limit is reached.");
+ 			} else {
+ 				quotaCallout.style.display = 'none';
+ 			}
+diff --git a/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts b/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts
+index db8fdfd5a4c..c1614ef48dd 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts
+@@ -349,7 +349,7 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
+ 
+ 	private getEntryProps(): IStatusbarEntry {
+ 		let text = '$(copilot)';
+-		let ariaLabel = localize('chatStatusAria', "Copilot status");
++		let ariaLabel = localize('chatStatusAria', "FlowLeap status");
+ 		let kind: StatusbarEntryKind | undefined;
+ 		let tooltip = this.dashboardTooltip;
+ 
+@@ -371,7 +371,7 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
+ 			// Disabled
+ 			if (this.chatEntitlementService.sentiment.disabled || this.chatEntitlementService.sentiment.untrusted) {
+ 				text = '$(copilot-unavailable)';
+-				ariaLabel = localize('copilotDisabledStatus', "Copilot disabled");
++				ariaLabel = localize('copilotDisabledStatus', "FlowLeap disabled");
+ 			}
+ 
+ 			// Signed out — keep showing Sign-in affordance even when BYOK models are present
+@@ -390,7 +390,7 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
+ 
+ 			// Copilot Resumed (limit reset after the user was previously blocked)
+ 			else if (this.quotaResumeState === 'resumed') {
+-				const resumedLabel = localize('chatResumedStatus', "Copilot Resumed");
++				const resumedLabel = localize('chatResumedStatus', "FlowLeap Resumed");
+ 				text = `$(copilot) ${resumedLabel}`;
+ 				ariaLabel = resumedLabel;
+ 				kind = 'prominent';
+@@ -420,7 +420,7 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
+ 		}
+ 
+ 		const baseResult = {
+-			name: localize('chatStatus', "Copilot Status"),
++			name: localize('chatStatus', "FlowLeap Status"),
+ 			text,
+ 			ariaLabel,
+ 			command: ToggleTooltipCommand,
+@@ -437,9 +437,9 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
+ 		const showSignInLabel = !this.isSignInTitleBarAffordanceVisible();
+ 		const signInLabel = localize('signIn', "Sign In");
+ 		return {
+-			name: localize('chatStatus', "Copilot Status"),
++			name: localize('chatStatus', "FlowLeap Status"),
+ 			text: showSignInLabel ? `$(copilot) ${signInLabel}` : '$(copilot)',
+-			ariaLabel: showSignInLabel ? signInLabel : localize('chatStatusAria', "Copilot status"),
++			ariaLabel: showSignInLabel ? signInLabel : localize('chatStatusAria', "FlowLeap status"),
+ 			command: CHAT_SETUP_ACTION_ID,
+ 			showInAllWindows: true,
+ 			kind: undefined,
+diff --git a/src/vs/workbench/contrib/chat/browser/chatTipCatalog.ts b/src/vs/workbench/contrib/chat/browser/chatTipCatalog.ts
+index 33baf35df16..44464b67f99 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatTipCatalog.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatTipCatalog.ts
+@@ -464,7 +464,7 @@ export const TIP_CATALOG: readonly ITipDefinition[] = [
+ 			return new MarkdownString(
+ 				localize(
+ 					'tip.copilotCli',
+-					"Run agents in parallel with [Copilot CLI](command:workbench.action.chat.openNewChatSessionInPlace.copilotcli?%5B%22sidebar%22%5D \"Switch to Copilot CLI\")."
++					"Run agents in parallel with [CLI Agent](command:workbench.action.chat.openNewChatSessionInPlace.copilotcli?%5B%22sidebar%22%5D \"Switch to CLI Agent\")."
+ 				)
+ 			);
+ 		},
+diff --git a/src/vs/workbench/contrib/chat/browser/promptSyntax/hookActions.ts b/src/vs/workbench/contrib/chat/browser/promptSyntax/hookActions.ts
+index 7dedb04c77d..7023cde1158 100644
+--- a/src/vs/workbench/contrib/chat/browser/promptSyntax/hookActions.ts
++++ b/src/vs/workbench/contrib/chat/browser/promptSyntax/hookActions.ts
+@@ -411,7 +411,7 @@ export async function showConfigureHooksQuickPick(
+ 
+ 						pickerItems = [];
+ 						if (shared.length > 0) {
+-							pickerItems.push({ type: 'separator', label: localize('hookSection.default', "Local/Copilot Agents") });
++							pickerItems.push({ type: 'separator', label: localize('hookSection.default', "Local/CLI Agents") });
+ 							pickerItems.push(...shared.map(makeItem));
+ 						}
+ 						if (vscodeOnly.length > 0) {
+@@ -419,7 +419,7 @@ export async function showConfigureHooksQuickPick(
+ 							pickerItems.push(...vscodeOnly.map(makeItem));
+ 						}
+ 						if (copilotOnly.length > 0) {
+-							pickerItems.push({ type: 'separator', label: localize('hookSection.copilotCliOnly', "Copilot Agents") });
++							pickerItems.push({ type: 'separator', label: localize('hookSection.copilotCliOnly', "CLI Agents") });
+ 							pickerItems.push(...copilotOnly.map(makeItem));
+ 						}
+ 					}
+diff --git a/src/vs/workbench/contrib/chat/browser/promptSyntax/promptCodingAgentActionOverlay.ts b/src/vs/workbench/contrib/chat/browser/promptSyntax/promptCodingAgentActionOverlay.ts
+index b3de9d98131..aa17f0ac3d4 100644
+--- a/src/vs/workbench/contrib/chat/browser/promptSyntax/promptCodingAgentActionOverlay.ts
++++ b/src/vs/workbench/contrib/chat/browser/promptSyntax/promptCodingAgentActionOverlay.ts
+@@ -42,7 +42,7 @@ export class PromptCodingAgentActionOverlayWidget extends Disposable implements
+ 
+ 		this._button.element.style.background = 'var(--vscode-button-background)';
+ 		this._button.element.style.color = 'var(--vscode-button-foreground)';
+-		this._button.label = localize('runWithCodingAgent.label', "{0} Delegate to Copilot coding agent", '$(cloud-upload)');
++		this._button.label = localize('runWithCodingAgent.label', "{0} Delegate to coding agent", '$(cloud-upload)');
+ 
+ 		this._register(this._button.onDidClick(async () => {
+ 			await this._execute();
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/chatContentParts/chatQuotaExceededPart.ts b/src/vs/workbench/contrib/chat/browser/widget/chatContentParts/chatQuotaExceededPart.ts
+index 7f3dab0e64b..e406ec8ee36 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/chatContentParts/chatQuotaExceededPart.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/chatContentParts/chatQuotaExceededPart.ts
+@@ -56,7 +56,7 @@ export class ChatQuotaExceededPart extends Disposable implements IChatContentPar
+ 				primaryButtonLabel = localize('manageBudget', "Manage Budget");
+ 				break;
+ 			case ChatEntitlement.Free:
+-				primaryButtonLabel = localize('upgradeToCopilotPro', "Upgrade to GitHub Copilot Pro");
++				primaryButtonLabel = localize('upgradeToCopilotPro', "Upgrade to FlowLeap Pro");
+ 				break;
+ 		}
+ 
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
+index c8780cfa59c..7781f0354cb 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
+@@ -1676,7 +1676,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
+ 				let additionalMessage: string | IMarkdownString | undefined;
+ 				if (this.chatEntitlementService.anonymous && !this.chatEntitlementService.sentiment.completed) {
+ 					const providers = product.defaultChatAgent.provider;
+-					additionalMessage = new MarkdownString(localize({ key: 'settings', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0} Copilot, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3}).", providers.default.name, providers.default.name, product.defaultChatAgent.termsStatementUrl, product.defaultChatAgent.privacyStatementUrl), { isTrusted: true });
++					additionalMessage = new MarkdownString(localize({ key: 'settings', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0}, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3}).", providers.default.name, providers.default.name, product.defaultChatAgent.termsStatementUrl, product.defaultChatAgent.privacyStatementUrl), { isTrusted: true });
+ 				} else if (this.isByokWithoutModel()) {
+ 					// FlowLeap Patent IDE is BYOK-only: with no model connected a chat turn cannot run,
+ 					// so the empty state must carry the one-click paths out. Signed out there are two
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem.ts b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem.ts
+index 5da21ce75f8..7b39350ce30 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem.ts
+@@ -192,7 +192,7 @@ export class ModelPickerActionItem extends BaseActionViewItem {
+ 			return localize('chat.modelPicker.restrictedHover', "{0} • Unavailable while in Restricted mode. Trust Workspace to enable models.", label);
+ 		}
+ 		if (this._pickerWidget.isSetupRequired()) {
+-			return localize('chat.modelPicker.setupRequiredHover', "{0} • Sign in to GitHub Copilot to choose a model.", label);
++			return localize('chat.modelPicker.setupRequiredHover', "{0} • Sign in to FlowLeap to choose a model.", label);
+ 		}
+ 		const selectedModel = this._pickerWidget.selectedModel;
+ 		const { statusIcon, tooltip } = selectedModel?.metadata || {};
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemPrimitives.ts b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemPrimitives.ts
+index fbec1514213..905425558aa 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemPrimitives.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemPrimitives.ts
+@@ -236,9 +236,9 @@ export function createUnavailableModelItem(
+ 	if (reason === 'upgrade') {
+ 		hoverContent = new MarkdownString('', { isTrusted: true, supportThemeIcons: true });
+ 		if (chatEntitlementService.entitlement === ChatEntitlement.Pro) {
+-			hoverContent.appendMarkdown(localize('chat.modelPicker.upgradeHoverProPlus', "[Upgrade to GitHub Copilot Pro+](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
++			hoverContent.appendMarkdown(localize('chat.modelPicker.upgradeHoverProPlus', "[Upgrade to FlowLeap Pro+](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
+ 		} else {
+-			hoverContent.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
++			hoverContent.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to FlowLeap Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
+ 		}
+ 	} else if (reason === 'update') {
+ 		hoverContent = getUpdateHoverContent(updateStateType);
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts
+index 2f43ab704d0..2ab996cbefd 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts
+@@ -70,19 +70,19 @@ export function buildUnavailableStateItems(options: IBuildModelPickerItemsOption
+ 	if (setupRequired) {
+ 		const enabled = !!options.actions.onRequestSetup;
+ 		const items: IActionListItem<IActionWidgetDropdownAction>[] = [
+-			{ kind: ActionListItemKind.Header, label: localize('chat.modelPicker.setupRequired', "Sign in to use Copilot") },
++			{ kind: ActionListItemKind.Header, label: localize('chat.modelPicker.setupRequired', "Sign in to use FlowLeap") },
+ 			{
+ 				item: {
+ 					id: SETUP_REQUIRED_SIGN_IN_ACTION_ID,
+ 					enabled,
+ 					checked: false,
+ 					class: undefined,
+-					tooltip: localize('chat.modelPicker.setupRequired.signInTooltip', "Sign in to GitHub Copilot to choose a model."),
+-					label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Copilot..."),
++					tooltip: localize('chat.modelPicker.setupRequired.signInTooltip', "Sign in to FlowLeap to choose a model."),
++					label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use FlowLeap..."),
+ 					run: () => options.actions.onRequestSetup?.(),
+ 				},
+ 				kind: ActionListItemKind.Action,
+-				label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Copilot..."),
++				label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use FlowLeap..."),
+ 				group: { title: '', icon: ThemeIcon.fromId(Codicon.signIn.id) },
+ 				disabled: !enabled,
+ 				hideIcon: false,
+@@ -127,7 +127,7 @@ export function buildUnavailableStateItems(options: IBuildModelPickerItemsOption
+ 	} else if (canUpgrade) {
+ 		description = new MarkdownString(localize('chat.modelPicker.upgradeLink', "[Upgrade](command:workbench.action.chat.upgradePlan \" \")"), { isTrusted: true });
+ 		hover = new MarkdownString('', { isTrusted: true, supportThemeIcons: true });
+-		hover.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
++		hover.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to FlowLeap Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
+ 	}
+ 	return [{
+ 		item: {
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerTabs.ts b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerTabs.ts
+index a3f14767310..dd97c5ec6ca 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerTabs.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerTabs.ts
+@@ -100,7 +100,7 @@ export function buildModelPickerDestinations(
+ 
+ 	const builtInVendor = languageModelsService.getVendors().find(vendor => vendor.isDefault);
+ 	const builtInVendorId = builtInVendor?.vendor ?? COPILOT_VENDOR_ID;
+-	const builtInLabel = builtInVendor?.displayName ?? localize('chat.modelPicker.builtInProvider', "GitHub Copilot");
++	const builtInLabel = builtInVendor?.displayName ?? localize('chat.modelPicker.builtInProvider', "FlowLeap");
+ 	const builtInPlaceholders = placeholders.filter(placeholder => placeholder.vendor === builtInVendorId);
+ 	const userPlaceholders = placeholders.filter(placeholder => placeholder.vendor !== builtInVendorId);
+ 
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts
+index e2d7e58d473..97f223ab5a4 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts
+@@ -842,7 +842,7 @@ export class ModelPickerWidget extends Disposable {
+ 		const ariaLabel = restrictedMode
+ 			? localize('chat.modelPicker.ariaLabelRestricted', "Models, unavailable while in Restricted mode")
+ 			: setupRequired
+-				? localize('chat.modelPicker.ariaLabelSetupRequired', "Models, sign in to use Copilot")
++				? localize('chat.modelPicker.ariaLabelSetupRequired', "Models, sign in to use FlowLeap")
+ 				: localize('chat.modelPicker.ariaLabel', "Models, {0}", modelLabel);
+ 		this._domNode.ariaLabel = ariaLabel;
+ 		this._nameButton.ariaLabel = ariaLabel;
+diff --git a/src/vs/workbench/contrib/chat/browser/widgetHosts/chatQuick.ts b/src/vs/workbench/contrib/chat/browser/widgetHosts/chatQuick.ts
+index 27d9bfcaf21..3133737e8f0 100644
+--- a/src/vs/workbench/contrib/chat/browser/widgetHosts/chatQuick.ts
++++ b/src/vs/workbench/contrib/chat/browser/widgetHosts/chatQuick.ts
+@@ -278,7 +278,7 @@ class QuickChat extends Disposable {
+ 			disclaimerElement.classList.toggle('hidden', !showDisclaimer);
+ 
+ 			if (showDisclaimer) {
+-				const renderedMarkdown = disposables.add(this.markdownRendererService.render(new MarkdownString(localize({ key: 'termsDisclaimer', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0} Copilot, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3})", product.defaultChatAgent?.provider?.default?.name ?? '', product.defaultChatAgent?.provider?.default?.name ?? '', product.defaultChatAgent?.termsStatementUrl ?? '', product.defaultChatAgent?.privacyStatementUrl ?? ''), { isTrusted: true })));
++				const renderedMarkdown = disposables.add(this.markdownRendererService.render(new MarkdownString(localize({ key: 'termsDisclaimer', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0}, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3})", product.defaultChatAgent?.provider?.default?.name ?? '', product.defaultChatAgent?.provider?.default?.name ?? '', product.defaultChatAgent?.termsStatementUrl ?? '', product.defaultChatAgent?.privacyStatementUrl ?? ''), { isTrusted: true })));
+ 				disclaimerElement.appendChild(renderedMarkdown.element);
+ 			}
+ 		}));
+diff --git a/src/vs/workbench/contrib/chat/common/actions/chatContextKeys.ts b/src/vs/workbench/contrib/chat/common/actions/chatContextKeys.ts
+index 4ba2fd786d2..ab56dc5d6c6 100644
+--- a/src/vs/workbench/contrib/chat/common/actions/chatContextKeys.ts
++++ b/src/vs/workbench/contrib/chat/common/actions/chatContextKeys.ts
+@@ -119,7 +119,7 @@ export namespace ChatContextKeys {
+ 	export const chatEditingCanUndo = new RawContextKey<boolean>('chatEditingCanUndo', false, { type: 'boolean', description: localize('chatEditingCanUndo', "True when it is possible to undo an interaction in the editing panel.") });
+ 	export const chatEditingCanRedo = new RawContextKey<boolean>('chatEditingCanRedo', false, { type: 'boolean', description: localize('chatEditingCanRedo', "True when it is possible to redo an interaction in the editing panel.") });
+ 	export const languageModelsAreUserSelectable = new RawContextKey<boolean>('chatModelsAreUserSelectable', false, { type: 'boolean', description: localize('chatModelsAreUserSelectable', "True when the chat model can be selected manually by the user.") });
+-	export const nonCopilotLanguageModelsAreUserSelectable = new RawContextKey<boolean>('chatNonCopilotModelsAreUserSelectable', false, { type: 'boolean', description: localize('chatNonCopilotModelsAreUserSelectable', "True when a user-selectable chat model from a non-Copilot vendor is available.") });
++	export const nonCopilotLanguageModelsAreUserSelectable = new RawContextKey<boolean>('chatNonCopilotModelsAreUserSelectable', false, { type: 'boolean', description: localize('chatNonCopilotModelsAreUserSelectable', "True when a user-selectable chat model from a non-FlowLeap vendor is available.") });
+ 	export const chatSessionHasModels = new RawContextKey<boolean>('chatSessionHasModels', false, { type: 'boolean', description: localize('chatSessionHasModels', "True when the chat is in a contributed chat session that has available 'models' to display.") });
+ 	export const chatSessionOptionsValid = new RawContextKey<boolean>('chatSessionOptionsValid', true, { type: 'boolean', description: localize('chatSessionOptionsValid', "True when all selected session options exist in their respective option group items.") });
+ 	export const extensionInvalid = new RawContextKey<boolean>('chatExtensionInvalid', false, { type: 'boolean', description: localize('chatExtensionInvalid', "True when the installed chat extension is invalid and needs to be updated.") });
+diff --git a/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts b/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts
+index 5a64e91a694..bfec24670b4 100644
+--- a/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts
++++ b/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts
+@@ -196,7 +196,7 @@ function getRateLimitMessage(fetchError: IChatFetchErrorPayload, copilotPlan: st
+ 		return localize({ key: 'chatError.rateLimit.model', comment: [`{Locked=']({'}`] }, "You've hit the rate limit for this model. Please try switching to Auto or try again in {0}. [Learn More]({1})", retryAfterString, RATE_LIMIT_LEARN_MORE_URL);
+ 	}
+ 	if (code?.startsWith('integration_rate_limited')) {
+-		return localize({ key: 'chatError.rateLimit.integration', comment: [`{Locked=']({'}`] }, "Sorry, GitHub Copilot Chat is currently experiencing high demand. Please try again in {0}. [Learn More]({1})", retryAfterString, RATE_LIMIT_LEARN_MORE_URL);
++		return localize({ key: 'chatError.rateLimit.integration', comment: [`{Locked=']({'}`] }, "Sorry, FlowLeap is currently experiencing high demand. Please try again in {0}. [Learn More]({1})", retryAfterString, RATE_LIMIT_LEARN_MORE_URL);
+ 	}
+ 
+ 	if (fetchError.capiError?.code && fetchError.capiError?.message) {
+@@ -221,16 +221,16 @@ export function getQuotaMessageForPlan(copilotPlan: string | undefined, isUsageB
+ 		switch (copilotPlan) {
+ 			case 'free':
+ 				return resetDateString
+-					? localize('chatError.quota.ubb.freeDate', "You've reached your monthly credit limit. Upgrade to Copilot Pro or wait until your credits reset on {0}.", resetDateString)
+-					: localize('chatError.quota.ubb.free', "You've reached your monthly credit limit. Upgrade to Copilot Pro or wait for your credits to reset.");
++					? localize('chatError.quota.ubb.freeDate', "You've reached your monthly credit limit. Upgrade to FlowLeap Pro or wait until your credits reset on {0}.", resetDateString)
++					: localize('chatError.quota.ubb.free', "You've reached your monthly credit limit. Upgrade to FlowLeap Pro or wait for your credits to reset.");
+ 			case 'individual':
+ 				return resetDateString
+-					? localize('chatError.quota.ubb.individualDate', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro+, or wait until your credits reset on {0}.", resetDateString)
+-					: localize('chatError.quota.ubb.individual', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro+, or wait for your credits to reset.");
++					? localize('chatError.quota.ubb.individualDate', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro+, or wait until your credits reset on {0}.", resetDateString)
++					: localize('chatError.quota.ubb.individual', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro+, or wait for your credits to reset.");
+ 			case 'edu':
+ 				return resetDateString
+-					? localize('chatError.quota.ubb.eduDate', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro, or wait until your credits reset on {0}.", resetDateString)
+-					: localize('chatError.quota.ubb.edu', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro, or wait for your credits to reset.");
++					? localize('chatError.quota.ubb.eduDate', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro, or wait until your credits reset on {0}.", resetDateString)
++					: localize('chatError.quota.ubb.edu', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro, or wait for your credits to reset.");
+ 			case 'individual_pro':
+ 			case 'individual_max':
+ 				return resetDateString
+@@ -239,30 +239,30 @@ export function getQuotaMessageForPlan(copilotPlan: string | undefined, isUsageB
+ 			case 'business':
+ 			case 'enterprise':
+ 				return resetDateString
+-					? localize('chatError.quota.ubb.businessDate', "You've reached your credit limit. To continue working, please contact your organization's Copilot admin or wait until your credits reset on {0}.", resetDateString)
+-					: localize('chatError.quota.ubb.business', "You've reached your credit limit. To continue working, please contact your organization's Copilot admin or wait for your credits to reset.");
++					? localize('chatError.quota.ubb.businessDate', "You've reached your credit limit. To continue working, please contact your organization's FlowLeap admin or wait until your credits reset on {0}.", resetDateString)
++					: localize('chatError.quota.ubb.business', "You've reached your credit limit. To continue working, please contact your organization's FlowLeap admin or wait for your credits to reset.");
+ 			default:
+ 				return resetDateString
+-					? localize('chatError.quota.ubb.defaultDate', "You've reached your credit limit. For additional paid credits, please reach out to your organization's Copilot admin or wait until your credits reset on {0}.", resetDateString)
+-					: localize('chatError.quota.ubb.default', "You've reached your credit limit. For additional paid credits, please reach out to your organization's Copilot admin or wait for your credits to reset.");
++					? localize('chatError.quota.ubb.defaultDate', "You've reached your credit limit. For additional paid credits, please reach out to your organization's FlowLeap admin or wait until your credits reset on {0}.", resetDateString)
++					: localize('chatError.quota.ubb.default', "You've reached your credit limit. For additional paid credits, please reach out to your organization's FlowLeap admin or wait for your credits to reset.");
+ 		}
+ 	}
+ 
+ 	switch (copilotPlan) {
+ 		case 'free':
+-			return localize('chatError.quota.free', "You've reached your monthly chat messages quota. Upgrade to Copilot Pro or wait for your allowance to renew.");
++			return localize('chatError.quota.free', "You've reached your monthly chat messages quota. Upgrade to FlowLeap Pro or wait for your allowance to renew.");
+ 		case 'individual':
+-			return localize('chatError.quota.individual', "You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to Copilot Pro+, or wait for your allowance to renew.");
++			return localize('chatError.quota.individual', "You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to FlowLeap Pro+, or wait for your allowance to renew.");
+ 		case 'edu':
+-			return localize('chatError.quota.edu', "You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to Copilot Pro, or wait for your allowance to renew.");
++			return localize('chatError.quota.edu', "You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to FlowLeap Pro, or wait for your allowance to renew.");
+ 		case 'individual_pro':
+ 		case 'individual_max':
+ 			return localize('chatError.quota.pro', "You've exhausted your premium model quota. Please enable additional paid premium requests or wait for your allowance to renew.");
+ 		case 'business':
+ 		case 'enterprise':
+-			return localize('chatError.quota.business', "You've exhausted your credits. To continue working, please contact your organization's Copilot admin or wait for your allowance to renew.");
++			return localize('chatError.quota.business', "You've exhausted your credits. To continue working, please contact your organization's FlowLeap admin or wait for your allowance to renew.");
+ 		default:
+-			return localize('chatError.quota.default', "You've exhausted your premium model quota. For additional paid premium requests, please reach out to your organization's Copilot admin or wait for your allowance to renew.");
++			return localize('chatError.quota.default', "You've exhausted your premium model quota. For additional paid premium requests, please reach out to your organization's FlowLeap admin or wait for your allowance to renew.");
+ 	}
+ }
+ 
+@@ -274,7 +274,7 @@ function getQuotaHitMessage(fetchError: IChatFetchErrorPayload, copilotPlan: str
+ 	if (code === 'quota_exceeded') {
+ 		return getQuotaMessageForPlan(copilotPlan, isUsageBasedBilling, quotaResetDate);
+ 	} else if (code === 'overage_limit_reached') {
+-		return localize({ key: 'chatError.quota.overage', comment: [`{Locked=']({'}`] }, "You cannot accrue additional premium requests at this time. Please contact [GitHub Support]({0}) to continue using Copilot.", GITHUB_SUPPORT_URL);
++		return localize({ key: 'chatError.quota.overage', comment: [`{Locked=']({'}`] }, "You cannot accrue additional premium requests at this time. Please contact [GitHub Support]({0}) to continue using FlowLeap.", GITHUB_SUPPORT_URL);
+ 	} else if (code === 'additional_spend_limit_reached') {
+ 		return localize('chatError.quota.additionalSpend', "You've reached your additional usage limit for your plan. Upgrade your plan to keep going.");
+ 	} else if (code === 'billing_not_configured' && fetchError.capiError?.message) {
+diff --git a/src/vs/workbench/contrib/chat/common/languageModelStats.ts b/src/vs/workbench/contrib/chat/common/languageModelStats.ts
+index 960462e4a25..a25ae151526 100644
+--- a/src/vs/workbench/contrib/chat/common/languageModelStats.ts
++++ b/src/vs/workbench/contrib/chat/common/languageModelStats.ts
+@@ -46,7 +46,7 @@ export class LanguageModelStatsService extends Disposable implements ILanguageMo
+ export const CopilotUsageExtensionFeatureId = 'copilot';
+ Registry.as<IExtensionFeaturesRegistry>(Extensions.ExtensionFeaturesRegistry).registerExtensionFeature({
+ 	id: CopilotUsageExtensionFeatureId,
+-	label: localize('Language Models', "Copilot"),
++	label: localize('Language Models', "Language Models"),
+ 	description: localize('languageModels', "Language models usage statistics of this extension."),
+ 	icon: Codicon.copilot,
+ 	access: {
+diff --git a/src/vs/workbench/contrib/chat/common/languageModels.ts b/src/vs/workbench/contrib/chat/common/languageModels.ts
+index 00843fbde50..207e27e2318 100644
+--- a/src/vs/workbench/contrib/chat/common/languageModels.ts
++++ b/src/vs/workbench/contrib/chat/common/languageModels.ts
+@@ -760,7 +760,7 @@ export interface ILanguageModelsService {
+ export function getLanguageModelProviderDisplayName(languageModelsService: ILanguageModelsService, vendor: string): string {
+ 	if (vendor === 'copilotcli') {
+ 		// @vritant24: This is temporary until we have distinct vendors for Copilot CLI and Copilot Chat.
+-		return localize('chat.languageModelProvider.copilot', "Copilot");
++		return localize('chat.languageModelProvider.copilot', "CLI Agent");
+ 	}
+ 	const descriptor = languageModelsService.getVendors().find(candidate => candidate.vendor === vendor);
+ 	return descriptor?.displayName ?? vendor.charAt(0).toUpperCase() + vendor.slice(1);
+@@ -855,7 +855,7 @@ const languageModelChatProviderType = {
+ 		},
+ 		managementCommand: {
+ 			type: 'string',
+-			description: localize('vscode.extension.contributes.languageModels.managementCommand', "A command to manage the language model chat provider, e.g. 'Manage Copilot models'. This is used in the chat model picker. If not provided, a gear icon is not rendered during vendor selection."),
++			description: localize('vscode.extension.contributes.languageModels.managementCommand', "A command to manage the language model chat provider, e.g. 'Manage FlowLeap models'. This is used in the chat model picker. If not provided, a gear icon is not rendered during vendor selection."),
+ 			deprecated: true,
+ 			deprecationMessage: localize('vscode.extension.contributes.languageModels.managementCommand.deprecated', "The managementCommand property is deprecated and will be removed in a future release. Use the new configuration property instead.")
+ 		},
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptValidator.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptValidator.ts
+index 7bd5bf0b5dc..0abef0037a1 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptValidator.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptValidator.ts
+@@ -307,7 +307,7 @@ export class PromptValidator {
+ 						break;
+ 					case PromptsType.agent:
+ 						if (target === Target.GitHubCopilot) {
+-							report(toMarker(localize('promptValidator.unknownAttribute.github-agent', "Attribute '{0}' is not supported in custom GitHub Copilot agent files. Supported: {1}.", attribute.key, supportedNames.value), attribute.range, MarkerSeverity.Hint, [MarkerTag.Unnecessary]));
++							report(toMarker(localize('promptValidator.unknownAttribute.github-agent', "Attribute '{0}' is not supported in custom FlowLeap agent files. Supported: {1}.", attribute.key, supportedNames.value), attribute.range, MarkerSeverity.Hint, [MarkerTag.Unnecessary]));
+ 						} else if (target === Target.Claude) {
+ 							// ignore for now as we don't have a full list of supported attributes for claude target
+ 						} else {
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/promptTypes.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/promptTypes.ts
+index 828c51b5581..4ed0463bfa9 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/promptTypes.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/promptTypes.ts
+@@ -179,9 +179,9 @@ export function getSourceDescription(source: PromptFileSource): string | undefin
+ 		case PromptFileSource.AgentsPersonal:
+ 			return localize('source.agentsPersonal', "Global");
+ 		case PromptFileSource.GitHubWorkspace:
+-			return localize('source.githubWorkspace', "Workspace (only used by Copilot agents)");
++			return localize('source.githubWorkspace', "Workspace (only used by FlowLeap agents)");
+ 		case PromptFileSource.CopilotPersonal:
+-			return localize('source.copilotPersonal', "Global (only used by Copilot agents)");
++			return localize('source.copilotPersonal', "Global (only used by FlowLeap agents)");
+ 		case PromptFileSource.ClaudeWorkspace:
+ 			return localize('source.claudeWorkspace', "Workspace (only used by Claude agents)");
+ 		case PromptFileSource.ClaudeWorkspaceLocal:
+diff --git a/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts b/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts
+index 64109c392ae..adab30c5aa1 100644
+--- a/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts
++++ b/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts
+@@ -784,12 +784,12 @@ export class AgentsHandoffInputTipContribution extends Disposable implements IWo
+ 		// than a generic "continue in agents" upsell.
+ 		const useEmptyWorkspaceCopy = emptyWorkspaceEligible && !eligible;
+ 		const message = this._titleTreatment ?? (useEmptyWorkspaceCopy
+-			? localize('chat.agentsHandoff.tip.emptyWorkspace.message', "Copilot isn't available without an open folder")
++			? localize('chat.agentsHandoff.tip.emptyWorkspace.message', "CLI Agent isn't available without an open folder")
+ 			: localize('chat.agentsHandoff.tip.message', "Continue this session in the Agents Window"));
+ 		const description = this._descriptionTreatment ?? (useEmptyWorkspaceCopy
+-			? localize('chat.agentsHandoff.tip.emptyWorkspace.description', "Open the Agents Window to start a Copilot session.")
++			? localize('chat.agentsHandoff.tip.emptyWorkspace.description', "Open the Agents Window to start a CLI Agent session.")
+ 			: mode === AgentsHandoffTipMode.Custom
+-				? localize('chat.agentsHandoff.tip.description.copilot', "Free with your Copilot plan — get a dedicated, multi-pane view alongside your workspace.")
++				? localize('chat.agentsHandoff.tip.description.copilot', "Free with your FlowLeap plan — get a dedicated, multi-pane view alongside your workspace.")
+ 				: localize('chat.agentsHandoff.tip.description', "Get a dedicated, multi-pane view alongside your workspace."));
+ 		const actionLabel = useEmptyWorkspaceCopy
+ 			? localize('chat.agentsHandoff.tip.action', "Open in Agents Window")
+diff --git a/src/vs/workbench/contrib/chat/test/browser/chatQuotaExceededPart.test.ts b/src/vs/workbench/contrib/chat/test/browser/chatQuotaExceededPart.test.ts
+index b88f73a647d..9011d3ae1f8 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/chatQuotaExceededPart.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/chatQuotaExceededPart.test.ts
+@@ -134,7 +134,7 @@ suite('ChatQuotaExceededPart', () => {
+ 			assert.strictEqual(button.textContent, 'Manage Budget');
+ 		});
+ 
+-		test('shows "Upgrade to GitHub Copilot Pro" for Free user', () => {
++		test('shows "Upgrade to FlowLeap Pro" for Free user', () => {
+ 			const widget = createWidget(ChatEntitlement.Free, {
+ 				message: 'Quota exceeded',
+ 				isQuotaExceeded: true,
+@@ -142,7 +142,7 @@ suite('ChatQuotaExceededPart', () => {
+ 
+ 			const button = getPrimaryButton(widget);
+ 			assert.ok(button);
+-			assert.strictEqual(button.textContent, 'Upgrade to GitHub Copilot Pro');
++			assert.strictEqual(button.textContent, 'Upgrade to FlowLeap Pro');
+ 		});
+ 
+ 		test('shows "Manage Budget" for Pro user with additional_spend_limit_reached', () => {
+diff --git a/src/vs/workbench/contrib/chat/test/browser/chatQuotaNotification.test.ts b/src/vs/workbench/contrib/chat/test/browser/chatQuotaNotification.test.ts
+index 0e2d5d719dd..e4ca1c42640 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/chatQuotaNotification.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/chatQuotaNotification.test.ts
+@@ -468,7 +468,7 @@ suite('ChatQuotaNotificationContribution', () => {
+ 
+ 			assert.ok(notificationMock.getNotification());
+ 			assert.strictEqual(notificationMock.getNotification()!.message, 'Usage Blocked');
+-			assert.strictEqual(notificationMock.getNotification()!.description, 'Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.');
++			assert.strictEqual(notificationMock.getNotification()!.description, 'Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.');
+ 			assert.strictEqual(notificationMock.getNotification()!.actions.length, 0);
+ 		});
+ 
+@@ -480,7 +480,7 @@ suite('ChatQuotaNotificationContribution', () => {
+ 
+ 			assert.ok(notificationMock.getNotification());
+ 			assert.strictEqual(notificationMock.getNotification()!.message, 'Usage Blocked');
+-			assert.strictEqual(notificationMock.getNotification()!.description, 'Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.');
++			assert.strictEqual(notificationMock.getNotification()!.description, 'Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.');
+ 			assert.strictEqual(notificationMock.getNotification()!.actions.length, 0);
+ 		});
+ 
+diff --git a/src/vs/workbench/contrib/chat/test/browser/chatSetup/chatSetupGrowthSession.test.ts b/src/vs/workbench/contrib/chat/test/browser/chatSetup/chatSetupGrowthSession.test.ts
+index cb4e36936f8..88f465b34b0 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/chatSetup/chatSetupGrowthSession.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/chatSetup/chatSetupGrowthSession.test.ts
+@@ -61,7 +61,7 @@ suite('GrowthSessionController', () => {
+ 		const items = controller.items;
+ 		assert.strictEqual(items.length, 1);
+ 		assert.strictEqual(items[0].status, ChatSessionStatus.NeedsInput);
+-		assert.strictEqual(items[0].label, 'Try Copilot');
++		assert.strictEqual(items[0].label, 'Try FlowLeap');
+ 		assert.ok(items[0].resource.scheme === AgentSessionProviders.Growth);
+ 	});
+ 
+diff --git a/src/vs/workbench/contrib/chat/test/browser/chatStatusDashboard.test.ts b/src/vs/workbench/contrib/chat/test/browser/chatStatusDashboard.test.ts
+index c7da7c9f9b7..1fe1b4bc863 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/chatStatusDashboard.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/chatStatusDashboard.test.ts
+@@ -323,7 +323,7 @@ suite('ChatStatusDashboard', () => {
+ 				}(),
+ 			});
+ 
+-			dashboard.element.querySelector<HTMLElement>('[aria-label="Manage Copilot Settings"]')?.click();
++			dashboard.element.querySelector<HTMLElement>('[aria-label="Manage FlowLeap Settings"]')?.click();
+ 			dashboard.element.querySelector<HTMLElement>('.header-cta-button')?.click();
+ 
+ 			assert.deepStrictEqual({ opened, errors }, available ? {
+@@ -784,7 +784,7 @@ suite('ChatStatusDashboard', () => {
+ 
+ 		assert.deepStrictEqual(getIncludedLabels(dashboard.element), ['Premium Requests']);
+ 		assert.deepStrictEqual(getIncludedDescriptions(dashboard.element), ['Organization limit reached.']);
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.');
+ 	});
+ 
+ 	test('Enterprise — pooled exhausted (no overages): shows exhausted indicator and enterprise callout', () => {
+@@ -797,7 +797,7 @@ suite('ChatStatusDashboard', () => {
+ 
+ 		assert.deepStrictEqual(getIncludedLabels(dashboard.element), ['Premium Requests']);
+ 		assert.deepStrictEqual(getIncludedDescriptions(dashboard.element), ['Organization limit reached.']);
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.');
+ 	});
+ 
+ 	test('Enterprise — pooled exhausted TBB (no overages): shows Credits exhausted', () => {
+@@ -822,7 +822,7 @@ suite('ChatStatusDashboard', () => {
+ 
+ 		assert.deepStrictEqual(getIncludedLabels(dashboard.element), ['Premium Requests']);
+ 		assert.deepStrictEqual(getIncludedDescriptions(dashboard.element), ['Organization limit reached.']);
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.');
+ 	});
+ 
+ 	test('Enterprise — TBB (multi-quota): shows only Credits, not Chat messages or Inline Suggestions', () => {
+@@ -974,7 +974,7 @@ suite('ChatStatusDashboard', () => {
+ 			entitlement: ChatEntitlement.Pro,
+ 		}));
+ 
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot is paused until the limit resets.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap is paused until the limit resets.');
+ 	});
+ 
+ 	test('Callout: Free — no paused message when only inline suggestions limit is reached', () => {
+@@ -996,7 +996,7 @@ suite('ChatStatusDashboard', () => {
+ 			entitlement: ChatEntitlement.Free,
+ 		}));
+ 
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot is paused until the limit resets.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap is paused until the limit resets.');
+ 	});
+ 
+ 	test('Callout: shows budget active when quota exhausted and overage permitted but no overage used yet', () => {
+@@ -1043,7 +1043,7 @@ suite('ChatStatusDashboard', () => {
+ 			entitlement: ChatEntitlement.Pro,
+ 		}));
+ 
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot will pause when the limit is reached.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap will pause when the limit is reached.');
+ 	});
+ 
+ 	test('Callout: shows paused for enterprise when quota exhausted', () => {
+@@ -1053,7 +1053,7 @@ suite('ChatStatusDashboard', () => {
+ 			entitlement: ChatEntitlement.Enterprise,
+ 		}));
+ 
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot is paused until the limit resets. Contact your administrator for more information.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap is paused until the limit resets. Contact your administrator for more information.');
+ 	});
+ 
+ 	test('Callout: TBB — shows additional budget active when exhausted with overage permitted but no usage yet', () => {
+@@ -1086,7 +1086,7 @@ suite('ChatStatusDashboard', () => {
+ 			entitlement: ChatEntitlement.Enterprise,
+ 		}));
+ 
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot will pause when your limits are reached. Please contact your admin to increase your limits.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap will pause when your limits are reached. Please contact your admin to increase your limits.');
+ 	});
+ 
+ 	test('Callout: Business — shows org-specific wording when approaching limit with additional usage', () => {
+@@ -1097,7 +1097,7 @@ suite('ChatStatusDashboard', () => {
+ 			entitlement: ChatEntitlement.Business,
+ 		}));
+ 
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot will pause when your limits are reached. Please contact your admin to increase your limits.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap will pause when your limits are reached. Please contact your admin to increase your limits.');
+ 	});
+ 
+ 	test('Callout: Enterprise — shows org-specific wording when quota exhausted with additional usage', () => {
+@@ -1109,7 +1109,7 @@ suite('ChatStatusDashboard', () => {
+ 			entitlement: ChatEntitlement.Enterprise,
+ 		}));
+ 
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot has paused because your limits are reached. Please contact your admin to increase your limits.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap has paused because your limits are reached. Please contact your admin to increase your limits.');
+ 	});
+ 
+ 	test('Callout: Business — shows org-specific wording when quota exhausted with additional usage', () => {
+@@ -1121,7 +1121,7 @@ suite('ChatStatusDashboard', () => {
+ 			entitlement: ChatEntitlement.Business,
+ 		}));
+ 
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot has paused because your limits are reached. Please contact your admin to increase your limits.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap has paused because your limits are reached. Please contact your admin to increase your limits.');
+ 	});
+ 
+ 	// --- LIVE UPDATES ---
+@@ -1186,7 +1186,7 @@ suite('ChatStatusDashboard', () => {
+ 		};
+ 		svc.fireQuotaExceeded();
+ 
+-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot is paused until the limit resets.');
++		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap is paused until the limit resets.');
+ 	});
+ 
+ 	test('Live update: header button visibility updates when quota changes', () => {
+diff --git a/src/vs/workbench/contrib/chat/test/browser/chatStatusEntry.test.ts b/src/vs/workbench/contrib/chat/test/browser/chatStatusEntry.test.ts
+index 3e7c4d17241..eab6522a52f 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/chatStatusEntry.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/chatStatusEntry.test.ts
+@@ -339,7 +339,7 @@ suite('ChatStatusBarEntry', () => {
+ 		svc.quotas = { premiumChat: available };
+ 		svc.fireQuotaExceeded();
+ 
+-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
++		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
+ 		assert.strictEqual(persistedState(storageService), 'resumed');
+ 	});
+ 
+@@ -348,7 +348,7 @@ suite('ChatStatusBarEntry', () => {
+ 
+ 		await flushTimers();
+ 
+-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
++		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
+ 		assert.strictEqual(persistedState(storageService), 'resumed');
+ 	});
+ 
+@@ -357,14 +357,14 @@ suite('ChatStatusBarEntry', () => {
+ 
+ 		await flushTimers();
+ 
+-		assert.notStrictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
++		assert.notStrictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
+ 		assert.strictEqual(persistedState(storageService), undefined);
+ 	});
+ 
+ 	test('clears resumed when the dashboard is opened', async () => {
+ 		const { statusbar, storageService } = createEntry({ entitlement: ChatEntitlement.Free, quotas: { premiumChat: available }, persisted: 'blocked' });
+ 		await flushTimers();
+-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
++		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
+ 
+ 		// Opening the dashboard happens through the status entry tooltip element factory.
+ 		const tooltip = statusbar.current?.tooltip as { element: (token: CancellationToken) => HTMLElement };
+@@ -379,7 +379,7 @@ suite('ChatStatusBarEntry', () => {
+ 
+ 	test('resumed is overridden when the user becomes blocked again', () => {
+ 		const { svc, statusbar, storageService } = createEntry({ entitlement: ChatEntitlement.Free, quotas: { premiumChat: available }, persisted: 'resumed' });
+-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
++		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
+ 
+ 		svc.quotas = { premiumChat: exhausted };
+ 		svc.fireQuotaExceeded();
+diff --git a/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptValidator.test.ts b/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptValidator.test.ts
+index 8498b5aefb9..2ba65bbdff0 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptValidator.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptValidator.test.ts
+@@ -737,7 +737,7 @@ suite('PromptValidator', () => {
+ 			const markers = await validate(content, PromptsType.agent);
+ 			const messages = markers.map(m => m.message);
+ 			assert.deepStrictEqual(messages, [
+-				'Attribute \'handoffs\' is not supported in custom GitHub Copilot agent files. Supported: description, github, infer, mcp-servers, model, name, reasoning-effort, target, tools.',
++				'Attribute \'handoffs\' is not supported in custom FlowLeap agent files. Supported: description, github, infer, mcp-servers, model, name, reasoning-effort, target, tools.',
+ 			], 'Only handoffs is unsupported for github-copilot target, model and reasoning-effort are supported');
+ 		});
+ 
+diff --git a/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts b/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts
+index e5ca1001637..9cb5e3bdcb5 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts
+@@ -430,7 +430,7 @@ suite('buildModelPickerItems', () => {
+ 	test('setupRequired shows an explanatory header and a Sign In action instead of auto', () => {
+ 		const items = callBuild([], { setupRequired: true, showManageModelsInSetupRequired: true, onRequestSetup: () => { } });
+ 		const actions = getActionItems(items);
+-		assert.ok(items.some(i => i.kind === ActionListItemKind.Header && i.label === 'Sign in to use Copilot'));
++		assert.ok(items.some(i => i.kind === ActionListItemKind.Header && i.label === 'Sign in to use FlowLeap'));
+ 		assert.strictEqual(actions.length, 2);
+ 		assert.strictEqual(actions[0].item?.id, 'setupRequiredSignIn');
+ 		assert.strictEqual(actions[0].item?.enabled, true);
+@@ -1045,7 +1045,7 @@ suite('buildModelPickerItems', () => {
+ 		assert.strictEqual(promoted.badge, 'OpenAI Compatible');
+ 	});
+ 
+-	test('Other Models splits agent-host models into sections by their modelGroup and labels copilotcli as Copilot', () => {
++	test('Other Models splits agent-host models into sections by their modelGroup and labels copilotcli as CLI Agent', () => {
+ 		// Agent-host models all share one vendor but declare their upstream provider's
+ 		// vendor id via `modelGroup`; the picker resolves each group's display name from
+ 		// the vendor registry and renders one section per provider instead of collapsing
+@@ -1063,7 +1063,7 @@ suite('buildModelPickerItems', () => {
+ 		const items = callBuild([auto, cli, openai, hf], { languageModelsService: service });
+ 		const labelledSeparators = items.filter(i => i.kind === ActionListItemKind.Separator && i.label);
+ 		// Buckets sorted alphabetically by resolved group display name.
+-		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['Copilot', 'Hugging Face', 'OpenAI']);
++		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['CLI Agent', 'Hugging Face', 'OpenAI']);
+ 	});
+ 
+ 	test('Other Models resolves a trusted source label without a synthetic vendor descriptor', () => {
+@@ -1084,7 +1084,7 @@ suite('buildModelPickerItems', () => {
+ 		const items = callBuild([auto, cli, chatgpt], { languageModelsService: service });
+ 		const labelledSeparators = items.filter(i => i.kind === ActionListItemKind.Separator && i.label);
+ 
+-		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['ChatGPT', 'Copilot']);
++		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['ChatGPT', 'CLI Agent']);
+ 	});
+ 
+ 	test('Other Models respects the configured BYOK group name for agent-host models', () => {
+@@ -1104,7 +1104,7 @@ suite('buildModelPickerItems', () => {
+ 		const items = callBuild([auto, cli, googleWithByokIdentifier], { languageModelsService: service });
+ 		const labelledSeparators = items.filter(i => i.kind === ActionListItemKind.Separator && i.label);
+ 
+-		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['Copilot', 'GoogleBYOK']);
++		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['CLI Agent', 'GoogleBYOK']);
+ 	});
+ 
+ 	test('Other Models keeps identically named agent-host BYOK groups from different providers separate', () => {
+@@ -1541,8 +1541,8 @@ suite('buildModelPickerItems', () => {
+ 		const nextSeparatorIndex = items.findIndex((item, index) => index > pinnedSepIndex && item.kind === ActionListItemKind.Separator);
+ 		const pinnedItems = items.slice(pinnedSepIndex + 1, nextSeparatorIndex);
+ 		assert.deepStrictEqual(pinnedItems.map(item => ({ provider: item.badge, name: item.label })), [
+-			{ provider: 'Copilot', name: 'Alpha' },
+-			{ provider: 'Copilot', name: 'Zeta' },
++			{ provider: 'CLI Agent', name: 'Alpha' },
++			{ provider: 'CLI Agent', name: 'Zeta' },
+ 			{ provider: 'Open Router', name: 'Alpha' },
+ 			{ provider: 'Open Router', name: 'Zeta' },
+ 		]);
+diff --git a/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts b/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts
+index e6077def119..e178a369bd1 100644
+--- a/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts
+@@ -62,7 +62,7 @@ suite('ChatErrorMessages', () => {
+ 					copilotPlan: 'business',
+ 				},
+ 			}), { copilotPlan: 'free' });
+-			assert.strictEqual(details?.message, 'You\'ve reached your monthly chat messages quota. Upgrade to Copilot Pro or wait for your allowance to renew.');
++			assert.strictEqual(details?.message, 'You\'ve reached your monthly chat messages quota. Upgrade to FlowLeap Pro or wait for your allowance to renew.');
+ 		});
+ 
+ 		// Drift guard: the node layer (platform/agentHost/node/shared/forwardedChatError.ts)
+@@ -123,7 +123,7 @@ suite('ChatErrorMessages', () => {
+ 			const details = getChatErrorDetailsFromFetchError(fetchError, 'free');
+ 			assert.deepStrictEqual(details, {
+ 				code: 'quota_exceeded',
+-				message: 'You\'ve reached your monthly chat messages quota. Upgrade to Copilot Pro or wait for your allowance to renew.',
++				message: 'You\'ve reached your monthly chat messages quota. Upgrade to FlowLeap Pro or wait for your allowance to renew.',
+ 				isQuotaExceeded: true,
+ 			});
+ 		});
+@@ -239,7 +239,7 @@ suite('ChatErrorMessages', () => {
+ 			assert.deepStrictEqual(messages, [
+ 				'Sorry, you have exceeded the agent mode rate limit. Please switch to ask mode and try again in 30 seconds. [Learn More](https://aka.ms/github-copilot-rate-limit-error)',
+ 				'Sorry, the upstream model provider is currently experiencing high demand. Please try again in 30 seconds. [Learn More](https://aka.ms/github-copilot-rate-limit-error)',
+-				'Sorry, GitHub Copilot Chat is currently experiencing high demand. Please try again in 30 seconds. [Learn More](https://aka.ms/github-copilot-rate-limit-error)',
++				'Sorry, FlowLeap is currently experiencing high demand. Please try again in 30 seconds. [Learn More](https://aka.ms/github-copilot-rate-limit-error)',
+ 				'Sorry, your request was rate-limited. Please wait 30 seconds before trying again or consider switching to Auto. [Learn More](https://aka.ms/github-copilot-rate-limit-error)',
+ 			]);
+ 		});
+@@ -252,7 +252,7 @@ suite('ChatErrorMessages', () => {
+ 				getChatErrorDetailsFromFetchError({ type: ChatFetchResponseType.QuotaExceeded }, undefined).message,
+ 			];
+ 			assert.deepStrictEqual(messages, [
+-				'You cannot accrue additional premium requests at this time. Please contact [GitHub Support](https://support.github.com/contact) to continue using Copilot.',
++				'You cannot accrue additional premium requests at this time. Please contact [GitHub Support](https://support.github.com/contact) to continue using FlowLeap.',
+ 				'You\'ve reached your additional usage limit for your plan. Upgrade your plan to keep going.',
+ 				'set up billing',
+ 				'Quota Exceeded',
+@@ -264,13 +264,13 @@ suite('ChatErrorMessages', () => {
+ 
+ 		test('usage-based billing business plan with reset date', () => {
+ 			const message = getQuotaMessageForPlan('business', true, '2030-01-15T00:00:00.000Z');
+-			assert.ok(message.startsWith('You\'ve reached your credit limit. To continue working, please contact your organization\'s Copilot admin or wait until your credits reset on'));
++			assert.ok(message.startsWith('You\'ve reached your credit limit. To continue working, please contact your organization\'s FlowLeap admin or wait until your credits reset on'));
+ 		});
+ 
+ 		test('default plan, no usage-based billing', () => {
+ 			assert.strictEqual(
+ 				getQuotaMessageForPlan(undefined),
+-				'You\'ve exhausted your premium model quota. For additional paid premium requests, please reach out to your organization\'s Copilot admin or wait for your allowance to renew.',
++				'You\'ve exhausted your premium model quota. For additional paid premium requests, please reach out to your organization\'s FlowLeap admin or wait for your allowance to renew.',
+ 			);
+ 		});
+ 
+@@ -278,8 +278,8 @@ suite('ChatErrorMessages', () => {
+ 			assert.deepStrictEqual(
+ 				[getQuotaMessageForPlan('edu', true, '2030-01-15T00:00:00.000Z'), getQuotaMessageForPlan('edu', true)],
+ 				[
+-					`You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro, or wait until your credits reset on ${new Date('2030-01-15T00:00:00.000Z').toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.`,
+-					'You\'ve reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro, or wait for your credits to reset.',
++					`You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro, or wait until your credits reset on ${new Date('2030-01-15T00:00:00.000Z').toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.`,
++					'You\'ve reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro, or wait for your credits to reset.',
+ 				],
+ 			);
+ 		});
+@@ -287,7 +287,7 @@ suite('ChatErrorMessages', () => {
+ 		test('edu plan without usage-based billing', () => {
+ 			assert.strictEqual(
+ 				getQuotaMessageForPlan('edu'),
+-				'You\'ve exhausted your premium model quota. Please enable additional paid premium requests, upgrade to Copilot Pro, or wait for your allowance to renew.',
++				'You\'ve exhausted your premium model quota. Please enable additional paid premium requests, upgrade to FlowLeap Pro, or wait for your allowance to renew.',
+ 			);
+ 		});
+ 	});

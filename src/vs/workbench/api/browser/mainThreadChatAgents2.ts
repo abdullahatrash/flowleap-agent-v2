@@ -542,8 +542,7 @@ export class MainThreadChatAgents2 extends Disposable implements MainThreadChatA
 						completionTokens: progress.completionTokens,
 						outputBuffer: progress.outputBuffer,
 						copilotCredits: progress.copilotCredits,
-						promptTokenDetails: progress.promptTokenDetails,
-						modelTotals: progress.modelTotals
+						promptTokenDetails: progress.promptTokenDetails
 					});
 				} else {
 					// Non-subagent request with no response model: unexpected. Drop the

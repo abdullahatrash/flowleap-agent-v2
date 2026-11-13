@@ -22,7 +22,6 @@ import { getTitleBarStyle } from '../../platform/window/common/window.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { isFullscreen, onDidChangeFullscreen } from '../../base/browser/browser.js';
 import { IEditorService } from '../services/editor/common/editorService.js';
-import { PatentIdeContextKeys } from '../common/patent/patentIdeContextKeys.js';
 
 export class WorkbenchContextKeysHandler extends Disposable {
 
@@ -48,7 +47,6 @@ export class WorkbenchContextKeysHandler extends Disposable {
 	private virtualWorkspaceContext: IContextKey<string>;
 	private temporaryWorkspaceContext: IContextKey<boolean>;
 	private isSessionsWindowContext: IContextKey<boolean>;
-	private patentIdeModeContext: IContextKey<boolean>;
 	private inAutomationContext: IContextKey<boolean>;
 
 	private inZenModeContext: IContextKey<boolean>;
@@ -98,10 +96,6 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		this.temporaryWorkspaceContext = TemporaryWorkspaceContext.bindTo(this.contextKeyService);
 		this.isSessionsWindowContext = IsSessionsWindowContext.bindTo(this.contextKeyService);
 		this.isSessionsWindowContext.set(this.environmentService.isSessionsWindow);
-
-		// FlowLeap: Patent IDE mode hides developer-focused UI
-		this.patentIdeModeContext = PatentIdeContextKeys.Mode.bindTo(this.contextKeyService);
-		this.patentIdeModeContext.set(true);
 		this.updateWorkspaceContextKeys();
 
 		// Capabilities

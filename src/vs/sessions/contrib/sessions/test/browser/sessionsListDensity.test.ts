@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { SessionStatus } from '../../../../services/sessions/common/session.js';
+import { SessionStatus } from '../../../../../workbench/services/sessions/common/session.js';
 import { SessionsGrouping, SessionsList, SessionsSorting } from '../../browser/views/sessionsList.js';
 import { createListHarness, createTestSession } from './sessionsListTestUtils.js';
 

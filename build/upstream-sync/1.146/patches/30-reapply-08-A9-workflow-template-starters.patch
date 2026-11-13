@@ -1,0 +1,102 @@
+diff --git a/src/vs/sessions/contrib/chat/browser/media/chatWidget.css b/src/vs/sessions/contrib/chat/browser/media/chatWidget.css
+index 7f8034c4e58..79c068d46e7 100644
+--- a/src/vs/sessions/contrib/chat/browser/media/chatWidget.css
++++ b/src/vs/sessions/contrib/chat/browser/media/chatWidget.css
+@@ -755,3 +755,39 @@
+ .action-widget .monaco-list-row.action.sessions-browse-inline-item.focused:not(.option-disabled) .description {
+ 	visibility: visible;
+ }
++
++/* FlowLeap: patent workflow starter chips below the new-session composer input.
++ * Picking one prefills the input with the template's prompt. */
++.new-session-workflow-templates {
++	display: flex;
++	flex-wrap: wrap;
++	gap: 6px;
++	margin-top: 10px;
++}
++
++.new-session-workflow-template-chip {
++	display: inline-flex;
++	align-items: center;
++	gap: var(--vscode-spacing-size60);
++	padding: var(--vscode-spacing-size40) var(--vscode-spacing-size100);
++	border: 1px solid var(--vscode-button-border, transparent);
++	border-radius: var(--vscode-cornerRadius-xLarge);
++	background-color: var(--vscode-badge-background);
++	color: var(--vscode-badge-foreground);
++	font-size: var(--vscode-bodyFontSize-small);
++	font-family: inherit;
++	cursor: pointer;
++}
++
++.new-session-workflow-template-chip:hover {
++	background-color: var(--vscode-button-secondaryHoverBackground);
++}
++
++.new-session-workflow-template-chip:focus-visible {
++	outline: 1px solid var(--vscode-focusBorder);
++	outline-offset: 1px;
++}
++
++.new-session-workflow-template-chip .codicon {
++	font-size: var(--vscode-codiconFontSize-compact);
++}
+diff --git a/src/vs/sessions/contrib/chat/browser/newChatWidget.ts b/src/vs/sessions/contrib/chat/browser/newChatWidget.ts
+index d56d37fb433..1cedc2e9291 100644
+--- a/src/vs/sessions/contrib/chat/browser/newChatWidget.ts
++++ b/src/vs/sessions/contrib/chat/browser/newChatWidget.ts
+@@ -73,6 +73,9 @@ import { IAuthenticationService } from '../../../../workbench/services/authentic
+ import { HiddenItemStrategy, MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+ import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+ import { AccessibilityVerbositySettingId } from '../../../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
++import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
++import { IHoverService } from '../../../../platform/hover/browser/hover.js';
++import { getSessionWorkflowTemplates } from '../common/sessionWorkflowTemplates.js';
+ 
+ // #region --- New Chat Widget ---
+ 
+@@ -174,6 +177,7 @@ export class NewChatWidget extends Disposable {
+ 		@INewSessionComposerService private readonly newSessionComposerService: INewSessionComposerService,
+ 		@ICommandService private readonly commandService: ICommandService,
+ 		@INotificationService private readonly notificationService: INotificationService,
++		@IHoverService private readonly hoverService: IHoverService,
+ 	) {
+ 		super();
+ 		this._register(this._pendingPreferredUpgrade);
+@@ -603,6 +607,7 @@ export class NewChatWidget extends Disposable {
+ 
+ 		this._renderFeedbackBanner(chatWidgetContent);
+ 		this._newChatInput.render(chatWidgetContent, parent);
++		this._renderWorkflowTemplates(chatWidgetContent);
+ 		this._register(autorun(reader => {
+ 			const useExperimentalLayout = this._useExperimentalComposerLayout.read(reader);
+ 			const isQuickChat = this._isQuickChatComposer.read(reader);
+@@ -1263,6 +1268,27 @@ export class NewChatWidget extends Disposable {
+ 		}
+ 	}
+ 
++	/**
++	 * FlowLeap: renders the patent workflow starter chips below the composer
++	 * input. Picking one seeds the input with the template's prompt (editable,
++	 * not auto-sent). The resulting session is an ordinary session of the type
++	 * the picker has selected; templates add no session type.
++	 */
++	private _renderWorkflowTemplates(container: HTMLElement): void {
++		const templates = getSessionWorkflowTemplates();
++		if (templates.length === 0) {
++			return;
++		}
++		const row = dom.append(container, dom.$('.new-session-workflow-templates'));
++		for (const template of templates) {
++			const chip = dom.append(row, dom.$('button.new-session-workflow-template-chip'));
++			dom.append(chip, dom.$('span.codicon.codicon-search'));
++			dom.append(chip, dom.$('span.new-session-workflow-template-chip-label', undefined, template.label));
++			this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), chip, template.description));
++			this._register(dom.addDisposableListener(chip, dom.EventType.CLICK, () => this._newChatInput.prefillInput(template.prompt)));
++		}
++	}
++
+ 	focusWorkspacePicker(): void {
+ 		this._workspacePicker.showPicker();
+ 	}

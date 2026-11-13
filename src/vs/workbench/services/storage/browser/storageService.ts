@@ -47,6 +47,17 @@ export class BrowserStorageService extends AbstractStorageService {
 		);
 	}
 
+	override async readApplicationSharedValue(key: string): Promise<string | undefined> {
+		await this.initialize();
+		return this.applicationSharedStorageDatabase!.getValue(key);
+	}
+
+	override async compareAndSwapApplicationSharedValue(key: string, expectedValue: string | undefined, newValue: string): Promise<{ swapped: boolean; currentValue: string | undefined }> {
+		await this.initialize();
+		this.updateKeyTarget(key, StorageScope.APPLICATION_SHARED, StorageTarget.MACHINE);
+		return this.applicationSharedStorageDatabase!.compareAndSwap(key, expectedValue, newValue);
+	}
+
 	async getApplicationStorageValue(key: string): Promise<string | undefined> {
 		return (await this.applicationStoragePromise.p).indexedDb.getValue(key);
 	}
@@ -56,9 +67,9 @@ export class BrowserStorageService extends AbstractStorageService {
 	}
 
 	constructor(
-		protected readonly workspace: IAnyWorkspaceIdentifier,
+		private readonly workspace: IAnyWorkspaceIdentifier,
 		private readonly userDataProfileService: IUserDataProfileService,
-		@ILogService protected readonly logService: ILogService,
+		@ILogService private readonly logService: ILogService,
 	) {
 		super({ flushInterval: BrowserStorageService.BROWSER_DEFAULT_FLUSH_INTERVAL });
 
@@ -83,7 +94,7 @@ export class BrowserStorageService extends AbstractStorageService {
 	}
 
 	private async createApplicationStorage(): Promise<void> {
-		const applicationStorageIndexedDB = await this.createStorageDatabase(StorageScope.APPLICATION, this.profileStorageProfile);
+		const applicationStorageIndexedDB = await IndexedDBStorageDatabase.createApplicationStorage(this.logService);
 
 		this.applicationStorageDatabase = this._register(applicationStorageIndexedDB);
 		this.applicationStorage = this._register(new Storage(this.applicationStorageDatabase));
@@ -98,7 +109,7 @@ export class BrowserStorageService extends AbstractStorageService {
 	}
 
 	private async createApplicationSharedStorage(): Promise<void> {
-		const applicationSharedStorageIndexedDB = await this.createStorageDatabase(StorageScope.APPLICATION_SHARED, this.profileStorageProfile);
+		const applicationSharedStorageIndexedDB = await IndexedDBStorageDatabase.createApplicationSharedStorage(this.logService);
 
 		this.applicationSharedStorageDatabase = this._register(applicationSharedStorageIndexedDB);
 		this.applicationSharedStorage = this._register(new Storage(this.applicationSharedStorageDatabase));
@@ -132,7 +143,7 @@ export class BrowserStorageService extends AbstractStorageService {
 
 			this.profileStorageDisposables.add(this.profileStorage.onDidChangeStorage(e => this.emitDidChangeValue(StorageScope.PROFILE, e)));
 		} else {
-			const profileStorageIndexedDB = await this.createStorageDatabase(StorageScope.PROFILE, this.profileStorageProfile);
+			const profileStorageIndexedDB = await IndexedDBStorageDatabase.createProfileStorage(this.profileStorageProfile, this.logService);
 
 			this.profileStorageDatabase = this.profileStorageDisposables.add(profileStorageIndexedDB);
 			this.profileStorage = this.profileStorageDisposables.add(new Storage(this.profileStorageDatabase));
@@ -146,7 +157,7 @@ export class BrowserStorageService extends AbstractStorageService {
 	}
 
 	private async createWorkspaceStorage(): Promise<void> {
-		const workspaceStorageIndexedDB = await this.createStorageDatabase(StorageScope.WORKSPACE, this.profileStorageProfile);
+		const workspaceStorageIndexedDB = await IndexedDBStorageDatabase.createWorkspaceStorage(this.workspace.id, this.logService);
 
 		this.workspaceStorageDatabase = this._register(workspaceStorageIndexedDB);
 		this.workspaceStorage = this._register(new Storage(this.workspaceStorageDatabase));
@@ -156,23 +167,6 @@ export class BrowserStorageService extends AbstractStorageService {
 		await this.workspaceStorage.init();
 
 		this.updateIsNew(this.workspaceStorage);
-	}
-
-	/**
-	 * Creates the database behind one storage scope. The default keeps it in IndexedDB;
-	 * a Hosted Workspace keeps it on the server (`HostedStorageService`).
-	 */
-	protected createStorageDatabase(scope: StorageScope, profile: IUserDataProfile): Promise<IIndexedDBStorageDatabase> {
-		switch (scope) {
-			case StorageScope.APPLICATION:
-				return IndexedDBStorageDatabase.createApplicationStorage(this.logService);
-			case StorageScope.APPLICATION_SHARED:
-				return IndexedDBStorageDatabase.createApplicationSharedStorage(this.logService);
-			case StorageScope.PROFILE:
-				return IndexedDBStorageDatabase.createProfileStorage(profile, this.logService);
-			default:
-				return IndexedDBStorageDatabase.createWorkspaceStorage(this.workspace.id, this.logService);
-		}
 	}
 
 	private updateIsNew(storage: IStorage): void {
@@ -300,7 +294,7 @@ export class BrowserStorageService extends AbstractStorageService {
 	}
 }
 
-export interface IIndexedDBStorageDatabase extends IStorageDatabase, IDisposable {
+interface IIndexedDBStorageDatabase extends IStorageDatabase, IDisposable {
 
 	/**
 	 * Name of the database.

@@ -6,6 +6,7 @@
 import assert from 'assert';
 import * as sinon from 'sinon';
 import { CancellationToken } from '../../../../../../base/common/cancellation.js';
+import { CancellationError } from '../../../../../../base/common/errors.js';
 import { Event } from '../../../../../../base/common/event.js';
 import { Schemas } from '../../../../../../base/common/network.js';
 import { OperatingSystem } from '../../../../../../base/common/platform.js';
@@ -51,6 +52,8 @@ import { IContextKeyService } from '../../../../../../platform/contextkey/common
 import { MockContextKeyService } from '../../../../../../platform/keybinding/test/common/mockKeybindingService.js';
 import { IAgentPlugin, IAgentPluginService } from '../../../common/plugins/agentPluginService.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
+import { IChatSessionsService } from '../../../common/chatSessionsService.js';
+import { MockChatSessionsService } from '../mockChatSessionsService.js';
 
 suite('ComputeAutomaticInstructions', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
@@ -68,6 +71,7 @@ suite('ComputeAutomaticInstructions', () => {
 
 	setup(async () => {
 		instaService = disposables.add(new TestInstantiationService());
+		instaService.stub(IChatSessionsService, new MockChatSessionsService());
 		instaService.stub(ILogService, new NullLogService());
 
 		workspaceContextService = new TestContextService();
@@ -319,26 +323,6 @@ suite('ComputeAutomaticInstructions', () => {
 				assert.ok(paths.includes(`${rootFolder}/.github/copilot-instructions.md`), 'Should include copilot-instructions');
 				assert.ok(!paths.includes(`${rootFolder}/AGENTS.md`), 'Should not include AGENTS.md');
 			}
-		});
-
-		test('should always add .flowleap/instructions.md like copilot-instructions.md', async () => {
-			const rootFolder = '/flowleap-instructions-test';
-			const rootFolderUri = URI.file(rootFolder);
-			workspaceContextService.setWorkspace(testWorkspace(rootFolderUri));
-
-			await mockFiles(fileService, [
-				{ path: `${rootFolder}/.flowleap/instructions.md`, contents: ['Cite every claim element.'] },
-				{ path: `${rootFolder}/.flowleap/notes.md`, contents: ['Not an instructions file.'] },
-				{ path: `${rootFolder}/src/file.ts`, contents: ['console.log("test");'] },
-			]);
-			const contextComputer = instaService.createInstance(ComputeAutomaticInstructions, ChatModeKind.Agent, undefined, undefined, localSessionType);
-			const variables = new ChatRequestVariableSet();
-			variables.add(toFileVariableEntry(URI.joinPath(rootFolderUri, 'src/file.ts')));
-
-			await contextComputer.collect(variables, CancellationToken.None);
-
-			const paths = variables.asArray().filter(v => isPromptFileVariableEntry(v)).map(i => isPromptFileVariableEntry(i) ? i.value.path : undefined);
-			assert.deepStrictEqual(paths, [`${rootFolder}/.flowleap/instructions.md`]);
 		});
 
 		test('should not collect when settings are disabled', async () => {
@@ -1001,6 +985,7 @@ suite('ComputeAutomaticInstructions', () => {
 			assert.ok(telemetryEvent, 'Should emit telemetry event');
 			const data = telemetryEvent.data as InstructionsCollectionEvent;
 			assert.deepStrictEqual(data, {
+				provider: undefined,
 				applyingInstructionsCount: 1,
 				referencedInstructionsCount: 0,
 				agentInstructionsCount: 2,
@@ -1553,38 +1538,6 @@ suite('ComputeAutomaticInstructions', () => {
 			assert.equal(xmlContents(instructions[0], 'description')[0], 'Test instructions');
 			assert.equal(xmlContents(instructions[0], 'file')[0], getFilePath(`${rootFolder}/.github/instructions/test.instructions.md`));
 			assert.equal(xmlContents(instructions[0], 'applyTo')[0], '**/*.ts');
-		});
-
-		test('applies .flowleap/instructions files on every request with applyTo "**" and lists description-only files', async () => {
-			const rootFolder = '/flowleap-firm-instructions-test';
-			workspaceContextService.setWorkspace(testWorkspace(URI.file(rootFolder)));
-
-			await mockFiles(fileService, [
-				{
-					path: `${rootFolder}/.flowleap/instructions/prior-art-practice.instructions.md`,
-					contents: ['---', 'description: \'Firm steps for prior-art searches\'', 'applyTo: "**"', '---', 'Also search DE utility models.'],
-				},
-				{
-					path: `${rootFolder}/.flowleap/instructions/fto-practice.instructions.md`,
-					contents: ['---', 'description: \'Firm steps for FTO memos\'', '---', 'Put the client patents in a separate table.'],
-				},
-			]);
-
-			const contextComputer = instaService.createInstance(ComputeAutomaticInstructions, ChatModeKind.Agent, { 'vscode_readFile': true }, undefined, localSessionType);
-			const variables = new ChatRequestVariableSet();
-			await contextComputer.collect(variables, CancellationToken.None);
-
-			const index = variables.asArray().filter(v => isPromptTextVariableEntry(v)).map(v => v.value).join('');
-			assert.deepStrictEqual({
-				attached: variables.asArray().filter(v => isPromptFileVariableEntry(v)).map(v => isPromptFileVariableEntry(v) ? v.value.path : undefined),
-				listed: xmlContents(xmlContents(index, 'instructions')[0], 'instruction').map(i => xmlContents(i, 'file')[0]),
-			}, {
-				attached: [`${rootFolder}/.flowleap/instructions/prior-art-practice.instructions.md`],
-				listed: [
-					getFilePath(`${rootFolder}/.flowleap/instructions/prior-art-practice.instructions.md`),
-					getFilePath(`${rootFolder}/.flowleap/instructions/fto-practice.instructions.md`),
-				],
-			});
 		});
 
 		test('should escape instruction metadata that could alter the index structure', async () => {
@@ -2240,9 +2193,9 @@ suite('ComputeAutomaticInstructions', () => {
 				onCancellationRequested: Event.None
 			};
 
-			// Should handle cancellation gracefully
-			await contextComputer.collect(variables, cancelledToken);
-			assert.ok(true, 'Should handle cancellation without errors');
+			// Cancellation surfaces as an error rather than an empty result, so it
+			// can never be mistaken for "no instructions" and cached.
+			await assert.rejects(contextComputer.collect(variables, cancelledToken), CancellationError);
 		});
 	});
 

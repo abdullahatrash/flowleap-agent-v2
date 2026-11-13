@@ -170,9 +170,7 @@ export class ChatOutputRendererService extends Disposable implements IChatOutput
 		const onDidChangeHeight = store.add(new Emitter<number>());
 		store.add(autorun(reader => {
 			const height = reader.readObservable(webview.intrinsicContentSize);
-			// A height of 0 is reported while the webview is dismounted or reloading; writing it
-			// through would collapse the block and poison the persisted height cache.
-			if (height && height.height > 0) {
+			if (height) {
 				onDidChangeHeight.fire(height.height);
 				parent.style.height = `${height.height}px`;
 			}

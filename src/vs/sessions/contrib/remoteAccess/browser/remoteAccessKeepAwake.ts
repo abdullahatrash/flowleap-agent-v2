@@ -6,7 +6,7 @@
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, IObservable } from '../../../../base/common/observable.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { ISession, isActiveSessionStatus } from '../../../services/sessions/common/session.js';
+import { ISession, isActiveSessionStatus } from '../../../../workbench/services/sessions/common/session.js';
 
 /** The power-save blocker seam (main process `powerSaveBlocker` behind INativeHostService). */
 export interface IKeepAwakeBlocker {

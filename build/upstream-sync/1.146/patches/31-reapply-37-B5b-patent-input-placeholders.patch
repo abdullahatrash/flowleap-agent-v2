@@ -1,0 +1,150 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/editor/chatInputEditorContrib.ts b/src/vs/workbench/contrib/chat/browser/widget/input/editor/chatInputEditorContrib.ts
+index c8c38509f0d..2ea5cc9514c 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/input/editor/chatInputEditorContrib.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/input/editor/chatInputEditorContrib.ts
+@@ -14,6 +14,7 @@ import { EditorOption } from '../../../../../../../editor/common/config/editorOp
+ import { Position } from '../../../../../../../editor/common/core/position.js';
+ import { Range } from '../../../../../../../editor/common/core/range.js';
+ import { IDecorationOptions } from '../../../../../../../editor/common/editorCommon.js';
++import { IContextKeyService } from '../../../../../../../platform/contextkey/common/contextkey.js';
+ import { ILabelService } from '../../../../../../../platform/label/common/label.js';
+ import { IThemeService } from '../../../../../../../platform/theme/common/themeService.js';
+ import { getInputPlaceholderColor, getRangeForPlaceholder } from './chatInputPlaceholderDecoration.js';
+@@ -33,6 +34,8 @@ import { isCancellationError } from '../../../../../../../base/common/errors.js'
+ import { IEditorService } from '../../../../../../services/editor/common/editorService.js';
+ import { getChatSessionType } from '../../../../common/model/chatUri.js';
+ import { ICustomizationHarnessService } from '../../../../common/customizationHarnessService.js';
++import { ChatModeKind } from '../../../../common/constants.js';
++import { PatentIdeContextKeys } from '../../../../../../common/patent/patentIdeContextKeys.js';
+ 
+ const decorationDescription = 'chat';
+ const placeholderDecorationType = 'chat-session-detail';
+@@ -58,6 +61,28 @@ function exactlyOneSpaceAfterPart(parsedRequest: readonly IParsedChatRequestPart
+ 	return nextPart && nextPart instanceof ChatRequestTextPart && nextPart.text === ' ';
+ }
+ 
++/**
++ * Returns the patent-voice chat input placeholder for the given mode when Patent IDE mode is
++ * enabled, or `undefined` to fall back to the upstream mode description. Mirrors the per-mode
++ * welcome-title override in {@link ChatWidget} so the input strip speaks the same voice.
++ *
++ * @param modeKind The kind of the currently active chat mode.
++ * @param isPatentMode Whether Patent IDE mode is enabled (from the `patentIdeMode` context key).
++ */
++export function getPatentModeInputPlaceholder(modeKind: ChatModeKind, isPatentMode: boolean): string | undefined {
++	if (!isPatentMode) {
++		return undefined;
++	}
++	switch (modeKind) {
++		case ChatModeKind.Ask:
++			return localize('patentChatInputPlaceholder.ask', "Ask about patents, claims, or prior art");
++		case ChatModeKind.Edit:
++			return localize('patentChatInputPlaceholder.edit', "Describe the document changes to make");
++		default:
++			return localize('patentChatInputPlaceholder.agent', "Describe a patent research task");
++	}
++}
++
+ class InputEditorDecorations extends Disposable {
+ 
+ 	private static readonly UPDATE_DELAY = 200;
+@@ -81,6 +106,7 @@ class InputEditorDecorations extends Disposable {
+ 		@ILabelService private readonly labelService: ILabelService,
+ 		@ICustomizationHarnessService private readonly customizationHarnessService: ICustomizationHarnessService,
+ 		@IEditorService private readonly editorService: IEditorService,
++		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+ 	) {
+ 		super();
+ 
+@@ -230,7 +256,9 @@ class InputEditorDecorations extends Disposable {
+ 			}
+ 
+ 			const mode = this.widget.input.currentModeObs.get();
+-			const placeholder = mode.argumentHint?.get() ?? mode.description.get() ?? '';
++			// FlowLeap Patent IDE: patent-voice per-mode placeholders instead of the coding mode description
++			const isPatentMode = PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false;
++			const placeholder = getPatentModeInputPlaceholder(mode.kind, isPatentMode) ?? mode.argumentHint?.get() ?? mode.description.get() ?? '';
+ 			const displayPlaceholder = viewModel.inputPlaceholder || placeholder;
+ 
+ 			const decoration: IDecorationOptions[] = [
+diff --git a/src/vs/workbench/contrib/chat/test/browser/widget/input/editor/chatInputEditorContrib.test.ts b/src/vs/workbench/contrib/chat/test/browser/widget/input/editor/chatInputEditorContrib.test.ts
+index 0c892955489..af7956ce908 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/widget/input/editor/chatInputEditorContrib.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/widget/input/editor/chatInputEditorContrib.test.ts
+@@ -10,7 +10,8 @@ import { Range } from '../../../../../../../../editor/common/core/range.js';
+ import { withTestCodeEditor } from '../../../../../../../../editor/test/browser/testCodeEditor.js';
+ import { IChatWidget } from '../../../../../browser/chat.js';
+ import { ChatWidget } from '../../../../../browser/widget/chatWidget.js';
+-import '../../../../../browser/widget/input/editor/chatInputEditorContrib.js';
++import { getPatentModeInputPlaceholder } from '../../../../../browser/widget/input/editor/chatInputEditorContrib.js';
++import { ChatModeKind } from '../../../../../common/constants.js';
+ 
+ suite('ChatTokenDeleter', () => {
+ 
+@@ -105,3 +106,21 @@ suite('ChatTokenDeleter', () => {
+ 		});
+ 	});
+ });
++
++suite('getPatentModeInputPlaceholder', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('returns the patent-voice placeholder per mode in patent mode and undefined otherwise', () => {
++		const modes = [ChatModeKind.Agent, ChatModeKind.Ask, ChatModeKind.Edit];
++		assert.deepStrictEqual(
++			{
++				patent: modes.map(mode => getPatentModeInputPlaceholder(mode, true)),
++				upstream: modes.map(mode => getPatentModeInputPlaceholder(mode, false)),
++			},
++			{
++				patent: ['Describe a patent research task', 'Ask about patents, claims, or prior art', 'Describe the document changes to make'],
++				upstream: [undefined, undefined, undefined],
++			});
++	});
++});
+diff --git a/src/vs/workbench/contrib/markers/browser/markers.contribution.ts b/src/vs/workbench/contrib/markers/browser/markers.contribution.ts
+index 43a883c508d..eebb8bc7ff2 100644
+--- a/src/vs/workbench/contrib/markers/browser/markers.contribution.ts
++++ b/src/vs/workbench/contrib/markers/browser/markers.contribution.ts
+@@ -4,7 +4,7 @@
+  *--------------------------------------------------------------------------------------------*/
+ 
+ import './markersFileDecorations.js';
+-import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
++import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+ import { Extensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+ import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
+ import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+@@ -39,6 +39,7 @@ import { problemsConfigurationNodeBase } from '../../../common/configuration.js'
+ import { MarkerChatContextContribution } from './markersChatContext.js';
+ import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+ import { ProblemsAccessibilityHelp } from './markersAccessibilityHelp.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ KeybindingsRegistry.registerCommandAndKeybindingRule({
+ 	id: Markers.MARKER_OPEN_ACTION_ID,
+@@ -571,15 +572,21 @@ registerAction2(class extends Action2 {
+ 
+ class MarkersStatusBarContributions extends Disposable implements IWorkbenchContribution {
+ 
+-	private markersStatusItem: IStatusbarEntryAccessor;
++	private markersStatusItem!: IStatusbarEntryAccessor;
+ 	private markersStatusItemOff: IStatusbarEntryAccessor | undefined;
+ 
+ 	constructor(
+ 		@IMarkerService private readonly markerService: IMarkerService,
+ 		@IStatusbarService private readonly statusbarService: IStatusbarService,
+-		@IConfigurationService private readonly configurationService: IConfigurationService
++		@IConfigurationService private readonly configurationService: IConfigurationService,
++		@IContextKeyService contextKeyService: IContextKeyService
+ 	) {
+ 		super();
++
++		// FlowLeap Patent IDE: the Problems counter is developer residue; do not register it in patent mode
++		if (PatentIdeContextKeys.Mode.getValue(contextKeyService) !== false) {
++			return;
++		}
+ 		this.markersStatusItem = this._register(this.statusbarService.addEntry(this.getMarkersItem(), 'status.problems', StatusbarAlignment.LEFT, 50 /* Medium Priority */));
+ 
+ 		const addStatusBarEntry = () => {

@@ -6,7 +6,6 @@
 import { IDisposable } from '../../../../base/common/lifecycle.js';
 import { CustomizationHarnessServiceBase, IHarnessDescriptor } from '../../../../workbench/contrib/chat/common/customizationHarnessService.js';
 import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
-import { IFileService } from '../../../../platform/files/common/files.js';
 
 /**
  * Sessions-window override of the customization harness service.
@@ -17,9 +16,8 @@ export class SessionsCustomizationHarnessService extends CustomizationHarnessSer
 
 	constructor(
 		@IPromptsService promptsService: IPromptsService,
-		@IFileService fileService: IFileService,
 	) {
-		super([], '', promptsService, fileService);
+		super([], '', promptsService);
 	}
 
 	override registerExternalHarness(descriptor: IHarnessDescriptor): IDisposable {

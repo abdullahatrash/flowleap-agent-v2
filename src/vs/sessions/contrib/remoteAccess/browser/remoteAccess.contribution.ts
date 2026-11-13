@@ -33,7 +33,7 @@ import {
 	IRemoteAccessPair, IRemoteAccessPairingOffer, IRemoteAccessService, RemoteAccessEnabledContext, RemoteAccessError, RemoteAccessErrorKind,
 } from '../../../../workbench/contrib/chat/common/remoteAccess/remoteAccess.js';
 import { IHostService } from '../../../../workbench/services/host/browser/host.js';
-import { Menus } from '../../../browser/menus.js';
+import { Menus } from '../../../../workbench/contrib/sessions/browser/menus.js';
 import './media/remoteAccess.css';
 
 export const TOGGLE_REMOTE_ACCESS_ID = 'flowleap.remoteAccess.toggle';

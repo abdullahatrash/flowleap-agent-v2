@@ -1,0 +1,239 @@
+diff --git a/src/vs/workbench/contrib/chat/common/chatModes.ts b/src/vs/workbench/contrib/chat/common/chatModes.ts
+index 2a9d6d8f339..fdee9eb1f4c 100644
+--- a/src/vs/workbench/contrib/chat/common/chatModes.ts
++++ b/src/vs/workbench/contrib/chat/common/chatModes.ts
+@@ -441,6 +441,14 @@ export namespace IChatModeInstructions {
+ 
+ }
+ 
++/**
++ * Converts an optional icon id from a custom agent's header (a codicon id such as `search`)
++ * into a {@link ThemeIcon}, or `undefined` when no icon was specified.
++ */
++function toChatModeIcon(iconId: string | undefined): ThemeIcon | undefined {
++	return iconId ? ThemeIcon.fromId(iconId) : undefined;
++}
++
+ function isCachedChatModeData(data: unknown): data is IChatModeData {
+ 	if (typeof data !== 'object' || data === null) {
+ 		return false;
+@@ -467,6 +475,7 @@ function isCachedChatModeData(data: unknown): data is IChatModeData {
+ export class CustomChatMode implements IChatMode {
+ 	private readonly _nameObservable: ISettableObservable<string>;
+ 	private readonly _descriptionObservable: ISettableObservable<string | undefined>;
++	private readonly _iconObservable: ISettableObservable<ThemeIcon | undefined>;
+ 	private readonly _customToolsObservable: ISettableObservable<readonly string[] | undefined>;
+ 	private readonly _modeInstructions: ISettableObservable<IChatModeInstructions>;
+ 	private readonly _uriObservable: ISettableObservable<URI>;
+@@ -490,7 +499,7 @@ export class CustomChatMode implements IChatMode {
+ 	}
+ 
+ 	get icon(): IObservable<ThemeIcon | undefined> {
+-		return constObservable(undefined);
++		return this._iconObservable;
+ 	}
+ 
+ 	public get isBuiltin(): boolean {
+@@ -553,6 +562,7 @@ export class CustomChatMode implements IChatMode {
+ 		this.id = customChatMode.uri.toString();
+ 		this._nameObservable = observableValue('name', customChatMode.name);
+ 		this._descriptionObservable = observableValue('description', customChatMode.description);
++		this._iconObservable = observableValue('icon', toChatModeIcon(customChatMode.icon));
+ 		this._customToolsObservable = observableValue('customTools', customChatMode.tools);
+ 		this._modelObservable = observableValue('model', customChatMode.model);
+ 		this._argumentHintObservable = observableValue('argumentHint', customChatMode.argumentHint);
+@@ -581,6 +591,7 @@ export class CustomChatMode implements IChatMode {
+ 			};
+ 			update(this._nameObservable, newData.name);
+ 			update(this._descriptionObservable, newData.description);
++			update(this._iconObservable, toChatModeIcon(newData.icon), (a, b) => a?.id === b?.id);
+ 			update(this._customToolsObservable, newData.tools, arraysEqual);
+ 			update(this._modelObservable, newData.model, arraysEqual);
+ 			update(this._argumentHintObservable, newData.argumentHint);
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptFileAttributes.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptFileAttributes.ts
+index a6c00ecd374..2b95a514bc2 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptFileAttributes.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptFileAttributes.ts
+@@ -112,6 +112,10 @@ export const customAgentAttributes: Record<string, IAttributeDefinition> = {
+ 		type: 'scalar',
+ 		description: localize('promptHeader.agent.description', 'The description of the custom agent, what it does and when to use it.'),
+ 	},
++	[PromptHeaderAttributes.icon]: {
++		type: 'scalar',
++		description: localize('promptHeader.agent.icon', 'The icon (a codicon id such as `search`) shown next to the agent in the chat mode picker.'),
++	},
+ 	[PromptHeaderAttributes.argumentHint]: {
+ 		type: 'scalar',
+ 		description: localize('promptHeader.agent.argumentHint', 'The argument-hint describes what inputs the custom agent expects or supports.'),
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptValidator.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptValidator.ts
+index a80feca3f23..7bd5bf0b5dc 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptValidator.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptValidator.ts
+@@ -1064,7 +1064,7 @@ function isTrueOrFalse(value: IValue): boolean {
+ const allAttributeNames: Record<PromptsType, string[]> = {
+ 	[PromptsType.prompt]: [PromptHeaderAttributes.name, PromptHeaderAttributes.description, PromptHeaderAttributes.model, PromptHeaderAttributes.tools, PromptHeaderAttributes.mode, PromptHeaderAttributes.agent, PromptHeaderAttributes.argumentHint],
+ 	[PromptsType.instructions]: [PromptHeaderAttributes.name, PromptHeaderAttributes.description, PromptHeaderAttributes.applyTo, PromptHeaderAttributes.excludeAgent],
+-	[PromptsType.agent]: [PromptHeaderAttributes.name, PromptHeaderAttributes.description, PromptHeaderAttributes.model, PromptHeaderAttributes.reasoningEffort, PromptHeaderAttributes.tools, PromptHeaderAttributes.advancedOptions, PromptHeaderAttributes.handOffs, PromptHeaderAttributes.argumentHint, PromptHeaderAttributes.target, PromptHeaderAttributes.infer, PromptHeaderAttributes.agents, PromptHeaderAttributes.hooks, PromptHeaderAttributes.userInvocable, PromptHeaderAttributes.disableModelInvocation, GithubPromptHeaderAttributes.github],
++	[PromptsType.agent]: [PromptHeaderAttributes.name, PromptHeaderAttributes.description, PromptHeaderAttributes.icon, PromptHeaderAttributes.model, PromptHeaderAttributes.reasoningEffort, PromptHeaderAttributes.tools, PromptHeaderAttributes.advancedOptions, PromptHeaderAttributes.handOffs, PromptHeaderAttributes.argumentHint, PromptHeaderAttributes.target, PromptHeaderAttributes.infer, PromptHeaderAttributes.agents, PromptHeaderAttributes.hooks, PromptHeaderAttributes.userInvocable, PromptHeaderAttributes.disableModelInvocation, GithubPromptHeaderAttributes.github],
+ 	[PromptsType.skill]: [PromptHeaderAttributes.name, PromptHeaderAttributes.description, PromptHeaderAttributes.license, PromptHeaderAttributes.compatibility, PromptHeaderAttributes.metadata, PromptHeaderAttributes.argumentHint, PromptHeaderAttributes.userInvocable, PromptHeaderAttributes.disableModelInvocation, PromptHeaderAttributes.context],
+ 	[PromptsType.hook]: [], // hooks are JSON files, not markdown with YAML frontmatter
+ };
+@@ -1135,6 +1135,8 @@ export function getAttributeDescription(attributeName: string, promptType: Promp
+ 					return localize('promptHeader.agent.name', 'The name of the agent as shown in the UI.');
+ 				case PromptHeaderAttributes.description:
+ 					return localize('promptHeader.agent.description', 'The description of the custom agent, what it does and when to use it.');
++				case PromptHeaderAttributes.icon:
++					return localize('promptHeader.agent.icon', 'The icon (a codicon id such as `search`) shown next to the agent in the chat mode picker.');
+ 				case PromptHeaderAttributes.argumentHint:
+ 					return localize('promptHeader.agent.argumentHint', 'The argument-hint describes what inputs the custom agent expects or supports.');
+ 				case PromptHeaderAttributes.model:
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/promptFileParser.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/promptFileParser.ts
+index 3b1fc927cca..8fcb12fd246 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/promptFileParser.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/promptFileParser.ts
+@@ -69,6 +69,7 @@ interface ParsedHeader {
+ export namespace PromptHeaderAttributes {
+ 	export const name = 'name';
+ 	export const description = 'description';
++	export const icon = 'icon';
+ 	export const agent = 'agent';
+ 	export const mode = 'mode';
+ 	export const model = 'model';
+@@ -170,6 +171,14 @@ export class PromptHeader {
+ 		return this.getStringAttribute(PromptHeaderAttributes.description);
+ 	}
+ 
++	/**
++	 * Optional icon id (a codicon id such as `search`) shown next to the
++	 * agent in the chat mode picker. When unset, custom agent modes render without an icon.
++	 */
++	public get icon(): string | undefined {
++		return this.getStringAttribute(PromptHeaderAttributes.icon);
++	}
++
+ 	public get agent(): string | undefined {
+ 		return this.getStringAttribute(PromptHeaderAttributes.agent) ?? this.getStringAttribute(PromptHeaderAttributes.mode);
+ 	}
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsService.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsService.ts
+index 033817b9d6b..55370a4b6d6 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsService.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsService.ts
+@@ -294,6 +294,11 @@ export interface ICustomAgent {
+ 	 */
+ 	readonly description?: string;
+ 
++	/**
++	 * Optional icon id (a codicon id such as `search`) shown next to the agent in the chat mode picker.
++	 */
++	readonly icon?: string;
++
+ 	/**
+ 	 * Tools metadata in the prompt header.
+ 	 */
+diff --git a/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.ts b/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.ts
+index 3a99f7e03e2..953c8d30ad8 100644
+--- a/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.ts
++++ b/src/vs/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.ts
+@@ -1749,6 +1749,7 @@ export namespace CustomAgent {
+ 
+ 		const name = ast.header?.name ?? extra.name ?? getCleanPromptName(uri);
+ 		const description = ast.header?.description ?? extra.description;
++		const icon = ast.header?.icon;
+ 		const target = getTarget(PromptsType.agent, ast.header ?? uri);
+ 		const id = uri.toString();
+ 
+@@ -1769,7 +1770,7 @@ export namespace CustomAgent {
+ 		if (target === Target.Claude && tools) {
+ 			tools = mapClaudeTools(tools);
+ 		}
+-		return { id, uri, name, description, model, tools, handOffs, argumentHint, target, visibility, agents, agentInstructions, source, sessionTypes, hooks, enabled };
++		return { id, uri, name, description, ...(icon !== undefined ? { icon } : {}), model, tools, handOffs, argumentHint, target, visibility, agents, agentInstructions, source, sessionTypes, hooks, enabled };
+ 
+ 	}
+ }
+diff --git a/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptHeaderAutocompletion.test.ts b/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptHeaderAutocompletion.test.ts
+index cc2863ab807..fb1f4649e4d 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptHeaderAutocompletion.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptHeaderAutocompletion.test.ts
+@@ -143,6 +143,7 @@ suite('PromptHeaderAutocompletion', () => {
+ 				{ label: 'github', result: 'github: $0' },
+ 				{ label: 'handoffs', result: 'handoffs: $0' },
+ 				{ label: 'hooks', result: 'hooks:\n  ${1|SessionStart,SessionEnd,UserPromptSubmit,PreToolUse,PostToolUse,PreCompact,SubagentStart,SubagentStop,Stop,ErrorOccurred|}:\n    - type: command\n      command: "$2"' },
++				{ label: 'icon', result: 'icon: $0' },
+ 				{ label: 'model', result: 'model: ${0:MAE 4 (olama)}' },
+ 				{ label: 'name', result: 'name: $0' },
+ 				{ label: 'reasoning-effort', result: 'reasoning-effort: ${0:low}' },
+diff --git a/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptValidator.test.ts b/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptValidator.test.ts
+index fcb3e575a92..8498b5aefb9 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptValidator.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/promptSyntax/languageProviders/promptValidator.test.ts
+@@ -570,7 +570,7 @@ suite('PromptValidator', () => {
+ 			assert.deepStrictEqual(
+ 				markers.map(m => ({ severity: m.severity, message: m.message, tags: m.tags })),
+ 				[
+-					{ severity: MarkerSeverity.Hint, message: `Attribute 'applyTo' is not supported in VS Code agent files. Supported: agents, argument-hint, description, disable-model-invocation, github, handoffs, hooks, model, name, reasoning-effort, target, tools, user-invocable.`, tags: [MarkerTag.Unnecessary] },
++					{ severity: MarkerSeverity.Hint, message: `Attribute 'applyTo' is not supported in VS Code agent files. Supported: agents, argument-hint, description, disable-model-invocation, github, handoffs, hooks, icon, model, name, reasoning-effort, target, tools, user-invocable.`, tags: [MarkerTag.Unnecessary] },
+ 				]
+ 			);
+ 		});
+diff --git a/src/vs/workbench/contrib/chat/test/common/promptSyntax/service/promptsService.test.ts b/src/vs/workbench/contrib/chat/test/common/promptSyntax/service/promptsService.test.ts
+index 7a589b4d3f0..85f9b8d1f66 100644
+--- a/src/vs/workbench/contrib/chat/test/common/promptSyntax/service/promptsService.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/promptSyntax/service/promptsService.test.ts
+@@ -1348,6 +1348,56 @@ suite('PromptsService', () => {
+ 			);
+ 		});
+ 
++		test('header with icon', async () => {
++			const rootFolderName = 'custom-agents-with-icon';
++			const rootFolder = `/${rootFolderName}`;
++			const rootFolderUri = URI.file(rootFolder);
++
++			workspaceContextService.setWorkspace(testWorkspace(rootFolderUri));
++
++			await mockFiles(fileService, [
++				{
++					path: `${rootFolder}/.github/agents/agent1.agent.md`,
++					contents: [
++						'---',
++						'description: \'Patent research agent.\'',
++						'icon: search',
++						'---',
++						'I research patents.',
++					]
++				}
++			]);
++
++			const result = (await service.getCustomAgents(CancellationToken.None)).map(agent => ({ ...agent, uri: URI.from(agent.uri) }));
++			const expected: ICustomAgent[] = [
++				{
++					id: URI.joinPath(rootFolderUri, '.github/agents/agent1.agent.md').toString(),
++					name: 'agent1',
++					description: 'Patent research agent.',
++					icon: 'search',
++					agentInstructions: {
++						content: 'I research patents.',
++						toolReferences: [],
++						metadata: undefined
++					},
++					handOffs: undefined,
++					model: undefined,
++					argumentHint: undefined,
++					tools: undefined,
++					target: Target.Undefined,
++					visibility: { userInvocable: true, agentInvocable: true },
++					agents: undefined,
++					hooks: undefined,
++					sessionTypes: undefined,
++					uri: URI.joinPath(rootFolderUri, '.github/agents/agent1.agent.md'),
++					source: { storage: PromptsStorage.local },
++					enabled: true,
++				},
++			];
++
++			assert.deepEqual(result, expected, 'Must get custom agents with icon.');
++		});
++
+ 		test('header with target', async () => {
+ 			const rootFolderName = 'custom-agents-with-target';
+ 			const rootFolder = `/${rootFolderName}`;

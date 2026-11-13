@@ -10,8 +10,7 @@ import { Range } from '../../../../../../../../editor/common/core/range.js';
 import { withTestCodeEditor } from '../../../../../../../../editor/test/browser/testCodeEditor.js';
 import { IChatWidget } from '../../../../../browser/chat.js';
 import { ChatWidget } from '../../../../../browser/widget/chatWidget.js';
-import { getPatentModeInputPlaceholder } from '../../../../../common/widget/patentInputPlaceholder.js';
-import { ChatModeKind } from '../../../../../common/constants.js';
+import '../../../../../browser/widget/input/editor/chatInputEditorContrib.js';
 
 suite('ChatTokenDeleter', () => {
 
@@ -33,6 +32,7 @@ suite('ChatTokenDeleter', () => {
 	test('deletes inserted slash, agent, and variable tokens on immediate backspace', () => {
 		const testCases = [
 			{ initialValue: '/', insertedText: '/fix ', deleteRange: new Range(1, 5, 1, 6) },
+			{ initialValue: '/', insertedText: '/fork ', deleteRange: new Range(1, 6, 1, 7) },
 			{ initialValue: '@', insertedText: '@workspace ', deleteRange: new Range(1, 11, 1, 12) },
 			{ initialValue: '#', insertedText: '#selection', deleteRange: new Range(1, 10, 1, 11) },
 		];
@@ -104,23 +104,5 @@ suite('ChatTokenDeleter', () => {
 				store.dispose();
 			}
 		});
-	});
-});
-
-suite('getPatentModeInputPlaceholder', () => {
-
-	ensureNoDisposablesAreLeakedInTestSuite();
-
-	test('returns the patent-voice placeholder per mode in patent mode and undefined otherwise', () => {
-		const modes = [ChatModeKind.Agent, ChatModeKind.Ask, ChatModeKind.Edit];
-		assert.deepStrictEqual(
-			{
-				patent: modes.map(mode => getPatentModeInputPlaceholder(mode, true)),
-				upstream: modes.map(mode => getPatentModeInputPlaceholder(mode, false)),
-			},
-			{
-				patent: ['Describe a patent research task', 'Ask about patents, claims, or prior art', 'Describe the document changes to make'],
-				upstream: [undefined, undefined, undefined],
-			});
 	});
 });

@@ -17,13 +17,12 @@ import './sessions.web.main.js';
 // Viewer's service publishes exactly one such entry: the pair's Host. One
 // provider lists every agent the Host publishes.
 import './contrib/providers/remoteAgentHost/browser/webSocketAgentHost.contribution.js';
-import './contrib/providers/agentHost/browser/agentHostAgentPicker.js';
-import './contrib/providers/agentHost/browser/openSubagentChat.js';
+import './contrib/providers/agentHost/browser/openSubagentChat.contribution.js';
 
 // Phone presentation of the chat input pickers (web only: phones never run
 // the desktop build).
-import './contrib/providers/agentHost/browser/mobile/mobileChatInputConfigPicker.js';
-import './contrib/providers/agentHost/browser/mobile/mobileChatPhoneInputPresenter.js';
+import '../workbench/contrib/sessions/providers/agentHost/browser/mobile/mobileChatInputConfigPicker.js';
+import '../workbench/contrib/sessions/providers/agentHost/browser/mobile/mobileChatPhoneInputPresenter.js';
 
 // The Viewer's remote agent host service and the workbench integration of a
 // remote connection.

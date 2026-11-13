@@ -1,0 +1,3 @@
+# Fork-created files whose intent upstream now covers; step 10 does not restore them. One path per line.
+# B10 #440: agentEditorComments null ext-host seam; upstream ships the real implementation.
+src/vs/workbench/api/test/browser/extHostAgentEditorComments.test.ts

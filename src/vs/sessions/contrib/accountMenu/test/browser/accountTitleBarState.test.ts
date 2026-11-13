@@ -26,7 +26,6 @@ suite('Sessions - Account Title Bar State', () => {
 			entitlement: ChatEntitlement.Pro,
 			sentiment: {},
 			quotas: {},
-			allowSignedOutWhenUsable: false,
 			...overrides,
 		};
 	}
@@ -133,30 +132,11 @@ suite('Sessions - Account Title Bar State', () => {
 		});
 	});
 
-	test('shows sign in state when no account is available', () => {
+	test('offers a calm sign-in when signed out', () => {
 		const state = getAccountTitleBarState(createState({
 			accountName: undefined,
 			accountProviderLabel: undefined,
 			entitlement: ChatEntitlement.Unknown,
-		}));
-
-		assert.deepStrictEqual({
-			source: state.source,
-			label: state.label,
-			kind: state.kind,
-		}, {
-			source: 'copilot',
-			label: 'Agents Signed Out',
-			kind: 'prominent',
-		});
-	});
-
-	test('offers a calm opt-in sign-in when signed-out operation is enabled', () => {
-		const state = getAccountTitleBarState(createState({
-			accountName: undefined,
-			accountProviderLabel: undefined,
-			entitlement: ChatEntitlement.Unknown,
-			allowSignedOutWhenUsable: true,
 		}));
 
 		assert.deepStrictEqual({
@@ -219,8 +199,8 @@ suite('Sessions - Account Title Bar State', () => {
 			}
 		};
 		const authenticationService = new class extends mock<IAuthenticationService>() {
-			override async getSessions(providerId: string): Promise<ReadonlyArray<AuthenticationSession>> {
-				return providerId === 'github' ? sessions : [];
+			override async getSessions(): Promise<ReadonlyArray<AuthenticationSession>> {
+				return sessions;
 			}
 		};
 
@@ -231,31 +211,6 @@ suite('Sessions - Account Title Bar State', () => {
 				accountProviderId: 'github',
 				accountProviderLabel: 'GitHub',
 				accountIcon: URI.parse('https://example.com/default.png'),
-			}
-		);
-	});
-
-	test('resolves a FlowLeap session before the default account', async () => {
-		const defaultAccountService = new class extends mock<IDefaultAccountService>() {
-			override async getDefaultAccount(): Promise<IDefaultAccount | null> {
-				return null;
-			}
-		};
-		const authenticationService = new class extends mock<IAuthenticationService>() {
-			override async getSessions(providerId: string): Promise<ReadonlyArray<AuthenticationSession>> {
-				return providerId === 'flowleap'
-					? [{ id: 'flowleap-session', accessToken: 'token', scopes: [], account: { id: 'user', label: 'jane@example.com' } }]
-					: [];
-			}
-		};
-
-		assert.deepStrictEqual(
-			await resolveAccountInfo(defaultAccountService, authenticationService),
-			{
-				accountName: 'jane@example.com',
-				accountProviderId: 'flowleap',
-				accountProviderLabel: 'FlowLeap',
-				accountIcon: undefined,
 			}
 		);
 	});

@@ -1,0 +1,17 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts b/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
+index e1eab4faefb..7e5ab1cf53b 100644
+--- a/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
++++ b/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
+@@ -2147,7 +2147,11 @@ configurationRegistry.registerConfiguration({
+ 			type: 'boolean',
+ 			title: nls.localize('chat.useClaudeMd.title', "Use CLAUDE.md file",),
+ 			markdownDescription: nls.localize('chat.useClaudeMd.description', "Controls whether instructions from `CLAUDE.md` file found in workspace roots, .claude and ~/.claude folder are attached to all chat requests. This setting is only used by the Local agent harness.",),
+-			default: true,
++			// Patent AI: off by default. A personal ~/.claude/CLAUDE.md belongs to the user's coding
++			// assistant, not their patent assistant; with it on, every chat opened by hunting for the
++			// files it names (2026-09-02). Claude sessions in the Agents window read CLAUDE.md through
++			// their own provider and are unaffected.
++			default: false,
+ 			restricted: true,
+ 			disallowConfigurationDefault: true,
+ 			tags: ['prompts', 'reusable prompts', 'prompt snippets', 'instructions']

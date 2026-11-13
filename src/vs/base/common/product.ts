@@ -98,12 +98,6 @@ export interface IDictationRuntimeProductConfig {
 
 export interface IProductConfiguration {
 	readonly version: string;
-	/**
-	 * FlowLeap: the release version (for example `0.9.0`), stamped into the
-	 * built product.json by build/flowleap/stamp-flowleap-version.mjs. `version`
-	 * stays the upstream package version. Absent in dev builds.
-	 */
-	readonly flowleapVersion?: string;
 	readonly date?: string;
 	readonly quality?: string;
 	readonly commit?: string;
@@ -183,6 +177,12 @@ export interface IProductConfiguration {
 	readonly trustedExtensionPublishers?: readonly string[];
 
 	readonly extensionRecommendations?: IStringDictionary<IExtensionRecommendations>;
+	readonly connectorRecommendations?: IStringDictionary<{
+		readonly name: string;
+		readonly description: string;
+		readonly iconUrl: string;
+		readonly urls?: readonly string[];
+	}>;
 	readonly configBasedExtensionTips?: IStringDictionary<IConfigBasedExtensionTip>;
 	readonly exeBasedExtensionTips?: IStringDictionary<IExeBasedExtensionTip>;
 	readonly remoteExtensionTips?: IStringDictionary<IRemoteExtensionTip>;
@@ -286,13 +286,6 @@ export interface IProductConfiguration {
 	readonly voiceWsUrl?: string;
 
 	readonly remoteDefaultExtensionsIfInstalledLocally?: string[];
-
-	/**
-	 * View containers (by ID, e.g. `workbench.view.debug`) that start unpinned for new users.
-	 * They stay available via the activity/panel bar context menu and open transiently, but are
-	 * not shown by default. Only applies when no cached composite-bar state exists yet.
-	 */
-	readonly defaultHiddenViewContainers?: readonly string[];
 
 	/**
 	 * Maps an extension-contributed setting key to either a full enterprise {@link IPolicy}
@@ -438,14 +431,6 @@ export interface IAiGeneratedWorkspaceTrust {
 export interface IDefaultChatAgent {
 	readonly extensionId: string;
 	readonly chatExtensionId: string;
-
-	/**
-	 * When `true`, the default chat extension is treated as the product's core agent and is kept
-	 * enabled regardless of chat-setup state. Upstream disables the chat extension until GitHub
-	 * chat setup completes; in BYOK products where that setup flow is neutralized this gate would
-	 * disable the agent forever, so it must be opted out of.
-	 */
-	readonly alwaysEnabled?: boolean;
 
 	readonly chatExtensionOutputId: string;
 	readonly chatExtensionOutputExtensionStateCommand: string;

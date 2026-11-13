@@ -7,21 +7,24 @@ import assert from 'assert';
 import { DeferredPromise, timeout } from '../../../../../base/common/async.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { IChannel } from '../../../../../base/parts/ipc/common/ipc.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { IChannel } from '../../../../../base/parts/ipc/common/ipc.js';
 import { upcastPartial } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
+import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { ILogService, NullLogService } from '../../../../../platform/log/common/log.js';
-import { IAllowedMcpServersService, IGalleryMcpServer, ILocalMcpServer, IMcpGalleryService, IMcpManagementService, IInstallableMcpServer } from '../../../../../platform/mcp/common/mcpManagement.js';
-import { McpServerType } from '../../../../../platform/mcp/common/mcpPlatformTypes.js';
+import { IAllowedMcpServersService, IGalleryMcpServer, IMcpGalleryService, IMcpManagementService, IInstallableMcpServer } from '../../../../../platform/mcp/common/mcpManagement.js';
+import { McpManagementChannel, McpManagementChannelClient } from '../../../../../platform/mcp/common/mcpManagementIpc.js';
+import { McpManagementService } from '../../../../../platform/mcp/common/mcpManagementService.js';
+import { IMcpServerConfiguration, McpServerType, McpServerVariableType } from '../../../../../platform/mcp/common/mcpPlatformTypes.js';
 import { IMcpResourceScannerService, McpResourceScannerService } from '../../../../../platform/mcp/common/mcpResourceScannerService.js';
 import { McpResourceFormat } from '../../../../../platform/mcp/common/mcpWorkspaceConfiguration.js';
 import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -32,8 +35,9 @@ import { Workspace } from '../../../../../platform/workspace/test/common/testWor
 import { TestUserDataProfileService } from '../../../../test/common/workbenchTestServices.js';
 import { IRemoteAgentConnection, IRemoteAgentService } from '../../../remote/common/remoteAgentService.js';
 import { IUserDataProfileService } from '../../../userDataProfile/common/userDataProfile.js';
+import { UserDataProfileService } from '../../../userDataProfile/common/userDataProfileService.js';
 import { IRemoteUserDataProfilesService } from '../../../userDataProfile/common/remoteUserDataProfiles.js';
-import { LocalMcpServerScope, WorkbenchMcpManagementService, WorkspaceMcpConfigKind } from '../../common/mcpWorkbenchManagementService.js';
+import { WorkbenchMcpManagementService, WorkspaceMcpConfigKind } from '../../common/mcpWorkbenchManagementService.js';
 import { IMcpWorkspaceInstallTargetService, McpWorkspaceInstallTargetService } from '../../common/mcpWorkspaceInstallTargetService.js';
 
 suite('WorkbenchMcpManagementService - workspace configurations', () => {
@@ -41,12 +45,19 @@ suite('WorkbenchMcpManagementService - workspace configurations', () => {
 	const folder = toWorkspaceFolder(URI.from({ scheme: Schemas.inMemory, path: '/workspace' }));
 	const rootResource = folder.toResource('.mcp.json');
 	const legacyResource = folder.toResource('.vscode/mcp.json');
+	const userResource = URI.from({ scheme: Schemas.inMemory, path: '/user/mcp.json' });
+	const remoteUserResource = URI.from({ scheme: Schemas.inMemory, path: '/remote-user/mcp.json' });
+	const remoteProfileResource = URI.from({ scheme: Schemas.inMemory, path: '/remote-user/profiles/other/mcp.json' });
 	const server: IInstallableMcpServer = { name: 'same', config: { type: McpServerType.LOCAL, command: 'node' } };
 
-	async function createFixture(options: { initialScan?: Promise<void>; allowed?: boolean; rootContent?: string; legacyContent?: string; workspaceConfiguration?: URI; folderTargetsOnly?: boolean; remoteChannel?: IChannel; localUserInstall?: boolean; calls?: string[]; localUserServers?: ILocalMcpServer[] } = {}) {
+	async function createFixture(options: { initialScan?: Promise<void>; beforeScan?: (resource: URI) => Promise<void>; allowed?: boolean; rootContent?: string; legacyContent?: string; userContent?: string; remoteUserContent?: string; nonDefaultProfile?: boolean; workspaceConfiguration?: URI; folderTargetsOnly?: boolean } = {}) {
 		const logService = store.add(new NullLogService());
 		const fileService = store.add(new FileService(logService));
 		store.add(fileService.registerProvider(Schemas.inMemory, store.add(new InMemoryFileSystemProvider())));
+		const defaultProfile = { ...new TestUserDataProfileService().currentProfile, isDefault: true, mcpResource: userResource };
+		const profileService = store.add(new UserDataProfileService(options.nonDefaultProfile
+			? { ...defaultProfile, id: 'other', isDefault: false, mcpResource: URI.joinPath(userResource, '..', 'profiles', 'other', 'mcp.json') }
+			: defaultProfile));
 		await fileService.createFolder(folder.uri);
 		if (options.rootContent) {
 			await fileService.writeFile(rootResource, VSBuffer.fromString(options.rootContent));
@@ -54,26 +65,23 @@ suite('WorkbenchMcpManagementService - workspace configurations', () => {
 		if (options.legacyContent) {
 			await fileService.writeFile(legacyResource, VSBuffer.fromString(options.legacyContent));
 		}
+		if (options.userContent) {
+			await fileService.writeFile(profileService.currentProfile.mcpResource, VSBuffer.fromString(options.userContent));
+		}
+		if (options.remoteUserContent) {
+			await fileService.writeFile(remoteUserResource, VSBuffer.fromString(options.remoteUserContent));
+		}
 		const uriIdentityService = store.add(new UriIdentityService(fileService));
 		const scanner = store.add(new class extends McpResourceScannerService {
 			override async scanMcpServers(...args: Parameters<McpResourceScannerService['scanMcpServers']>) {
 				await options.initialScan;
+				await options.beforeScan?.(args[0]);
 				return super.scanMcpServers(...args);
 			}
 		}(fileService, uriIdentityService));
-		const profileService = new TestUserDataProfileService();
 		const foldersChanged = store.add(new Emitter<IWorkspaceFoldersChangeEvent>());
 		let workspace = new Workspace('test', [folder], options.workspaceConfiguration);
-		const userManagement = upcastPartial<IMcpManagementService>({
-			onInstallMcpServer: Event.None,
-			onDidInstallMcpServers: Event.None,
-			onDidUpdateMcpServers: Event.None,
-			onUninstallMcpServer: Event.None,
-			onDidUninstallMcpServer: Event.None,
-			getInstalled: async () => options.localUserServers ?? [],
-			install: async installable => { options.calls?.push('local:install'); return upcastPartial<ILocalMcpServer>({ name: installable.name, mcpResource: profileService.currentProfile.mcpResource }); },
-			installFromGallery: async gallery => { options.calls?.push('local:installFromGallery'); return upcastPartial<ILocalMcpServer>({ name: gallery.name, mcpResource: profileService.currentProfile.mcpResource }); },
-		});
+		let remoteConnection: IRemoteAgentConnection | null = null;
 		const services = new ServiceCollection(
 			[IAllowedMcpServersService, upcastPartial<IAllowedMcpServersService>({
 				onDidChangeAllowedMcpServers: Event.None,
@@ -85,11 +93,12 @@ suite('WorkbenchMcpManagementService - workspace configurations', () => {
 			[IFileService, fileService],
 			[IUriIdentityService, uriIdentityService],
 			[IMcpResourceScannerService, scanner],
+			[IEnvironmentService, upcastPartial<IEnvironmentService>({ userRoamingDataHome: URI.joinPath(userResource, '..') })],
 			[IMcpGalleryService, upcastPartial<IMcpGalleryService>({ getMcpServersFromGallery: async () => [] })],
 			[IUserDataProfileService, profileService],
-			[IUserDataProfilesService, upcastPartial<IUserDataProfilesService>({ profiles: [profileService.currentProfile] })],
-			[IRemoteUserDataProfilesService, upcastPartial<IRemoteUserDataProfilesService>({ getRemoteProfile: async profile => profile })],
-			[IRemoteAgentService, upcastPartial<IRemoteAgentService>({ getConnection: () => options.remoteChannel ? upcastPartial<IRemoteAgentConnection>({ getChannel: <T extends IChannel>() => options.remoteChannel as T }) : null })],
+			[IUserDataProfilesService, upcastPartial<IUserDataProfilesService>({ profiles: options.nonDefaultProfile ? [defaultProfile, profileService.currentProfile] : [defaultProfile], defaultProfile })],
+			[IRemoteUserDataProfilesService, upcastPartial<IRemoteUserDataProfilesService>({ getRemoteProfile: async profile => ({ ...profile, mcpResource: profile.isDefault ? remoteUserResource : remoteProfileResource }) })],
+			[IRemoteAgentService, upcastPartial<IRemoteAgentService>({ getConnection: () => remoteConnection })],
 			[IWorkspaceContextService, upcastPartial<IWorkspaceContextService>({
 				getWorkspace: () => workspace,
 				getWorkbenchState: () => workspace.configuration ? WorkbenchState.WORKSPACE : WorkbenchState.FOLDER,
@@ -98,16 +107,28 @@ suite('WorkbenchMcpManagementService - workspace configurations', () => {
 			})],
 		);
 		const instantiationService = store.add(new TestInstantiationService(services));
+		const createChannel = (managementService: IMcpManagementService): IChannel => {
+			const channel = new McpManagementChannel<void>(managementService, () => null);
+			return {
+				listen: event => channel.listen(undefined, event),
+				call: (command, args) => channel.call(undefined, command, args),
+			};
+		};
+		const userManagement = store.add(instantiationService.createInstance(McpManagementService));
+		const userManagementClient = store.add(instantiationService.createInstance(McpManagementChannelClient, createChannel(userManagement)));
+		if (options.remoteUserContent !== undefined) {
+			const remoteInstantiationService = store.add(instantiationService.createChild(new ServiceCollection(
+				[IUserDataProfilesService, upcastPartial<IUserDataProfilesService>({ defaultProfile: { ...defaultProfile, mcpResource: remoteUserResource } })],
+			)));
+			const remoteManagement = store.add(remoteInstantiationService.createInstance(McpManagementService));
+			const remoteChannel = createChannel(remoteManagement);
+			remoteConnection = upcastPartial<IRemoteAgentConnection>({ getChannel: <T extends IChannel>() => remoteChannel as T });
+		}
 		const workspaceInstallTargetService = options.folderTargetsOnly
 			? upcastPartial<IMcpWorkspaceInstallTargetService>({ getTargets: () => workspace.folders })
 			: instantiationService.createInstance(McpWorkspaceInstallTargetService);
-		const localUserInstall = options.localUserInstall ?? true;
-		const service = store.add(new class extends WorkbenchMcpManagementService {
-			protected override canInstallInLocalUser(): boolean {
-				return localUserInstall;
-			}
-		}(
-			userManagement,
+		const service = store.add(new WorkbenchMcpManagementService(
+			userManagementClient,
 			instantiationService.get(IAllowedMcpServersService),
 			logService,
 			profileService,
@@ -118,9 +139,10 @@ suite('WorkbenchMcpManagementService - workspace configurations', () => {
 			instantiationService.get(IRemoteUserDataProfilesService),
 			instantiationService,
 			workspaceInstallTargetService,
+			scanner,
 		));
 		return {
-			service, fileService,
+			service, fileService, profileService,
 			changeWorkspace(next: Workspace, event: IWorkspaceFoldersChangeEvent) {
 				workspace = next;
 				foldersChanged.fire(event);
@@ -128,64 +150,176 @@ suite('WorkbenchMcpManagementService - workspace configurations', () => {
 		};
 	}
 
-	suite('user target with a remote connection', () => {
-		const remoteResource = URI.from({ scheme: Schemas.vscodeRemote, authority: 'hosted', path: '/home/flowleap/.flowleap-server/data/User/mcp.json' });
+	suite('input cleanup across scopes', () => {
+		const shared = { id: 'shared', type: McpServerVariableType.PROMPT, description: 'Shared', password: false };
+		const exclusive = { ...shared, id: 'exclusive' };
+		const removed: IMcpServerConfiguration = { type: McpServerType.LOCAL, command: 'node', args: ['${input:shared}', '${input:exclusive}'] };
+		const kept = { type: McpServerType.LOCAL, command: 'node', args: ['${input:shared}'] };
 
-		function createRemoteChannel(calls: string[], installed: string[] = []): IChannel {
-			return {
-				call: async <T>(command: string, arg?: unknown[]) => {
-					calls.push(`remote:${command}`);
-					const name = (arg?.[0] as { name: string } | undefined)?.name;
-					return (command === 'getInstalled' ? installed.map(name => ({ name, mcpResource: remoteResource.toJSON() })) : { name, mcpResource: remoteResource.toJSON() }) as T;
+		for (const removeFromUser of [true, false]) {
+			test(`preserves cross-scope input references when removing from user: ${removeFromUser}`, async () => {
+				const source = { servers: { removed }, inputs: [shared, exclusive] };
+				const consumer = { servers: { kept } };
+				const { service, fileService } = await createFixture({
+					userContent: JSON.stringify(removeFromUser ? source : consumer),
+					legacyContent: JSON.stringify(removeFromUser ? consumer : source),
+				});
+				const local = (await service.getInstalled()).find(server => server.name === 'removed')!;
+
+				await service.uninstall(local);
+
+				assert.deepStrictEqual({
+					source: JSON.parse((await fileService.readFile(removeFromUser ? userResource : legacyResource)).value.toString()),
+					consumer: JSON.parse((await fileService.readFile(removeFromUser ? legacyResource : userResource)).value.toString()),
+				}, { source: { servers: {}, inputs: [shared] }, consumer });
+			});
+		}
+
+		test('preserves dependencies in another workspace folder and workspace sandbox', async () => {
+			const workspaceResource = URI.from({ scheme: Schemas.inMemory, path: '/test.code-workspace' });
+			const { service, fileService, changeWorkspace } = await createFixture({
+				workspaceConfiguration: workspaceResource,
+				userContent: JSON.stringify({ servers: { removed }, inputs: [shared, exclusive] }),
+			});
+			const second = new WorkspaceFolder({ uri: URI.from({ scheme: Schemas.inMemory, path: '/second' }), name: 'second', index: 1 });
+			await fileService.writeFile(second.toResource('.vscode/mcp.json'), VSBuffer.fromString(JSON.stringify({
+				servers: { kept },
+			})));
+			await fileService.writeFile(workspaceResource, VSBuffer.fromString(JSON.stringify({
+				settings: { mcp: { sandbox: { filesystem: { allowWrite: ['${input:exclusive}'] } } } },
+			})));
+			changeWorkspace(new Workspace('test', [folder, second], workspaceResource), { added: [second], removed: [], changed: [] });
+			const local = (await service.getInstalled()).find(server => server.name === 'removed')!;
+
+			await service.uninstall(local);
+
+			assert.deepStrictEqual(JSON.parse((await fileService.readFile(userResource)).value.toString()), { servers: {}, inputs: [shared, exclusive] });
+		});
+
+		test('cleans up exclusive user inputs when other scopes are empty', async () => {
+			const { service, fileService } = await createFixture({ userContent: JSON.stringify({ servers: { removed }, inputs: [shared, exclusive] }) });
+			const [local] = await service.getInstalled();
+
+			await service.uninstall(local);
+
+			assert.strictEqual(await fileService.exists(userResource), false);
+		});
+
+		for (const removeFromRemote of [true, false]) {
+			test(`preserves references across local and remote user scopes when removing from remote: ${removeFromRemote}`, async () => {
+				const source = { servers: { removed }, inputs: [shared, exclusive] };
+				const consumer = { servers: { kept } };
+				const { service, fileService } = await createFixture({
+					userContent: JSON.stringify(removeFromRemote ? consumer : source),
+					remoteUserContent: JSON.stringify(removeFromRemote ? source : consumer),
+				});
+				const local = (await service.getInstalled()).find(server => server.name === 'removed')!;
+
+				await service.uninstall(local);
+
+				assert.deepStrictEqual({
+					source: JSON.parse((await fileService.readFile(removeFromRemote ? remoteUserResource : userResource)).value.toString()),
+					consumer: JSON.parse((await fileService.readFile(removeFromRemote ? userResource : remoteUserResource)).value.toString()),
+				}, { source: { servers: {}, inputs: [shared] }, consumer });
+			});
+		}
+
+		test('uninstalls from a non-default remote profile without changing the default profile', async () => {
+			const original = JSON.stringify({ servers: { removed }, inputs: [shared, exclusive] });
+			const { service, fileService } = await createFixture({
+				nonDefaultProfile: true,
+				remoteUserContent: original,
+				legacyContent: JSON.stringify({ servers: { kept } }),
+			});
+			await fileService.writeFile(remoteProfileResource, VSBuffer.fromString(original));
+			const local = (await service.getInstalled()).find(server => server.name === 'removed')!;
+
+			await service.uninstall(local);
+
+			assert.deepStrictEqual({
+				resource: local.mcpResource.toString(),
+				profile: JSON.parse((await fileService.readFile(remoteProfileResource)).value.toString()),
+				defaultProfile: (await fileService.readFile(remoteUserResource)).value.toString(),
+			}, {
+				resource: remoteProfileResource.toString(),
+				profile: { servers: {}, inputs: [shared] },
+				defaultProfile: original,
+			});
+		});
+
+		test('preserves workspace inputs inherited by a workspace folder', async () => {
+			const workspaceResource = URI.from({ scheme: Schemas.inMemory, path: '/test.code-workspace' });
+			const { service, fileService } = await createFixture({
+				workspaceConfiguration: workspaceResource,
+				legacyContent: JSON.stringify({ servers: { kept } }),
+			});
+			await fileService.writeFile(workspaceResource, VSBuffer.fromString(JSON.stringify({
+				folders: [], settings: { mcp: { servers: { removed }, inputs: [shared, exclusive] }, 'editor.fontSize': 14 },
+			})));
+			const local = await service.install({ name: 'removed', config: removed }, { target: ConfigurationTarget.WORKSPACE });
+
+			await service.uninstall(local);
+
+			assert.deepStrictEqual(JSON.parse((await fileService.readFile(workspaceResource)).value.toString()), {
+				folders: [], settings: { mcp: { servers: {}, inputs: [shared] }, 'editor.fontSize': 14 },
+			});
+		});
+
+		test('keeps uninstall bound to its original profile while scanning other scopes', async () => {
+			const scanning = new DeferredPromise<void>();
+			const resumeScan = new DeferredPromise<void>();
+			let pauseScan = false;
+			const original = JSON.stringify({ servers: { removed }, inputs: [shared, exclusive] });
+			const { service, fileService, profileService } = await createFixture({
+				userContent: original,
+				beforeScan: async resource => {
+					if (pauseScan && resource.toString() === legacyResource.toString()) {
+						await scanning.complete();
+						await resumeScan.p;
+					}
 				},
-				listen: <T>() => Event.None as Event<T>,
-			};
-		}
-
-		async function installAll(localUserInstall: boolean) {
-			const calls: string[] = [];
-			const { service } = await createFixture({ remoteChannel: createRemoteChannel(calls), localUserInstall, calls });
-			const gallery = upcastPartial<IGalleryMcpServer>({ name: 'filesystem' });
-			const installed = [
-				await service.installFromGallery(gallery),
-				await service.install(server),
-				await service.installFromGallery(gallery, { target: ConfigurationTarget.USER_LOCAL }),
-				await service.install(server, { target: folder }),
-			];
-			return { calls, scopes: installed.map(local => local.scope), resources: installed.map(local => local.mcpResource.toString()) };
-		}
-
-		test('web client installs user-scope servers in the remote user configuration', async () => {
-			assert.deepStrictEqual(await installAll(false), {
-				calls: ['remote:installFromGallery', 'remote:install', 'local:installFromGallery'],
-				scopes: [LocalMcpServerScope.RemoteUser, LocalMcpServerScope.RemoteUser, LocalMcpServerScope.User, LocalMcpServerScope.Workspace],
-				resources: [remoteResource.toString(), remoteResource.toString(), new TestUserDataProfileService().currentProfile.mcpResource.toString(), legacyResource.toString()],
 			});
+			const otherResource = URI.from({ scheme: Schemas.inMemory, path: '/other-profile/mcp.json' });
+			await fileService.writeFile(otherResource, VSBuffer.fromString(original));
+			const [local] = await service.getInstalled();
+
+			pauseScan = true;
+			const uninstall = service.uninstall(local);
+			try {
+				await scanning.p;
+				await profileService.updateCurrentProfile({ ...profileService.currentProfile, id: 'other', isDefault: false, mcpResource: otherResource });
+			} finally {
+				await resumeScan.complete();
+			}
+			await uninstall;
+
+			assert.deepStrictEqual({
+				originalProfileExists: await fileService.exists(userResource),
+				otherProfile: (await fileService.readFile(otherResource)).value.toString(),
+			}, { originalProfileExists: false, otherProfile: original });
 		});
 
-		test('desktop keeps user-scope servers in the local user configuration', async () => {
-			const result = await installAll(true);
-			assert.deepStrictEqual({ calls: result.calls, scopes: result.scopes }, {
-				calls: ['local:installFromGallery', 'local:install', 'local:installFromGallery'],
-				scopes: [LocalMcpServerScope.User, LocalMcpServerScope.User, LocalMcpServerScope.User, LocalMcpServerScope.Workspace],
-			});
-		});
+		const workspaceResource = URI.from({ scheme: Schemas.inMemory, path: '/test.code-workspace' });
+		for (const resource of [legacyResource, workspaceResource, remoteUserResource]) {
+			test(`identifies the unreadable scope and leaves inputs unchanged: ${resource.path}`, async () => {
+				const original = JSON.stringify({ servers: { removed }, inputs: [shared, exclusive] });
+				const { service, fileService } = await createFixture({
+					userContent: original,
+					workspaceConfiguration: resource === workspaceResource ? workspaceResource : undefined,
+					remoteUserContent: resource === remoteUserResource ? '{}' : undefined,
+				});
+				const [local] = await service.getInstalled();
+				await fileService.writeFile(resource, VSBuffer.fromString('{'));
 
-		for (const localUserInstall of [false, true]) {
-			test(`lists a user server that is also in the remote user configuration once on the web client: localUserInstall=${localUserInstall}`, async () => {
-				const localUserServers = ['filesystem', 'memory'].map(name => upcastPartial<ILocalMcpServer>({ name, mcpResource: new TestUserDataProfileService().currentProfile.mcpResource }));
-				const { service } = await createFixture({ remoteChannel: createRemoteChannel([], ['filesystem']), localUserInstall, localUserServers });
-				assert.deepStrictEqual((await service.getInstalled()).map(local => `${local.scope}:${local.name}`), localUserInstall
-					? ['user:filesystem', 'user:memory', 'remoteUser:filesystem']
-					: ['user:memory', 'remoteUser:filesystem']);
+				await assert.rejects(service.uninstall(local), error =>
+					error instanceof Error
+					&& error.message.includes(resource.toString())
+					&& error.cause instanceof Error
+					&& error.cause.message.includes('Failed to parse scanned MCP servers'));
+
+				assert.strictEqual((await fileService.readFile(userResource)).value.toString(), original);
 			});
 		}
-
-		test('web client asks the remote whether a server can be installed', async () => {
-			const { service } = await createFixture({ remoteChannel: createRemoteChannel([]), localUserInstall: false, allowed: false });
-			const result = service.canInstall(server);
-			assert.deepStrictEqual(result === true ? true : result.value, 'This mcp server cannot be installed because Blocked by policy');
-		});
 	});
 
 	test('allows installing in an ordinary workspace configuration that does not exist yet', async () => {

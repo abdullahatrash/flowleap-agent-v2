@@ -308,7 +308,7 @@ abstract class AbstractTreeView extends Disposable implements ITreeView {
 			this.initializeShowRefreshAction();
 		});
 
-		this.treeViewDnd = this.instantiationService.createInstance(CustomTreeViewDragAndDrop, this.id);
+		this.treeViewDnd = this._register(this.instantiationService.createInstance(CustomTreeViewDragAndDrop, this.id));
 		if (this._dragAndDropController) {
 			this.treeViewDnd.controller = this._dragAndDropController;
 		}
@@ -740,18 +740,10 @@ abstract class AbstractTreeView extends Disposable implements ITreeView {
 			},
 			keyboardNavigationLabelProvider: {
 				getKeyboardNavigationLabel: (item: ITreeItem) => {
-					// Match the description as well as the label so type-to-find (and filter mode)
-					// hits the secondary text a tree shows next to a row, e.g. status or tags.
-					const description = typeof item.description === 'string' ? item.description : undefined;
 					if (item.label) {
-						const label = isMarkdownString(item.label.label) ? item.label.label.value : item.label.label;
-						return description ? `${label} ${description}` : label;
+						return isMarkdownString(item.label.label) ? item.label.label.value : item.label.label;
 					}
-					if (item.resourceUri) {
-						const name = basename(URI.revive(item.resourceUri));
-						return description ? `${name} ${description}` : name;
-					}
-					return description;
+					return item.resourceUri ? basename(URI.revive(item.resourceUri)) : undefined;
 				}
 			},
 			expandOnlyOnTwistieClick: (e: ITreeItem) => {
@@ -802,6 +794,9 @@ abstract class AbstractTreeView extends Disposable implements ITreeView {
 				this._onDidExpandItem.fire(element);
 			}
 		}));
+		// The view may have been laid out before the tree was created (e.g. a view that
+		// starts collapsed and is expanded later), so apply the last known dimensions.
+		this.layout(this._height, this._width);
 		this.tree.setInput(this.root).then(() => this.updateContentAreas());
 
 		this.treeDisposables.add(this.tree.onDidOpen(async (e) => {
@@ -1927,7 +1922,7 @@ interface TreeDragSourceInfo {
 export class CustomTreeViewDragAndDrop implements ITreeDragAndDrop<ITreeItem> {
 	private readonly treeMimeType: string;
 	private readonly treeItemsTransfer = LocalSelectionTransfer.getInstance<DraggedTreeItemsIdentifier>();
-	private dragCancellationToken: CancellationTokenSource | undefined;
+	private dragOperation: { uuid: string; controller: ITreeViewDragAndDropController; cancellationToken: CancellationTokenSource } | undefined;
 
 	constructor(
 		private readonly treeId: string,
@@ -1940,7 +1935,22 @@ export class CustomTreeViewDragAndDrop implements ITreeDragAndDrop<ITreeItem> {
 
 	private dndController: ITreeViewDragAndDropController | undefined;
 	set controller(controller: ITreeViewDragAndDropController | undefined) {
+		this.cancelDragOperation();
 		this.dndController = controller;
+	}
+
+	private cancelDragOperation(): void {
+		const operation = this.dragOperation;
+		this.dragOperation = undefined;
+		if (!operation) {
+			return;
+		}
+		operation.cancellationToken.dispose(true);
+		this.treeViewsDragAndDropService.removeDragOperationTransfer(operation.uuid);
+		operation.controller.handleDragEnd?.(operation.uuid);
+		if (this.treeItemsTransfer.getData(DraggedTreeItemsIdentifier.prototype)?.[0].identifier === operation.uuid) {
+			this.treeItemsTransfer.clearData(DraggedTreeItemsIdentifier.prototype);
+		}
 	}
 
 	private handleDragAndLog(dndController: ITreeViewDragAndDropController, itemHandles: string[], uuid: string, dragCancellationToken: CancellationToken): Promise<VSDataTransfer | undefined> {
@@ -1966,8 +1976,10 @@ export class CustomTreeViewDragAndDrop implements ITreeDragAndDrop<ITreeItem> {
 		}
 		const uuid = generateUuid();
 
-		this.dragCancellationToken = new CancellationTokenSource();
-		this.treeViewsDragAndDropService.addDragOperationTransfer(uuid, this.handleDragAndLog(this.dndController, itemHandles, uuid, this.dragCancellationToken.token));
+		this.cancelDragOperation();
+		const cancellationToken = new CancellationTokenSource();
+		this.dragOperation = { uuid, controller: this.dndController, cancellationToken };
+		this.treeViewsDragAndDropService.addDragOperationTransfer(uuid, this.handleDragAndLog(this.dndController, itemHandles, uuid, cancellationToken.token));
 		this.treeItemsTransfer.setData([new DraggedTreeItemsIdentifier(uuid)], DraggedTreeItemsIdentifier.prototype);
 		originalEvent.dataTransfer.clearData(Mimes.text);
 		if (this.dndController.dragMimeTypes.find((element) => element === Mimes.uriList)) {
@@ -2117,11 +2129,17 @@ export class CustomTreeViewDragAndDrop implements ITreeDragAndDrop<ITreeItem> {
 	onDragEnd(originalEvent: DragEvent): void {
 		// Check if the drag was cancelled.
 		if (originalEvent.dataTransfer?.dropEffect === 'none') {
-			this.dragCancellationToken?.cancel();
+			this.cancelDragOperation();
+		} else {
+			// A successful drop may still be awaiting its additional transfer data.
+			this.dragOperation?.cancellationToken.dispose();
+			this.dragOperation = undefined;
 		}
 	}
 
-	dispose(): void { }
+	dispose(): void {
+		this.cancelDragOperation();
+	}
 }
 
 function setCascadingCheckboxUpdates(items: readonly ITreeItem[]) {

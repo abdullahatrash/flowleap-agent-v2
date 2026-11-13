@@ -11,8 +11,8 @@ import { URI } from '../../../base/common/uri.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { ILogService } from '../../log/common/log.js';
 import { type AgentProvider, AgentSession, type AuthenticateParams, type AuthenticateResult, type IAgent, type IAgentHostNetworkEndpoint, type IMcpNotification } from '../common/agent.js';
+import type { IAgentHostAuthenticationScope } from '../common/agentHostCredentials.js';
 import type { IAgentHostManagedSettingsDiagnostics } from '../common/agentService.js';
-import { isMirroredSessionProvider } from '../common/agentHostChatMirror.js';
 import { IAgentHostAuthenticationController } from './agentHostAuthenticationService.js';
 import { parseMcpChannelUri } from './shared/mcpCustomizationController.js';
 
@@ -31,18 +31,23 @@ export interface IAgentHostProviderService {
 
 	registerProviderInitializer(initializer: (provider: IAgent) => IDisposable): IDisposable;
 	registerProvider(provider: IAgent): void;
-	/**
-	 * FlowLeap (PRD 0018 C3): removes and disposes a provider that registered at runtime, such as
-	 * the `flowleap-chat` agent, which exists only while a window publishes. No-op when absent.
-	 */
-	unregisterProvider(provider: AgentProvider): void;
 	resolveProvider(provider?: AgentProvider): IAgent | undefined;
 	getProvider(provider: AgentProvider): IAgent | undefined;
 	getProviderForSession(session: URI | string): IAgent | undefined;
+	/**
+	 * Resolves the agent backing `chat` of `session`: the chat's own agent when
+	 * one is associated with it (a chat whose agent differs from its session's),
+	 * otherwise the session's agent. `undefined` when the chat's own agent is not
+	 * registered: such a chat never falls back to its session's agent.
+	 */
+	getProviderForChat(session: URI | string, chat: URI | string | undefined): IAgent | undefined;
 	getProviders(): readonly IAgent[];
 	associateSession(session: URI | string, provider: AgentProvider): void;
 	releaseSession(session: URI | string, expectedProvider?: AgentProvider): void;
-	authenticate(params: AuthenticateParams): Promise<AuthenticateResult>;
+	/** Records the agent of a chat whose agent differs from its session's. A chat's agent never changes. */
+	associateChat(chat: URI | string, provider: AgentProvider): void;
+	releaseChat(chat: URI | string): void;
+	authenticate(params: AuthenticateParams, scope?: IAgentHostAuthenticationScope): Promise<AuthenticateResult>;
 	handleMcpRequest(channel: string, method: string, params: Record<string, unknown> | undefined): Promise<unknown>;
 	getNetworkDiagnostics(): Promise<IAgentHostProviderNetworkDiagnostics>;
 	getManagedSettingsDiagnostics(): Promise<readonly IAgentHostManagedSettingsDiagnostics[]>;
@@ -55,6 +60,7 @@ export class AgentHostProviderService extends Disposable implements IAgentHostPr
 	private readonly _providerRegistrations = this._register(new DisposableMap<AgentProvider, DisposableStore>());
 	private readonly _providers = this._register(new DisposableMap<AgentProvider, IAgent>());
 	private readonly _sessionToProvider = new Map<string, AgentProvider>();
+	private readonly _chatToProvider = new Map<string, AgentProvider>();
 	private readonly _agents: ISettableObservable<readonly IAgent[]> = observableValue(this, []);
 	readonly agents: IObservable<readonly IAgent[]> = this._agents;
 	private readonly _onDidRegisterProvider = this._register(new Emitter<IAgent>());
@@ -103,8 +109,7 @@ export class AgentHostProviderService extends Disposable implements IAgentHostPr
 			for (const initializer of this._providerInitializers) {
 				registrations.add(initializer(provider));
 			}
-			// FlowLeap (PRD 0018 C3): a mirror provider runs no session of its own; never the default.
-			if (!this._defaultProvider && !isMirroredSessionProvider(provider.id)) {
+			if (!this._defaultProvider) {
 				this._defaultProvider = provider.id;
 			}
 			this._agents.set([...this._providers.values()], undefined);
@@ -125,25 +130,6 @@ export class AgentHostProviderService extends Disposable implements IAgentHostPr
 		});
 	}
 
-	unregisterProvider(provider: AgentProvider): void {
-		if (!this._providers.has(provider)) {
-			return;
-		}
-		this._logService.info(`Unregistering agent provider: ${provider}`);
-		this._authenticationReplays.delete(provider);
-		this._providerRegistrations.deleteAndDispose(provider);
-		this._providers.deleteAndDispose(provider);
-		for (const [session, owner] of this._sessionToProvider) {
-			if (owner === provider) {
-				this._sessionToProvider.delete(session);
-			}
-		}
-		if (this._defaultProvider === provider) {
-			this._defaultProvider = [...this._providers.keys()].find(id => !isMirroredSessionProvider(id));
-		}
-		this._agents.set([...this._providers.values()], undefined);
-	}
-
 	resolveProvider(provider?: AgentProvider): IAgent | undefined {
 		return provider ? this._providers.get(provider) : this._defaultProvider ? this._providers.get(this._defaultProvider) : undefined;
 	}
@@ -162,7 +148,12 @@ export class AgentHostProviderService extends Disposable implements IAgentHostPr
 		if (schemeProvider) {
 			return this._providers.get(schemeProvider);
 		}
-		return this._defaultProvider ? this._providers.get(this._defaultProvider) : undefined;
+		return undefined;
+	}
+
+	getProviderForChat(session: URI | string, chat: URI | string | undefined): IAgent | undefined {
+		const chatProvider = chat === undefined ? undefined : this._chatToProvider.get(typeof chat === 'string' ? chat : chat.toString());
+		return chatProvider !== undefined ? this._providers.get(chatProvider) : this.getProviderForSession(session);
 	}
 
 	getProviders(): readonly IAgent[] {
@@ -181,8 +172,16 @@ export class AgentHostProviderService extends Disposable implements IAgentHostPr
 		this._sessionToProvider.delete(key);
 	}
 
-	authenticate(params: AuthenticateParams): Promise<AuthenticateResult> {
-		return this._authenticationController.authenticate(params, this._providers.values());
+	associateChat(chat: URI | string, provider: AgentProvider): void {
+		this._chatToProvider.set(typeof chat === 'string' ? chat : chat.toString(), provider);
+	}
+
+	releaseChat(chat: URI | string): void {
+		this._chatToProvider.delete(typeof chat === 'string' ? chat : chat.toString());
+	}
+
+	authenticate(params: AuthenticateParams, scope?: IAgentHostAuthenticationScope): Promise<AuthenticateResult> {
+		return this._authenticationController.authenticate(params, this._providers.values(), scope);
 	}
 
 	async handleMcpRequest(channel: string, method: string, params: Record<string, unknown> | undefined): Promise<unknown> {
@@ -268,6 +267,7 @@ export class AgentHostProviderService extends Disposable implements IAgentHostPr
 			this._agents.set([], undefined);
 			this._defaultProvider = undefined;
 			this._sessionToProvider.clear();
+			this._chatToProvider.clear();
 		}
 	}
 }

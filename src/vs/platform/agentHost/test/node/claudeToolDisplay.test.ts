@@ -5,6 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { AgentPermissionKind } from '../../common/agent.js';
 import {
 	getClaudeConfirmationTitle,
 	getClaudeInvocationMessage,
@@ -43,28 +44,28 @@ suite('claudeToolDisplay — §4 mapping table', () => {
 		const snapshot = TOOLS.map(t => [t, getClaudePermissionKind(t), getClaudeToolDisplayName(t)] as const);
 
 		assert.deepStrictEqual(snapshot, [
-			['Bash', 'shell', 'Run shell command'],
-			['BashOutput', 'shell', 'Read shell output'],
-			['KillBash', 'shell', 'Kill shell command'],
-			['Read', 'read', 'Read file'],
-			['Glob', 'read', 'Find files'],
-			['Grep', 'read', 'Search files'],
-			['LS', 'read', 'List directory'],
-			['NotebookRead', 'read', 'Read notebook'],
-			['Write', 'write', 'Write file'],
-			['Edit', 'write', 'Edit file'],
-			['MultiEdit', 'write', 'Edit file'],
-			['NotebookEdit', 'write', 'Edit notebook'],
-			['TodoWrite', 'write', 'Update todo list'],
-			['WebFetch', 'url', 'Fetch URL'],
-			['Task', 'custom-tool', 'Run subagent task'],
-			['ExitPlanMode', 'custom-tool', 'Approve the plan?'],
-			['AskUserQuestion', 'custom-tool', 'Ask user a question'],
-			['Skill', 'skill', 'Run skill'],
-			['TaskCreate', 'custom-tool', 'Create task'],
-			['TaskUpdate', 'custom-tool', 'Update task'],
-			['TaskList', 'custom-tool', 'List tasks'],
-			['TaskGet', 'custom-tool', 'Read task'],
+			['Bash', AgentPermissionKind.Shell, 'Run shell command'],
+			['BashOutput', AgentPermissionKind.Shell, 'Read shell output'],
+			['KillBash', AgentPermissionKind.Shell, 'Kill shell command'],
+			['Read', AgentPermissionKind.Read, 'Read file'],
+			['Glob', AgentPermissionKind.Read, 'Find files'],
+			['Grep', AgentPermissionKind.Read, 'Search files'],
+			['LS', AgentPermissionKind.Read, 'List directory'],
+			['NotebookRead', AgentPermissionKind.Read, 'Read notebook'],
+			['Write', AgentPermissionKind.Write, 'Write file'],
+			['Edit', AgentPermissionKind.Write, 'Edit file'],
+			['MultiEdit', AgentPermissionKind.Write, 'Edit file'],
+			['NotebookEdit', AgentPermissionKind.Write, 'Edit notebook'],
+			['TodoWrite', AgentPermissionKind.Write, 'Update todo list'],
+			['WebFetch', AgentPermissionKind.Url, 'Fetch URL'],
+			['Task', AgentPermissionKind.CustomTool, 'Run subagent task'],
+			['ExitPlanMode', AgentPermissionKind.CustomTool, 'Ready to code?'],
+			['AskUserQuestion', AgentPermissionKind.CustomTool, 'Ask user a question'],
+			['Skill', AgentPermissionKind.Skill, 'Run skill'],
+			['TaskCreate', AgentPermissionKind.CustomTool, 'Create task'],
+			['TaskUpdate', AgentPermissionKind.CustomTool, 'Update task'],
+			['TaskList', AgentPermissionKind.CustomTool, 'List tasks'],
+			['TaskGet', AgentPermissionKind.CustomTool, 'Read task'],
 		]);
 	});
 
@@ -74,7 +75,7 @@ suite('claudeToolDisplay — §4 mapping table', () => {
 				getClaudePermissionKind('mcp__github__listIssues'),
 				getClaudeToolDisplayName('mcp__github__listIssues'),
 			],
-			['mcp', 'Run MCP tool github__listIssues'],
+			[AgentPermissionKind.Mcp, 'Run MCP tool github__listIssues'],
 		);
 	});
 
@@ -84,7 +85,7 @@ suite('claudeToolDisplay — §4 mapping table', () => {
 				getClaudePermissionKind('SomeNewTool'),
 				getClaudeToolDisplayName('SomeNewTool'),
 			],
-			['custom-tool', 'SomeNewTool'],
+			[AgentPermissionKind.CustomTool, 'SomeNewTool'],
 		);
 	});
 
@@ -278,7 +279,7 @@ suite('claudeToolDisplay — §4 mapping table', () => {
 			['TodoWrite', undefined, undefined, 'Update todo list', 'Update todo list', '"Update todo list" failed', '{\n  "todos": []\n}'],
 			['WebFetch', undefined, undefined, { markdown: 'Fetching [https://example.com](https://example.com)' }, { markdown: 'Fetched [https://example.com](https://example.com)' }, '"Fetch URL" failed', '{\n  "url": "https://example.com"\n}'],
 			['Task', 'subagent', { toolKind: 'subagent' }, 'find the bug', 'Ran subagent', '"Run subagent task" failed', '{\n  "description": "find the bug",\n  "subagent_type": "Explore"\n}'],
-			['ExitPlanMode', undefined, undefined, 'Approve the plan?', 'Approve the plan?', '"Approve the plan?" failed', '{\n  "plan": "..."\n}'],
+			['ExitPlanMode', undefined, undefined, 'Ready to code?', 'Ready to code?', '"Ready to code?" failed', '{\n  "plan": "..."\n}'],
 			['AskUserQuestion', undefined, undefined, 'Ask user a question', 'Ask user a question', '"Ask user a question" failed', '{\n  "question": "why?"\n}'],
 			['Skill', undefined, undefined, { markdown: 'Running skill `deep-research`' }, { markdown: 'Ran skill `deep-research`' }, '"Run skill" failed', '{\n  "skill": "deep-research",\n  "args": "foo"\n}'],
 			['TaskCreate', undefined, undefined, 'Create task: Fix auth bug', 'Create task: Fix auth bug', '"Create task" failed', '{\n  "subject": "Fix auth bug",\n  "description": "..."\n}'],
@@ -361,7 +362,7 @@ suite('claudeToolDisplay — §4 mapping table', () => {
 				'subagent',
 				{ toolKind: 'subagent' },
 				'Run subagent task',
-				'custom-tool',
+				AgentPermissionKind.CustomTool,
 				'review this',
 			],
 		);

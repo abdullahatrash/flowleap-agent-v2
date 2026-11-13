@@ -5,7 +5,6 @@
 
 import { Disposable, DisposableStore, IDisposable, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { CancellationTokenSource } from '../../base/common/cancellation.js';
-import { IObservable, runOnChange } from '../../base/common/observable.js';
 import { DeferredPromise, disposableTimeout } from '../../base/common/async.js';
 import { createDecorator, IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../platform/log/common/log.js';
@@ -26,8 +25,8 @@ import { IKeybindingService } from '../../platform/keybinding/common/keybinding.
 import { IHostService } from '../../workbench/services/host/browser/host.js';
 import { IMarkdownRendererService } from '../../platform/markdown/browser/markdownRenderer.js';
 import { WELCOME_COMPLETE_KEY } from '../common/welcome.js';
-import { SessionsWelcomeVisibleContext } from '../common/contextkeys.js';
-import { ConditionalAuthState, conditionalAuthState, observeAllowSignedOutWhenUsable, resolveSignedOutWindowGate, SignedOutWindowGate } from './sessionsAuthGate.js';
+import { SessionsWelcomeVisibleContext } from '../../workbench/contrib/sessions/common/contextkeys.js';
+import { ConditionalAuthState, conditionalAuthState, resolveSignedOutWindowGate, SignedOutWindowGate } from '../../workbench/services/sessions/browser/sessionsAuthGate.js';
 
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { Codicon } from '../../base/common/codicons.js';
@@ -37,18 +36,10 @@ import { createWorkbenchDialogOptions } from '../../workbench/browser/parts/dial
 import { MarkdownString } from '../../base/common/htmlContent.js';
 import { localize } from '../../nls.js';
 import { createSessionsSignInDialogOptions, SessionsSigningInDialog } from './sessionsSignInDialog.js';
-import { SHOULD_SHOW_RETURN_TO_VSCODE_EDITOR_COMMAND_ID } from '../common/sessionCommands.js';
-import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
+import { SHOULD_SHOW_RETURN_TO_VSCODE_EDITOR_COMMAND_ID } from '../../workbench/contrib/sessions/common/sessionCommands.js';
+import { ISessionsManagementService } from '../../workbench/contrib/sessions/common/sessionsManagement.js';
 
 const AIDisabledConfig = 'chat.disableAIFeatures';
-
-/**
- * FlowLeap: completion key of the onboarding wizard, owned by
- * `workbench/contrib/welcomeOnboarding/common/onboardingTypes` (`ONBOARDING_STORAGE_KEY`).
- * Read by string so this layer can skip the duplicate welcome dialog without
- * importing a workbench contribution.
- */
-const ONBOARDING_WIZARD_STATE_KEY = 'welcomeOnboarding.state';
 
 export const ISessionsSetUpService = createDecorator<ISessionsSetUpService>('sessionsSetUpService');
 
@@ -85,7 +76,7 @@ class SessionsSetUpWidget extends Disposable {
 	private readonly watcherRef = this._register(new MutableDisposable());
 	private readonly signInSetupCancellation = this._register(new MutableDisposable<CancellationTokenSource>());
 	private _initialSetupFlow = true;
-	/** True while the window is open without GitHub via provider auth or the conditional-auth opt-in. */
+	/** True while the window is open without GitHub. */
 	private _proceedingSignedOut = false;
 	/**
 	 * Set once the initial default-account resolution has completed. Until then
@@ -97,8 +88,6 @@ class SessionsSetUpWidget extends Disposable {
 	 */
 	private _accountResolved = false;
 	private _waitingForSessionTypes = false;
-	/** Whether the window may proceed without GitHub sign-in. */
-	private readonly _allowSignedOutWhenUsable: IObservable<boolean>;
 
 	// Non-service params must come before @-decorated service params
 	constructor(
@@ -123,27 +112,8 @@ class SessionsSetUpWidget extends Disposable {
 		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
 	) {
 		super();
-		this._allowSignedOutWhenUsable = observeAllowSignedOutWhenUsable(this.configurationService);
-		this._register(runOnChange(this._allowSignedOutWhenUsable, () => this._onAllowSignedOutWhenUsableChanged()));
 		this._register(this.sessionsManagementService.onDidChangeSessionTypes(() => this._onProviderAvailabilityChanged()));
 		this._start();
-	}
-
-	/**
-	 * The opt-in was toggled while the window is open. Ignored until the account
-	 * has resolved (see {@link _accountResolved}) and for signed-in users. For a
-	 * signed-out user, turning it on retires an already-open sign-in modal (it was
-	 * raised before the account resolved); turning it off falls back to demanding
-	 * sign-in.
-	 */
-	private _onAllowSignedOutWhenUsableChanged(): void {
-		// Only act once the account has resolved AND the user is signed out; while
-		// unresolved or signed in, the sign-in watch owns the decision.
-		const signedIn = this.defaultAccountService.currentDefaultAccount !== null;
-		if (conditionalAuthState(this._accountResolved, signedIn) !== ConditionalAuthState.SignedOut) {
-			return;
-		}
-		this._reevaluateSignedOut();
 	}
 
 	private _onProviderAvailabilityChanged(): void {
@@ -171,14 +141,6 @@ class SessionsSetUpWidget extends Disposable {
 			return;
 		}
 
-		// FlowLeap: the default chat provider is not GitHub. Agents run on
-		// Claude-native credentials or a BYOK key, so the window has no
-		// GitHub/Copilot sign-in gate (PRD 0017 A1).
-		if (!this._usesGitHubSignIn()) {
-			void this._runWithoutGitHubGate();
-			return;
-		}
-
 		// Learn when the default account resolves so the conditional-auth reaction
 		// can tell "signed out" from "not resolved yet". On first load the account
 		// is populated silently (no change event fires), so awaiting it once is the
@@ -189,10 +151,6 @@ class SessionsSetUpWidget extends Disposable {
 			}
 			this._accountResolved = true;
 			this._onProviderAvailabilityChanged();
-			// The initial setup flow re-reads the setting after this account promise.
-			if (!this._initialSetupFlow && this._allowSignedOutWhenUsable.get()) {
-				this._onAllowSignedOutWhenUsableChanged();
-			}
 		});
 
 		if (isWeb) {
@@ -208,49 +166,6 @@ class SessionsSetUpWidget extends Disposable {
 		} else {
 			void this._watchSignInState().finally(() => this._initialSetupFlow = false);
 		}
-	}
-
-	private _usesGitHubSignIn(): boolean {
-		return this.productService.defaultChatAgent?.provider?.default?.id === 'github';
-	}
-
-	/**
-	 * First launch shows the welcome dialog, unless the onboarding wizard already
-	 * ran its own welcome; afterwards the window opens straight into the sessions
-	 * list. The welcome dialog is desktop-only; on web the window opens directly.
-	 */
-	private async _runWithoutGitHubGate(): Promise<void> {
-		await this._ensureAIFeaturesEnabled();
-		if (this._store.isDisposed) {
-			return;
-		}
-
-		const isFirstLaunch = !this.storageService.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.APPLICATION, false);
-		const onboardingWizardRan = this.storageService.getBoolean(ONBOARDING_WIZARD_STATE_KEY, StorageScope.APPLICATION, false);
-		if (onboardingWizardRan) {
-			this.storageService.store(WELCOME_COMPLETE_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
-			this.serviceMarkDone();
-		} else if (isFirstLaunch && !isWeb && !this.dialogRef.value) {
-			const disposables = new DisposableStore();
-			this.dialogRef.value = disposables;
-			const welcomeVisibleKey = SessionsWelcomeVisibleContext.bindTo(this.contextKeyService);
-			welcomeVisibleKey.set(true);
-			disposables.add(toDisposable(() => welcomeVisibleKey.reset()));
-			await this._showWelcomeDialog();
-			this.dialogRef.clear();
-		}
-
-		this._initialSetupFlow = false;
-		this.onCompleted();
-		this.watcherRef.value = this.configurationService.onDidChangeConfiguration(e => {
-			if (e.affectsConfiguration(AIDisabledConfig)) {
-				if (this.configurationService.getValue<boolean>(AIDisabledConfig)) {
-					this._showAIDisabledDialog();
-				} else {
-					this.dialogRef.clear();
-				}
-			}
-		});
 	}
 
 	private async _checkWebAuth(): Promise<void> {
@@ -298,7 +213,7 @@ class SessionsSetUpWidget extends Disposable {
 				return;
 			}
 			const welcomeComplete = this.storageService.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.APPLICATION, false);
-			if (welcomeComplete && this._allowSignedOutWhenUsable.get()) {
+			if (welcomeComplete) {
 				await this._proceedWithoutGitHub();
 			} else {
 				this._showWelcome(false);
@@ -341,13 +256,11 @@ class SessionsSetUpWidget extends Disposable {
 	}
 
 	/**
-	 * Resolve the window-level signed-out gate from the opt-in and the live auth
-	 * requirement of every advertised session type.
+	 * Resolve the window-level signed-out gate from every advertised session type.
 	 */
 	private _signedOutWindowGate(): SignedOutWindowGate {
 		const sessionTypes = this.sessionsManagementService.getAllProviderSessionTypes().map(({ sessionType }) => sessionType);
 		return resolveSignedOutWindowGate(
-			this._allowSignedOutWhenUsable.get(),
 			sessionTypes.map(sessionType => sessionType.authRequirement),
 			this._canInitializeWithoutGitHub(sessionTypes),
 		);
@@ -366,7 +279,7 @@ class SessionsSetUpWidget extends Disposable {
 		if (this._initialSetupFlow) {
 			return;
 		}
-		if (this._proceedingSignedOut && this._allowSignedOutWhenUsable.get()) {
+		if (this._proceedingSignedOut) {
 			return;
 		}
 		const gate = this._signedOutWindowGate();
@@ -392,16 +305,14 @@ class SessionsSetUpWidget extends Disposable {
 	}
 
 	/**
-	 * Open the Agents window for a signed-out user because the opt-in permits it.
-	 * Mirrors the signed-in completion path and remains active until sign-in or the
-	 * opt-in changes. Idempotent while already proceeding.
+	 * Open the Agents window for a signed-out user. Idempotent while already proceeding.
 	 */
 	private async _proceedWithoutGitHub(): Promise<void> {
 		if (this._proceedingSignedOut) {
 			return;
 		}
 		this._proceedingSignedOut = true;
-		this.logService.info('[sessions welcome] Proceeding without GitHub sign-in; a session type can initialize without GitHub or signed-out operation is enabled');
+		this.logService.info('[sessions welcome] Proceeding without GitHub sign-in');
 		await this._ensureAIFeaturesEnabled();
 		if (this._store.isDisposed) {
 			return;
@@ -463,8 +374,7 @@ class SessionsSetUpWidget extends Disposable {
 		}
 
 		// A non-first-launch _showWelcome means the user is signed out. Consult the
-		// last-resort GitHub gate before forcing sign-in: with the opt-in on, open
-		// the window instead.
+		// last-resort GitHub gate before forcing sign-in.
 		if (!isFirstLaunch) {
 			const gate = this._signedOutWindowGate();
 			if (gate === SignedOutWindowGate.Unresolved) {
@@ -517,8 +427,7 @@ class SessionsSetUpWidget extends Disposable {
 					await this._proceedWithoutGitHub();
 					return;
 				}
-				const allowContinueWithoutSignIn = this._allowSignedOutWhenUsable.get();
-				const continueWithoutSignIn = await this._showSignInDialog(allowContinueWithoutSignIn);
+				const continueWithoutSignIn = await this._showSignInDialog(true);
 				if (continueWithoutSignIn || this._canInitializeWithoutGitHub()) {
 					this.storageService.store(WELCOME_COMPLETE_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
 					this.serviceMarkDone();
@@ -560,9 +469,6 @@ class SessionsSetUpWidget extends Disposable {
 			let continueWithoutSignIn = false;
 			const showReturnToVSCodeEditor = !isWeb && (await this.commandService.executeCommand<boolean>(SHOULD_SHOW_RETURN_TO_VSCODE_EDITOR_COMMAND_ID)) === true;
 			const onContinueWithoutSignIn = () => {
-				if (!this._allowSignedOutWhenUsable.get()) {
-					return;
-				}
 				continueWithoutSignIn = true;
 				setupCancellation.cancel();
 			};
@@ -624,12 +530,12 @@ class SessionsSetUpWidget extends Disposable {
 			createWorkbenchDialogOptions({
 				type: 'none',
 				extraClasses: ['chat-setup-dialog', 'sessions-welcome-dialog', 'sessions-main-welcome-dialog'],
-				detail: localize('sessions.welcome.detail', "Your AI-powered patent workspace where agents research, analyze, and draft with you."),
+				detail: localize('sessions.welcome.detail', "Your AI-powered coding experience where agents explore, build, and iterate with you."),
 				icon: Codicon.agent,
 				alignment: DialogContentsAlignment.Vertical,
 				cancelId: 1,
 				disableCloseButton: true,
-				renderFooter: this._usesGitHubSignIn() ? footer => footer.appendChild(this._createWelcomeFooter(disposables)) : undefined,
+				renderFooter: footer => footer.appendChild(this._createWelcomeFooter(disposables)),
 			}, this.keybindingService, this.layoutService, this.hostService)
 		));
 

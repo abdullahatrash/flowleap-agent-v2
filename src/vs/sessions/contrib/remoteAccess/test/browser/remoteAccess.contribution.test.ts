@@ -14,8 +14,8 @@ import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contex
 import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { IsAuxiliaryWindowContext, IsSessionsWindowContext } from '../../../../../workbench/common/contextkeys.js';
 import { RemoteAccessEnabledContext } from '../../../../../workbench/contrib/chat/common/remoteAccess/remoteAccess.js';
-import { Menus } from '../../../../browser/menus.js';
-import { ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
+import { Menus } from '../../../../../workbench/contrib/sessions/browser/menus.js';
+import { ISession, SessionStatus } from '../../../../../workbench/services/sessions/common/session.js';
 import { describeHostStatus, MANAGE_VIEWERS_ID, PAIR_VIEWER_ID, TOGGLE_REMOTE_ACCESS_ID } from '../../browser/remoteAccess.contribution.js';
 import { RemoteAccessKeepAwakeController } from '../../browser/remoteAccessKeepAwake.js';
 

@@ -6,7 +6,7 @@
 import './media/globalCompositeBar.css';
 import { localize } from '../../../nls.js';
 import { ActionBar, ActionsOrientation } from '../../../base/browser/ui/actionbar/actionbar.js';
-import { ACCOUNTS_ACTIVITY_ID, GLOBAL_ACTIVITY_ID } from '../../common/activity.js';
+import { ACCOUNTS_ACTIVITY_ID, ACCOUNTS_SHARED_SIGN_IN_GROUP, GLOBAL_ACTIVITY_ID } from '../../common/activity.js';
 import { IActivityService } from '../../services/activity/common/activity.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { DisposableStore, Disposable } from '../../../base/common/lifecycle.js';
@@ -52,27 +52,13 @@ import { IDefaultAccountService } from '../../../platform/defaultAccount/common/
 import { WORKBENCH_MENU_MOTION_CLASS, workbenchMenuCloseAnimation } from '../actions/menuMotion.js';
 import { createCodexAccountMenuActions, ICodexAccountService, shouldShowCodexAccount } from '../../services/agentHost/browser/codexAccountService.js';
 
-/** Action id for the activity-bar Command Palette entry (not a registered command; drives the local ActionBar item). */
-const COMMAND_PALETTE_ACTIVITY_ID = 'workbench.actions.activityBarCommandPalette';
-/** The command opened when the activity-bar Command Palette icon is clicked (same as the Command Palette keybinding). */
-const SHOW_COMMANDS_COMMAND_ID = 'workbench.action.showCommands';
-/**
- * Id of the authentication provider (owned by the FlowLeap extension) that holds the FlowLeap Session.
- * Referenced here by string on purpose so core never becomes a second owner of it.
- */
-const FLOWLEAP_AUTH_PROVIDER_ID = 'flowleap';
-
 export class GlobalCompositeBar extends Disposable {
 
-	// FlowLeap (#143): the Command Palette action sits at the top of the bottom zone, directly above Accounts and Manage.
-	private static readonly COMMAND_PALETTE_ACTION_INDEX = 0;
-	private static readonly ACCOUNTS_ACTION_INDEX = 1;
+	private static readonly ACCOUNTS_ACTION_INDEX = 0;
 	static readonly ACCOUNTS_ICON = registerIcon('accounts-view-bar-icon', Codicon.account, localize('accountsViewBarIcon', "Accounts icon in the view bar."));
-	static readonly COMMAND_PALETTE_ICON = registerIcon('command-palette-view-bar-icon', Codicon.listSelection, localize('commandPaletteViewBarIcon', "Command Palette icon in the view bar."));
 
 	readonly element: HTMLElement;
 
-	private readonly commandPaletteAction = this._register(new Action(COMMAND_PALETTE_ACTIVITY_ID));
 	private readonly globalActivityAction = this._register(new Action(GLOBAL_ACTIVITY_ID));
 	private readonly accountAction = this._register(new Action(ACCOUNTS_ACTIVITY_ID));
 	private readonly globalActivityActionBar: ActionBar;
@@ -98,10 +84,6 @@ export class GlobalCompositeBar extends Disposable {
 		});
 		this.globalActivityActionBar = this._register(new ActionBar(this.element, {
 			actionViewItemProvider: (action, options) => {
-				if (action.id === COMMAND_PALETTE_ACTIVITY_ID) {
-					return this.instantiationService.createInstance(CommandPaletteActivityActionViewItem, this.contextMenuActionsProvider, { ...options, colors: this.colors, hoverOptions: this.activityHoverOptions });
-				}
-
 				if (action.id === GLOBAL_ACTIVITY_ID) {
 					return this.instantiationService.createInstance(GlobalActivityActionViewItem, this.contextMenuActionsProvider, { ...options, colors: this.colors, hoverOptions: this.activityHoverOptions }, contextMenuAlignmentOptions);
 				}
@@ -129,8 +111,6 @@ export class GlobalCompositeBar extends Disposable {
 			ariaLabel: localize('manage', "Manage"),
 			preventLoopNavigation: true
 		}));
-
-		this.globalActivityActionBar.push(this.commandPaletteAction, { index: GlobalCompositeBar.COMMAND_PALETTE_ACTION_INDEX });
 
 		if (this.accountsVisibilityPreference) {
 			this.globalActivityActionBar.push(this.accountAction, { index: GlobalCompositeBar.ACCOUNTS_ACTION_INDEX });
@@ -167,18 +147,14 @@ export class GlobalCompositeBar extends Disposable {
 	}
 
 	private toggleAccountsActivity() {
-		// FlowLeap (#143): locate items by id, since the Command Palette item sits above Accounts.
-		const viewItems = this.globalActivityActionBar.viewItems;
-		const accountsIndex = viewItems.findIndex(item => item.action.id === ACCOUNTS_ACTIVITY_ID);
-		const accountsVisible = accountsIndex !== -1;
+		const accountsVisible = this.globalActivityActionBar.length() === 2;
 		if (accountsVisible === this.accountsVisibilityPreference) {
 			return;
 		}
 		if (accountsVisible) {
-			this.globalActivityActionBar.pull(accountsIndex);
+			this.globalActivityActionBar.pull(GlobalCompositeBar.ACCOUNTS_ACTION_INDEX);
 		} else {
-			const manageIndex = viewItems.findIndex(item => item.action.id === GLOBAL_ACTIVITY_ID);
-			this.globalActivityActionBar.push(this.accountAction, manageIndex === -1 ? undefined : { index: manageIndex });
+			this.globalActivityActionBar.push(this.accountAction, { index: GlobalCompositeBar.ACCOUNTS_ACTION_INDEX });
 		}
 		this._onDidChange.fire();
 	}
@@ -189,75 +165,6 @@ export class GlobalCompositeBar extends Disposable {
 
 	private set accountsVisibilityPreference(value: boolean) {
 		setAccountsActionVisible(this.storageService, value);
-	}
-}
-
-/**
- * FlowLeap (#143): bottom-zone activity-bar item that opens the Command Palette on click (same as the
- * `workbench.action.showCommands` command). Unlike Accounts and Manage it has no popup menu of its own;
- * right-click falls back to the shared activity-bar context menu.
- */
-class CommandPaletteActivityActionViewItem extends CompositeBarActionViewItem {
-
-	constructor(
-		private readonly contextMenuActionsProvider: () => IAction[],
-		options: ICompositeBarActionViewItemOptions,
-		@IThemeService themeService: IThemeService,
-		@IHoverService hoverService: IHoverService,
-		@IConfigurationService configurationService: IConfigurationService,
-		@IKeybindingService keybindingService: IKeybindingService,
-		@ICommandService private readonly commandService: ICommandService,
-		@IContextMenuService private readonly contextMenuService: IContextMenuService,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
-		const action = instantiationService.createInstance(CompositeBarAction, {
-			id: COMMAND_PALETTE_ACTIVITY_ID,
-			name: localize('commandPalette', "Command Palette"),
-			classNames: ThemeIcon.asClassNameArray(GlobalCompositeBar.COMMAND_PALETTE_ICON),
-			keybindingId: SHOW_COMMANDS_COMMAND_ID,
-		});
-		super(action, { draggable: false, icon: true, hasPopup: false, ...options }, () => true, themeService, hoverService, configurationService, keybindingService);
-		this._register(action);
-	}
-
-	private open(): void {
-		this.commandService.executeCommand(SHOW_COMMANDS_COMMAND_ID);
-	}
-
-	override render(container: HTMLElement): void {
-		super.render(container);
-
-		this._register(addDisposableListener(this.container, EventType.MOUSE_DOWN, (e: MouseEvent) => {
-			EventHelper.stop(e, true);
-			if (e.button !== 2) {
-				this.open();
-			}
-		}));
-
-		this._register(addDisposableListener(this.container, EventType.KEY_UP, (e: KeyboardEvent) => {
-			const event = new StandardKeyboardEvent(e);
-			if (event.equals(KeyCode.Enter) || event.equals(KeyCode.Space)) {
-				EventHelper.stop(e, true);
-				this.open();
-			}
-		}));
-
-		this._register(addDisposableListener(this.container, TouchEventType.Tap, (e: GestureEvent) => {
-			EventHelper.stop(e, true);
-			this.open();
-		}));
-
-		// Right-click shows the shared activity-bar context menu, matching the rest of the bar.
-		this._register(addDisposableListener(this.container, EventType.CONTEXT_MENU, (e: MouseEvent) => {
-			e.stopPropagation();
-			const event = new StandardMouseEvent(getWindow(this.container), e);
-			this.contextMenuService.showContextMenu({
-				getAnchor: () => event,
-				getActions: () => this.contextMenuActionsProvider(),
-				getMenuClassName: () => WORKBENCH_MENU_MOTION_CLASS,
-				closeAnimation: workbenchMenuCloseAnimation
-			});
-		}));
 	}
 }
 
@@ -466,6 +373,11 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 	}
 
 	private async doInitialize(): Promise<void> {
+		// Resolve extension-host-backed GitHub state before exposing agent-specific accounts.
+		await this.defaultAccountService.getDefaultAccount();
+		if (this._store.isDisposed) {
+			return;
+		}
 		const providerIds = this.authenticationService.getProviderIds();
 		const results = await Promise.allSettled(providerIds.map(providerId => this.addAccountsFromProvider(providerId)));
 
@@ -532,14 +444,10 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 		}
 	}
 
-	/**
-	 * The avatar of the default account. When there is no default account (FlowLeap never sets one),
-	 * the avatar of the FlowLeap Session account is used instead.
-	 */
 	private getDefaultAccountAvatarIcon(): URI | undefined {
 		const currentDefaultAccount = this.defaultAccountService.currentDefaultAccount;
 		if (!currentDefaultAccount) {
-			return this.groupedAccounts.get(FLOWLEAP_AUTH_PROVIDER_ID)?.find(account => account.icon)?.icon;
+			return undefined;
 		}
 
 		const accounts = this.groupedAccounts.get(currentDefaultAccount.authenticationProvider.id);
@@ -559,9 +467,9 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 		const dynamicProviders = providers.filter(providerId => this.authenticationService.isDynamicAuthenticationProvider(providerId));
 
 		if (!this.initialized) {
-			const noAccountsAvailableAction = disposables.add(new Action('noAccountsAvailable', localize('loading', "Loading..."), undefined, false));
-			menus.push(noAccountsAvailableAction);
+			menus.push(disposables.add(new Action('noAccountsAvailable', localize('loading', "Loading..."), undefined, false)));
 		} else {
+
 			for (const providerId of registeredProviders) {
 				const provider = this.authenticationService.getProvider(providerId);
 				const accounts = this.groupedAccounts.get(providerId);
@@ -677,7 +585,21 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 			}
 		}
 
-		const codexAccountActions = createCodexAccountMenuActions(this.codexAccountService, shouldShowCodexAccount(this.configurationService, false));
+		const sharedAccountCommandGroups = otherCommands.filter(([group]) => group === ACCOUNTS_SHARED_SIGN_IN_GROUP);
+		const remainingCommandGroups = otherCommands.filter(([group]) => group !== ACCOUNTS_SHARED_SIGN_IN_GROUP);
+		const appendCommandGroups = (groups: typeof otherCommands) => {
+			for (const [, actions] of groups) {
+				if (menus.length && actions.length) {
+					menus.push(new Separator());
+				}
+				menus = menus.concat(actions);
+			}
+		};
+		appendCommandGroups(sharedAccountCommandGroups);
+
+		const codexAccountActions = this.initialized
+			? createCodexAccountMenuActions(this.codexAccountService, shouldShowCodexAccount(this.configurationService, false))
+			: [];
 		if (codexAccountActions.length) {
 			if (menus.length) {
 				menus.push(new Separator());
@@ -687,17 +609,7 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 			}
 		}
 
-		if (menus.length && otherCommands.length) {
-			menus.push(new Separator());
-		}
-
-		otherCommands.forEach((group, i) => {
-			const actions = group[1];
-			menus = menus.concat(actions);
-			if (i !== otherCommands.length - 1) {
-				menus.push(new Separator());
-			}
-		});
+		appendCommandGroups(remainingCommandGroups);
 
 		return menus;
 	}
@@ -733,16 +645,13 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 			canSignOut = false;
 		}
 
-		// Match by id first: a provider can relabel the same account (e.g. a placeholder
-		// label replaced once the user profile resolves). The label is only a fallback.
-		const existingAccount = accounts.find(a => a.id === account.id) ?? accounts.find(a => a.label === account.label);
+		const existingAccount = accounts.find(a => a.label === account.label);
 		if (existingAccount) {
 			// if we have an existing account and we discover that we
 			// can't sign out of it, update the account to mark it as "can't sign out"
 			if (!canSignOut) {
 				existingAccount.canSignOut = canSignOut;
 			}
-			existingAccount.label = account.label;
 			existingAccount.icon = account.icon;
 		} else {
 			accounts.push({ ...account, canSignOut });

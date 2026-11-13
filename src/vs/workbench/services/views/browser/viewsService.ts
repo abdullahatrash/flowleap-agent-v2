@@ -5,7 +5,7 @@
 
 import { Disposable, IDisposable, toDisposable, DisposableStore, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { IViewDescriptorService, ViewContainer, IViewDescriptor, IView, ViewContainerLocation, IViewPaneContainer } from '../../../common/views.js';
-import { FocusedViewContext, getVisbileViewContextKey } from '../../../common/contextkeys.js';
+import { FocusedViewContext, getEnabledViewContainerContextKey, getVisbileViewContextKey } from '../../../common/contextkeys.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ContextKeyExpr, IContextKey, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
@@ -401,7 +401,7 @@ export class ViewsService extends Disposable implements IViewsService {
 	private registerOpenViewContainerAction(viewContainer: ViewContainer): IDisposable {
 		const disposables = new DisposableStore();
 		if (viewContainer.openCommandActionDescriptor) {
-			const { id, mnemonicTitle, keybindings, order, when } = viewContainer.openCommandActionDescriptor ?? { id: viewContainer.id };
+			const { id, mnemonicTitle, keybindings, order } = viewContainer.openCommandActionDescriptor ?? { id: viewContainer.id };
 			const title = viewContainer.openCommandActionDescriptor.title ?? viewContainer.title;
 			const that = this;
 			disposables.add(registerAction2(class OpenViewContainerAction extends Action2 {
@@ -460,7 +460,7 @@ export class ViewsService extends Disposable implements IViewsService {
 						title: mnemonicTitle,
 					},
 					group: defaultLocation === ViewContainerLocation.Sidebar ? '3_sidebar' : defaultLocation === ViewContainerLocation.AuxiliaryBar ? '4_auxbar' : '5_panel',
-					when: ContextKeyExpr.and(ContextKeyExpr.has(getEnabledViewContainerContextKey(viewContainer.id)), when),
+					when: ContextKeyExpr.has(getEnabledViewContainerContextKey(viewContainer.id)),
 					order: order ?? Number.MAX_VALUE
 				}));
 			}
@@ -709,7 +709,5 @@ export class ViewsService extends Disposable implements IViewsService {
 		return viewPaneContainer;
 	}
 }
-
-function getEnabledViewContainerContextKey(viewContainerId: string): string { return `viewContainer.${viewContainerId}.enabled`; }
 
 registerSingleton(IViewsService, ViewsService, InstantiationType.Eager /* Eager because it registers viewlets and panels in the constructor which are required during workbench layout */);

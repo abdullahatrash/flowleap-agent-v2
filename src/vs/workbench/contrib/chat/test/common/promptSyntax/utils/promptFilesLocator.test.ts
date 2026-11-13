@@ -2058,83 +2058,6 @@ suite('PromptFilesLocator', () => {
 			});
 		});
 
-		suite('.flowleap folders', () => {
-			testT('finds skills in .flowleap/skills and ~/.flowleap/skills by default', async () => {
-				setLocations({});
-				setWorkspaceFolders(['/Users/legomushroom/repos/vscode']);
-				await mockFiles(fileService, [
-					{
-						path: '/Users/legomushroom/repos/vscode/.flowleap/skills/upc-revocation/SKILL.md',
-						contents: ['# UPC Revocation'],
-					},
-					{
-						path: '/Users/legomushroom/.flowleap/skills/claim-drafting/SKILL.md',
-						contents: ['# Claim Drafting'],
-					},
-				]);
-				const locator = instantiationService.createInstance(PromptFilesLocator);
-
-				const skills = await locator.findAgentSkills(CancellationToken.None);
-				assert.deepStrictEqual(
-					skills.map(s => ({ path: s.uri.path, source: s.source, storage: s.storage })),
-					[
-						{ path: '/Users/legomushroom/repos/vscode/.flowleap/skills/upc-revocation/SKILL.md', source: PromptFileSource.FlowLeapWorkspace, storage: PromptsStorage.local },
-						{ path: '/Users/legomushroom/.flowleap/skills/claim-drafting/SKILL.md', source: PromptFileSource.FlowLeapPersonal, storage: PromptsStorage.user },
-					],
-				);
-			});
-
-			testT('offers only .flowleap/ and ~/.flowleap/ as locations for new files', async () => {
-				setLocations({});
-				configValues[PromptsConfig.AGENTS_LOCATION_KEY] = {};
-				setWorkspaceFolders(['/Users/legomushroom/repos/vscode']);
-				await mockFiles(fileService, []);
-				const locator = instantiationService.createInstance(PromptFilesLocator);
-
-				const result: Record<string, string[]> = {};
-				for (const type of [PromptsType.skill, PromptsType.instructions, PromptsType.prompt, PromptsType.agent]) {
-					result[type] = (await locator.getResolvedSourceFolders(type)).map(f => f.uri.path);
-				}
-				assert.deepStrictEqual(result, {
-					skill: ['/Users/legomushroom/repos/vscode/.flowleap/skills', '/Users/legomushroom/.flowleap/skills'],
-					instructions: ['/Users/legomushroom/repos/vscode/.flowleap/instructions', '/Users/legomushroom/.flowleap/instructions'],
-					prompt: ['/Users/legomushroom/repos/vscode/.flowleap/prompts', '/Users/legomushroom/.flowleap/prompts'],
-					agent: ['/Users/legomushroom/repos/vscode/.flowleap/agents', '/Users/legomushroom/.flowleap/agents'],
-				});
-			});
-
-			testT('finds instructions, prompts and agents in .flowleap/ and ~/.flowleap/ by default', async () => {
-				setLocations({});
-				configValues[PromptsConfig.AGENTS_LOCATION_KEY] = {};
-				setWorkspaceFolders(['/Users/legomushroom/repos/vscode']);
-				await mockFiles(fileService, [
-					{ path: '/Users/legomushroom/repos/vscode/.flowleap/instructions/style.instructions.md', contents: ['style'] },
-					{ path: '/Users/legomushroom/.flowleap/instructions/firm.instructions.md', contents: ['firm'] },
-					{ path: '/Users/legomushroom/repos/vscode/.flowleap/prompts/summarize.prompt.md', contents: ['summarize'] },
-					{ path: '/Users/legomushroom/.flowleap/prompts/review.prompt.md', contents: ['review'] },
-					{ path: '/Users/legomushroom/repos/vscode/.flowleap/agents/examiner.agent.md', contents: ['examiner'] },
-					{ path: '/Users/legomushroom/.flowleap/agents/drafter.agent.md', contents: ['drafter'] },
-				]);
-				const locator = instantiationService.createInstance(PromptFilesLocator);
-
-				const result: Record<string, { path: string; source: PromptFileSource }[]> = {};
-				for (const type of [PromptsType.instructions, PromptsType.prompt, PromptsType.agent]) {
-					for (const storage of [PromptsStorage.local, PromptsStorage.user]) {
-						const files = await locator.listFilesWithSource(type, storage, CancellationToken.None);
-						result[`${type}/${storage}`] = files.map(f => ({ path: f.uri.path, source: f.source }));
-					}
-				}
-				assert.deepStrictEqual(result, {
-					'instructions/local': [{ path: '/Users/legomushroom/repos/vscode/.flowleap/instructions/style.instructions.md', source: PromptFileSource.FlowLeapWorkspace }],
-					'instructions/user': [{ path: '/Users/legomushroom/.flowleap/instructions/firm.instructions.md', source: PromptFileSource.FlowLeapPersonal }],
-					'prompt/local': [{ path: '/Users/legomushroom/repos/vscode/.flowleap/prompts/summarize.prompt.md', source: PromptFileSource.FlowLeapWorkspace }],
-					'prompt/user': [{ path: '/Users/legomushroom/.flowleap/prompts/review.prompt.md', source: PromptFileSource.FlowLeapPersonal }],
-					'agent/local': [{ path: '/Users/legomushroom/repos/vscode/.flowleap/agents/examiner.agent.md', source: PromptFileSource.FlowLeapWorkspace }],
-					'agent/user': [{ path: '/Users/legomushroom/.flowleap/agents/drafter.agent.md', source: PromptFileSource.FlowLeapPersonal }],
-				});
-			});
-		});
-
 		suite('listFiles with PromptsType.skill', () => {
 			testT('does not list skills when location is disabled', async () => {
 				setLocations({
@@ -2169,8 +2092,6 @@ suite('PromptFilesLocator', () => {
 					'skills/*': true,
 					'**/skills': true,
 					// disable defaults
-					'.flowleap/skills': false,
-					'~/.flowleap/skills': false,
 					'.github/skills': false,
 					'.agents/skills': false,
 					'.claude/skills': false,
@@ -2194,8 +2115,6 @@ suite('PromptFilesLocator', () => {
 				setLocations({
 					'/absolute/path/skills': true,
 					// disable defaults
-					'.flowleap/skills': false,
-					'~/.flowleap/skills': false,
 					'.github/skills': false,
 					'.agents/skills': false,
 					'.claude/skills': false,
@@ -2220,8 +2139,6 @@ suite('PromptFilesLocator', () => {
 					'./my-skills': true,
 					'custom/skills': true,
 					// disable defaults
-					'.flowleap/skills': false,
-					'~/.flowleap/skills': false,
 					'.github/skills': false,
 					'.agents/skills': false,
 					'.claude/skills': false,
@@ -2248,8 +2165,6 @@ suite('PromptFilesLocator', () => {
 				setLocations({
 					'../shared-skills': true,
 					// disable defaults
-					'.flowleap/skills': false,
-					'~/.flowleap/skills': false,
 					'.github/skills': false,
 					'.agents/skills': false,
 					'.claude/skills': false,
@@ -2275,8 +2190,6 @@ suite('PromptFilesLocator', () => {
 				setLocations({
 					'~/my-skills': true,
 					// disable defaults
-					'.flowleap/skills': false,
-					'~/.flowleap/skills': false,
 					'.github/skills': false,
 					'.agents/skills': false,
 					'.claude/skills': false,
@@ -2305,8 +2218,6 @@ suite('PromptFilesLocator', () => {
 					'.claude/skills': true,
 					'custom-skills': true,
 					// explicitly disable other defaults we don't want for this test
-					'.flowleap/skills': false,
-					'~/.flowleap/skills': false,
 					'.github/skills': false,
 					'.agents/skills': false,
 					'~/.copilot/skills': false,
@@ -2339,8 +2250,6 @@ suite('PromptFilesLocator', () => {
 					'skills/**': true, // glob - should be filtered out
 					'/absolute/skills': true, // absolute - should be filtered out
 					// explicitly disable other defaults we don't want for this test
-					'.flowleap/skills': false,
-					'~/.flowleap/skills': false,
 					'.github/skills': false,
 					'.agents/skills': false,
 					'~/.copilot/skills': false,
@@ -2374,8 +2283,6 @@ suite('PromptFilesLocator', () => {
 					folders,
 					[
 						// defaults
-						'/Users/legomushroom/repos/vscode/.flowleap/skills',
-						'/Users/legomushroom/.flowleap/skills',
 						'/Users/legomushroom/repos/vscode/.agents/skills',
 						'/Users/legomushroom/repos/vscode/.github/skills',
 						'/Users/legomushroom/repos/vscode/.claude/skills',
@@ -2692,8 +2599,6 @@ suite('PromptFilesLocator', () => {
 	suite('getConfigBasedSourceFolders', () => {
 		testT('gets unambiguous list of folders', async () => {
 			setLocations({
-				'.flowleap/prompts': false,
-				'~/.flowleap/prompts': false,
 				'.github/prompts': true,
 				'/Users/**/repos/**': true,
 				'gen/text/**': true,
@@ -2860,7 +2765,7 @@ suite('PromptFilesLocator', () => {
 			);
 		});
 
-		testT('walks through a submodule .git file to the parent repository', async () => {
+		testT('stops at a submodule .git file', async () => {
 			setWorkspaceFoldersForRoots(['/repos/superproject/submodule']);
 			await mockFiles(fileService, [
 				{ path: '/repos/superproject/.git/HEAD', contents: ['ref: refs/heads/main'] },
@@ -2868,16 +2773,29 @@ suite('PromptFilesLocator', () => {
 				{ path: '/repos/superproject/submodule/src/index.ts', contents: ['export {};'] },
 			]);
 
-			workspaceTrustService.setTrustedUris([URI.file('/repos/superproject')]);
+			workspaceTrustService.setTrustedUris([URI.file('/repos/superproject/submodule')]);
+
+			const roots = await locator.getWorkspaceFolderRoots(true);
+			assert.deepStrictEqual(roots.map(r => r.path), ['/repos/superproject/submodule']);
+		});
+
+		testT('stops at a git worktree .git file', async () => {
+			setWorkspaceFoldersForRoots(['/repos/repo.worktrees/feature/src']);
+			await mockFiles(fileService, [
+				{ path: '/repos/repo.worktrees/feature/.git', contents: ['gitdir: ../../repo/.git/worktrees/feature'] },
+				{ path: '/repos/repo.worktrees/feature/src/index.ts', contents: ['export {};'] },
+			]);
+
+			workspaceTrustService.setTrustedUris([URI.file('/repos/repo.worktrees/feature')]);
 
 			const roots = await locator.getWorkspaceFolderRoots(true);
 			assert.deepStrictEqual(
 				roots.map(r => r.path).sort(),
 				[
-					'/repos/superproject',
-					'/repos/superproject/submodule',
+					'/repos/repo.worktrees/feature',
+					'/repos/repo.worktrees/feature/src',
 				].sort(),
-				'Should continue past the submodule .git file to the parent repository root',
+				'Should include the workspace folder and its worktree root',
 			);
 		});
 

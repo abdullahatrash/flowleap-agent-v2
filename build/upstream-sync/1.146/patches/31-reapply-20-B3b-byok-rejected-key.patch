@@ -1,0 +1,168 @@
+diff --git a/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts b/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts
+index b2733963fac..5a64e91a694 100644
+--- a/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts
++++ b/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts
+@@ -26,6 +26,7 @@ export const enum ChatFetchResponseType {
+ 	ExtensionBlocked = 'extensionBlocked',
+ 	BadRequest = 'badRequest',
+ 	NotFound = 'notFound',
++	ProviderAuthFailed = 'providerAuthFailed',
+ 	Failed = 'failed',
+ 	Unknown = 'unknown',
+ 	NetworkError = 'networkError',
+@@ -65,6 +66,12 @@ export interface IChatFetchErrorPayload {
+ 	readonly rateLimitKey?: string;
+ 	readonly isAuto?: boolean;
+ 	readonly capiError?: { code?: string; message?: string };
++	/** BYOK provider that refused the credential, for `ProviderAuthFailed`. */
++	readonly modelProvider?: string;
++	/** False when no credential reached the provider — our fault, not a bad key. */
++	readonly credentialSent?: boolean;
++	/** Pre-rendered message; present when the failure crossed the `vscode.lm` boundary. */
++	readonly renderedMessage?: string;
+ }
+ 
+ /**
+@@ -82,6 +89,8 @@ export interface IForwardedChatError {
+ const RATE_LIMIT_LEARN_MORE_URL = 'https://aka.ms/github-copilot-rate-limit-error';
+ const FILTERED_DOCS_URL = 'https://aka.ms/copilot-chat-filtered-docs';
+ const GITHUB_SUPPORT_URL = 'https://support.github.com/contact';
++/** Command the chat error renderer trusts, so the link is clickable there. */
++const MANAGE_MODELS_LINK = 'command:workbench.action.chat.manage';
+ 
+ /**
+  * Localized "canceled" message. Mirrors the extension's `CanceledMessage`,
+@@ -115,6 +124,39 @@ function secondsToHumanReadableTime(seconds: number): string {
+ 	return localize('chatError.duration.hours', "{0} hours", hours);
+ }
+ 
++/**
++ * Message for a BYOK provider refusing the user's credential. Mirrors
++ * `getProviderAuthFailedMessage` in the Copilot extension's `commonTypes.ts`;
++ * keep the two wordings in step.
++ *
++ * The provider's own text cannot lead: OpenRouter answers an unrecognised key
++ * with "User not found.", which a signed-in user reads as "my account is gone"
++ * — away from the only thing they can fix.
++ */
++function getProviderAuthFailedMessage(fetchError: IChatFetchErrorPayload): string {
++	if (fetchError.renderedMessage) {
++		return fetchError.renderedMessage;
++	}
++
++	// Separate sentences rather than an "the model provider" placeholder: substituting a
++	// generic noun into "Your {0} API key" produces "Your the model provider API key".
++	const provider = fetchError.modelProvider;
++	const headline = fetchError.credentialSent === false
++		? (provider
++			? localize('chatError.providerAuth.noKey', "No API key was sent to {0}. Add or re-enter your key, then try again: [Manage Models]({1})", provider, MANAGE_MODELS_LINK)
++			: localize('chatError.providerAuth.noKeyUnnamed', "No API key was sent to the model provider. Add or re-enter your key, then try again: [Manage Models]({0})", MANAGE_MODELS_LINK))
++		: (provider
++			? localize('chatError.providerAuth.rejected', "Your {0} API key was rejected. Check that the key is valid and still has credit, then try again: [Manage Models]({1})", provider, MANAGE_MODELS_LINK)
++			: localize('chatError.providerAuth.rejectedUnnamed', "Your API key was rejected by the model provider. Check that the key is valid and still has credit, then try again: [Manage Models]({0})", MANAGE_MODELS_LINK));
++
++	const firstLine = (fetchError.reason ?? '').split('\n', 1)[0].trim();
++	if (!firstLine) {
++		return headline;
++	}
++	const truncated = firstLine.length > 200 ? `${firstLine.substring(0, 200)}…` : firstLine;
++	return localize('chatError.providerAuth.withDetail', "{0}\n\nProvider response: {1}", headline, truncated);
++}
++
+ function getRateLimitMessage(fetchError: IChatFetchErrorPayload, copilotPlan: string | undefined): string {
+ 	const retryAfterString = fetchError.retryAfter ? secondsToHumanReadableTime(fetchError.retryAfter) : localize('chatError.aMoment', "a moment");
+ 	const code = fetchError.capiError?.code;
+@@ -295,6 +337,8 @@ function getChatErrorDetailsInner(fetchError: IChatFetchErrorPayload, copilotPla
+ 				isQuotaExceeded: true,
+ 				...(fetchError.capiError?.code && { code: fetchError.capiError.code }),
+ 			};
++		case ChatFetchResponseType.ProviderAuthFailed:
++			return { message: getProviderAuthFailedMessage(fetchError), level: ChatErrorLevel.Info };
+ 		case ChatFetchResponseType.BadRequest:
+ 		case ChatFetchResponseType.Failed:
+ 			return fetchError.serverRequestId
+diff --git a/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts b/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts
+index 803144c281e..e6077def119 100644
+--- a/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts
+@@ -71,7 +71,7 @@ suite('ChatErrorMessages', () => {
+ 		// every fetchError.type its classifiers can produce — so a shape change on either
+ 		// side is caught here instead of silently failing to render.
+ 		test('accepts the payload shape and every type the node layer emits', () => {
+-			const nodeTypes = ['quotaExceeded', 'rateLimited', 'canceled', 'badRequest', 'agent_unauthorized', 'notFound', 'failed', 'length'];
++			const nodeTypes = ['quotaExceeded', 'rateLimited', 'canceled', 'badRequest', 'agent_unauthorized', 'notFound', 'providerAuthFailed', 'failed', 'length'];
+ 			const resolved = nodeTypes.map(type => getChatErrorDetailsFromMeta(errorInfo({
+ 				chatError: {
+ 					fetchError: {
+@@ -87,7 +87,7 @@ suite('ChatErrorMessages', () => {
+ 			}))?.code);
+ 			// Every node-emitted type resolves to a defined details object whose code is
+ 			// the fetch type (or, for quota, the more specific capiError code).
+-			assert.deepStrictEqual(resolved, ['some_code', 'rateLimited', 'canceled', 'badRequest', 'agent_unauthorized', 'notFound', 'failed', 'length']);
++			assert.deepStrictEqual(resolved, ['some_code', 'rateLimited', 'canceled', 'badRequest', 'agent_unauthorized', 'notFound', 'providerAuthFailed', 'failed', 'length']);
+ 		});
+ 	});
+ 
+@@ -138,6 +138,62 @@ suite('ChatErrorMessages', () => {
+ 			});
+ 		});
+ 
++		test('a rejected provider key names the key, not the raw provider text', () => {
++			// OpenRouter answers an unrecognised key with "User not found." — verbatim that
++			// reads as "your account is gone", so it must never be the headline.
++			const details = getChatErrorDetailsFromFetchError({
++				type: ChatFetchResponseType.ProviderAuthFailed,
++				modelProvider: 'OpenRouter',
++				credentialSent: true,
++				reason: 'User not found.',
++			}, undefined);
++			assert.deepStrictEqual(details, {
++				code: ChatFetchResponseType.ProviderAuthFailed,
++				message: 'Your OpenRouter API key was rejected. Check that the key is valid and still has credit, then try again: [Manage Models](command:workbench.action.chat.manage)\n\nProvider response: User not found.',
++				level: ChatErrorLevel.Info,
++			});
++		});
++
++		test('no credential sent blames the client, not the key', () => {
++			const details = getChatErrorDetailsFromFetchError({
++				type: ChatFetchResponseType.ProviderAuthFailed,
++				modelProvider: 'OpenRouter',
++				credentialSent: false,
++				reason: 'No cookie auth credentials found',
++			}, undefined);
++			assert.deepStrictEqual(details, {
++				code: ChatFetchResponseType.ProviderAuthFailed,
++				message: 'No API key was sent to OpenRouter. Add or re-enter your key, then try again: [Manage Models](command:workbench.action.chat.manage)\n\nProvider response: No cookie auth credentials found',
++				level: ChatErrorLevel.Info,
++			});
++		});
++
++		test('a pre-rendered message crossing the lm boundary is not wrapped twice', () => {
++			const details = getChatErrorDetailsFromFetchError({
++				type: ChatFetchResponseType.ProviderAuthFailed,
++				modelProvider: 'OpenRouter',
++				reason: 'Your OpenRouter API key was rejected.',
++				renderedMessage: 'Your OpenRouter API key was rejected.',
++			}, undefined);
++			assert.deepStrictEqual(details, {
++				code: ChatFetchResponseType.ProviderAuthFailed,
++				message: 'Your OpenRouter API key was rejected.',
++				level: ChatErrorLevel.Info,
++			});
++		});
++
++		test('an unnamed provider and an empty reason still read sensibly', () => {
++			const details = getChatErrorDetailsFromFetchError({
++				type: ChatFetchResponseType.ProviderAuthFailed,
++				reason: '',
++			}, undefined);
++			assert.deepStrictEqual(details, {
++				code: ChatFetchResponseType.ProviderAuthFailed,
++				message: 'Your API key was rejected by the model provider. Check that the key is valid and still has credit, then try again: [Manage Models](command:workbench.action.chat.manage)',
++				level: ChatErrorLevel.Info,
++			});
++		});
++
+ 		test('simple error types produce their static messages', () => {
+ 			const types = [
+ 				ChatFetchResponseType.Canceled,

@@ -21,7 +21,7 @@ import { AutomationDialogService } from '../../automations/browser/automationDia
 import { AutomationRunner } from '../../automations/browser/automationRunner.js';
 import { ProviderAutomationService } from '../../automations/browser/providerAutomationService.js';
 import { CodeReviewService, ICodeReviewService } from '../../codeReview/browser/codeReviewService.js';
-import { GitHubService, IGitHubService } from '../../github/browser/githubService.js';
+import { GitHubService, IGitHubService } from '../../../../workbench/contrib/sessions/browser/github/githubService.js';
 import { IPullRequestIconCache, PullRequestIconCache } from '../../github/browser/pullRequestIconCache.js';
 
 registerSingleton(IGitHubService, GitHubService, InstantiationType.Delayed);

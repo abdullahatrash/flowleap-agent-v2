@@ -56,11 +56,6 @@ type OpenCommandActionDescriptor = {
 	readonly mnemonicTitle?: string;
 	readonly order?: number;
 	readonly keybindings?: IKeybindings & { when?: ContextKeyExpression };
-	/**
-	 * Additional condition for showing the container's entry in the View menu,
-	 * composed with the container's enablement context key.
-	 */
-	readonly when?: ContextKeyExpression;
 };
 
 /**
@@ -887,6 +882,7 @@ export interface ITreeViewDragAndDropController {
 	readonly dropMimeTypes: string[];
 	readonly dragMimeTypes: string[];
 	handleDrag(sourceTreeItemHandles: string[], operationUuid: string, token: CancellationToken): Promise<VSDataTransfer | undefined>;
+	handleDragEnd?(operationUuid: string): void;
 	handleDrop(elements: VSDataTransfer, target: ITreeItem | undefined, token: CancellationToken, operationUuid?: string, sourceTreeId?: string, sourceTreeItemHandles?: string[]): Promise<void>;
 }
 

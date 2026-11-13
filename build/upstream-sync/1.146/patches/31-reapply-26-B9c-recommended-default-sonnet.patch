@@ -1,0 +1,116 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts b/src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts
+index def73d80072..3bedd152e2e 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts
+@@ -107,7 +107,7 @@ import { AgentHostAutoTierScope } from '../../agentSessions/agentHost/agentHostA
+ import { ChatModelSelectionDiagnostics } from './chatModelSelectionDiagnostics.js';
+ import { deserializeUntitledInputAttachments, deserializeUntitledInputState, serializeUntitledInputAttachments, serializeUntitledInputState } from './chatInputStatePersistence.js';
+ import { ChatInputStateOrigin, IChatModel, IChatModelInputState, IChatRequestModeInfo, IChatRequestModel, IInputModel, IIntendedModelHolder, IntendedModelSlot, logChangesToStateModel } from '../../../common/model/chatModel.js';
+-import { isInConversationModelChoice, ModelSelectionReason, resolveConfiguredModel, RestoredModelReason } from '../../../common/modelSelection.js';
++import { findRecommendedDefaultModel, isInConversationModelChoice, ModelSelectionReason, resolveConfiguredModel, RestoredModelReason } from '../../../common/modelSelection.js';
+ import { filterModelsForSession, hasModelsTargetingSession, isModelHiddenInPicker, isModelSupportedForInlineChat, isModelSupportedForMode, isNewConversation, isSessionStarted, mergeModelsWithCache, shouldDropAgnosticDraftModel, shouldResetOnModelListChange, shouldRestorePerTypeModelOnSessionSwitch } from './chatInputModelUtils.js';
+ import { getChatSessionType, isUntitledChatSession, LocalChatSessionUri } from '../../../common/model/chatUri.js';
+ import { IChatResponseViewModel, isResponseVM } from '../../../common/model/chatViewModel.js';
+@@ -1008,7 +1008,9 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
+ 			getConfiguredModelValue: () => this.getConfiguredModelValue(),
+ 			// Workbench chat runs a mode, and can be shown inline, so both bear on what it can run.
+ 			isModelSupportedHere: model => isModelSupportedForMode(model, this.currentModeKind) && isModelSupportedForInlineChat(model, this.location),
+-			getDeclaredDefaultModel: models => models.find(model => model.metadata.isDefaultForLocation[this.location]),
++			// With nothing configured or explicitly picked, recommend the stronger Claude tier (newest
++			// Sonnet, matching the Agents window) over the provider-declared or first-available model.
++			getDeclaredDefaultModel: models => findRecommendedDefaultModel(models) ?? models.find(model => model.metadata.isDefaultForLocation[this.location]),
+ 			subscribeToModelChanges: listener => this.languageModelsService.onDidChangeLanguageModels(listener),
+ 			getBoundConversationKey: () => this._inputModelSessionResource?.toString(),
+ 			getIntentHolder: () => this._intentHolder,
+diff --git a/src/vs/workbench/contrib/chat/common/modelSelection.ts b/src/vs/workbench/contrib/chat/common/modelSelection.ts
+index b5cdfd2f935..01e0248ebe5 100644
+--- a/src/vs/workbench/contrib/chat/common/modelSelection.ts
++++ b/src/vs/workbench/contrib/chat/common/modelSelection.ts
+@@ -132,6 +132,40 @@ function compareModelVersions(a: string | undefined, b: string | undefined): num
+ 	return rawA.localeCompare(rawB);
+ }
+ 
++/**
++ * The model family recommended as the default for a fresh chat when the user has not configured
++ * or explicitly picked a model. Matches the tier the Agents window resolves to (the newest
++ * Sonnet), which measurably outperforms the weaker tiers a first-available fallback would pick.
++ */
++const RECOMMENDED_DEFAULT_MODEL_FAMILY = 'sonnet';
++
++function matchesRecommendedFamily(metadata: ILanguageModelChatMetadata): boolean {
++	const haystack = `${metadata.family ?? ''} ${metadata.id ?? ''} ${metadata.name ?? ''}`.toLowerCase();
++	return haystack.includes(RECOMMENDED_DEFAULT_MODEL_FAMILY);
++}
++
++/**
++ * Picks the recommended default model from a pool for a user who has neither configured nor
++ * explicitly selected one: the newest model in the {@link RECOMMENDED_DEFAULT_MODEL_FAMILY} tier,
++ * deliberately Sonnet rather than a pricier tier, since under BYOK the user pays per token.
++ *
++ * BYOK models report a uniform `version` and set `family` to the raw (often dated) model id, so the
++ * concrete generation is only legible from the display name (e.g. "Claude Sonnet 4.6");
++ * {@link compareModelVersions} on the name selects the newest. Returns `undefined` when the pool
++ * has no such model, letting the caller fall back to its normal default.
++ */
++export function findRecommendedDefaultModel(
++	models: readonly ILanguageModelChatMetadataAndIdentifier[],
++): ILanguageModelChatMetadataAndIdentifier | undefined {
++	const candidates = models.filter(model => matchesRecommendedFamily(model.metadata));
++	if (candidates.length === 0) {
++		return undefined;
++	}
++	return candidates.reduce((best, candidate) =>
++		compareModelVersions(candidate.metadata.name, best.metadata.name) > 0 ? candidate : best
++	);
++}
++
+ /** Resolves a configured model id, family, or `auto` value against a model pool. */
+ export function resolveConfiguredModel(
+ 	configuredValue: string | undefined,
+diff --git a/src/vs/workbench/contrib/chat/test/common/modelSelection.test.ts b/src/vs/workbench/contrib/chat/test/common/modelSelection.test.ts
+index e1a95139b01..7831d4d5616 100644
+--- a/src/vs/workbench/contrib/chat/test/common/modelSelection.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/modelSelection.test.ts
+@@ -7,7 +7,7 @@ import assert from 'assert';
+ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+ import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
+ import { ILanguageModelChatMetadataAndIdentifier } from '../../common/languageModels.js';
+-import { getVisibleLanguageModelsForTarget, ModelSelectionReason, resolveConfiguredModel, resolveInitialModelSelection, resolveModelIdentifier, resolveModelIdentifierFromCatalog, resolveModelIdentifierFromLanguageModels } from '../../common/modelSelection.js';
++import { findRecommendedDefaultModel, getVisibleLanguageModelsForTarget, ModelSelectionReason, resolveConfiguredModel, resolveInitialModelSelection, resolveModelIdentifier, resolveModelIdentifierFromCatalog, resolveModelIdentifierFromLanguageModels } from '../../common/modelSelection.js';
+ 
+ function model(identifier: string, metadataId = identifier, family = identifier, version = '1.0'): ILanguageModelChatMetadataAndIdentifier {
+ 	return {
+@@ -181,4 +181,33 @@ suite('ModelSelection', () => {
+ 			undefined,
+ 		]);
+ 	});
++
++	suite('findRecommendedDefaultModel', () => {
++
++		test('prefers the newest Sonnet over older Sonnet, Haiku and Opus', () => {
++			// A first-available fallback would pick Haiku first; the recommendation must win.
++			const models = [
++				model('Claude Haiku 4.5', 'claude-haiku-4-5'),
++				model('Claude Opus 4.8', 'claude-opus-4-8'),
++				model('Claude Sonnet 4.5', 'claude-sonnet-4-5-20250929'),
++				model('Claude Sonnet 4.6', 'claude-sonnet-4-6-20260101'),
++			];
++			assert.strictEqual(findRecommendedDefaultModel(models)?.metadata.id, 'claude-sonnet-4-6-20260101');
++		});
++
++		test('matches Sonnet from an OpenRouter-style prefixed name', () => {
++			const models = [
++				model('Anthropic: Claude 3.5 Haiku', 'anthropic/claude-3.5-haiku'),
++				model('Anthropic: Claude Sonnet 4.5', 'anthropic/claude-sonnet-4.5'),
++			];
++			assert.strictEqual(findRecommendedDefaultModel(models)?.metadata.id, 'anthropic/claude-sonnet-4.5');
++		});
++
++		test('returns undefined when no model is in the recommended family or the pool is empty', () => {
++			assert.deepStrictEqual([
++				findRecommendedDefaultModel([model('GPT-4o', 'gpt-4o'), model('Gemini 2.5 Pro', 'gemini-2.5-pro')]),
++				findRecommendedDefaultModel([]),
++			], [undefined, undefined]);
++		});
++	});
+ });

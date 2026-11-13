@@ -15,7 +15,6 @@ import { LanguageModelToolsService } from '../../../browser/tools/languageModelT
 import { createToolSetFileContents, deleteToolSetFromFileContents, getEnabledSelectionReferences } from '../../../browser/tools/toolSetsContribution.js';
 import { IAICustomizationWorkspaceService } from '../../../common/aiCustomizationWorkspaceService.js';
 import { IToolData, ToolDataSource, ToolAndToolSetEnablementMap } from '../../../common/tools/languageModelToolsService.js';
-import { patentChatToolReferenceNames } from '../../../common/tools/patentChatToolReferenceNames.js';
 
 suite('ToolSetsContribution', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
@@ -93,18 +92,11 @@ suite('ToolSetsContribution', () => {
 		});
 	});
 
-	test('ClientToolSetsContribution groups the Patent Agent tools in both windows so agent hosts receive them', () => {
-		const makeTool = (name: string): IToolData => ({
-			id: `copilot_${name}`,
-			modelDescription: name,
-			displayName: name,
-			toolReferenceName: name,
-			source: ToolDataSource.Internal,
-		});
+	test('ClientToolSetsContribution exposes Sessions List tools only in the Sessions window', () => {
 		const createContribution = (isSessionsWindow: boolean) => {
 			const toolsService = createToolsService();
-			for (const tool of patentChatToolReferenceNames.map(makeTool)) {
-				store.add(toolsService.registerToolData(tool));
+			for (const name of ['readSessionsList', 'organizeSessionsList']) {
+				store.add(toolsService.registerToolData({ id: name, modelDescription: name, displayName: name, toolReferenceName: name, source: ToolDataSource.Internal }));
 			}
 			const workspaceService = new class extends mock<IAICustomizationWorkspaceService>() {
 				override readonly isSessionsWindow = isSessionsWindow;
@@ -113,17 +105,34 @@ suite('ToolSetsContribution', () => {
 			return toolsService;
 		};
 
-		const sessionsSet = createContribution(true).getToolSet('flowleap-patent');
-		const coreSet = createContribution(false).getToolSet('flowleap-patent');
+		assert.deepStrictEqual({
+			sessionsMembers: Array.from(createContribution(true).getToolSet('vscode-sessions-list')?.getTools() ?? [], tool => tool.toolReferenceName),
+			coreHasSet: !!createContribution(false).getToolSet('vscode-sessions-list'),
+		}, {
+			sessionsMembers: ['readSessionsList', 'organizeSessionsList'],
+			coreHasSet: false,
+		});
+	});
+
+	test('ClientToolSetsContribution exposes Appearance tools only in the Sessions window', () => {
+		const createContribution = (isSessionsWindow: boolean) => {
+			const toolsService = createToolsService();
+			for (const name of ['getThemeColors', 'setChatBackground', 'screenshotWindow']) {
+				store.add(toolsService.registerToolData({ id: name, modelDescription: name, displayName: name, toolReferenceName: name, source: ToolDataSource.Internal }));
+			}
+			const workspaceService = new class extends mock<IAICustomizationWorkspaceService>() {
+				override readonly isSessionsWindow = isSessionsWindow;
+			}();
+			store.add(new ClientToolSetsContribution(toolsService, workspaceService));
+			return toolsService;
+		};
 
 		assert.deepStrictEqual({
-			sessionsMembers: Array.from(sessionsSet?.getTools() ?? [], tool => tool.toolReferenceName),
-			coreMembers: Array.from(coreSet?.getTools() ?? [], tool => tool.toolReferenceName),
-			deprecated: [sessionsSet?.deprecated ?? false, coreSet?.deprecated ?? false],
+			sessionsMembers: Array.from(createContribution(true).getToolSet('vscode-appearance')?.getTools() ?? [], tool => tool.toolReferenceName),
+			coreHasSet: !!createContribution(false).getToolSet('vscode-appearance'),
 		}, {
-			sessionsMembers: [...patentChatToolReferenceNames],
-			coreMembers: [...patentChatToolReferenceNames],
-			deprecated: [false, false],
+			sessionsMembers: ['getThemeColors', 'setChatBackground', 'screenshotWindow'],
+			coreHasSet: false,
 		});
 	});
 

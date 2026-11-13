@@ -19,11 +19,11 @@ import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, ToggleTool
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { TestLifecycleService } from '../../../../test/common/workbenchTestServices.js';
 import { InEditorZenModeContext } from '../../../../common/contextkeys.js';
-import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { ChatQuotaResumeState, ChatStatusBarEntry, computeQuotaResumeState } from '../../browser/chatStatus/chatStatusEntry.js';
 import { IChatStatusItemService } from '../../browser/chatStatus/chatStatusItemService.js';
 import { ChatStatusPromo } from '../../browser/chatStatus/chatStatusPromo.js';
 import { UpdateTitleBarChatInProgressContext, UpdateTitleBarContext, UpdateTitleBarEditorVisibleContext } from '../../../update/common/update.js';
+import { CHAT_SETUP_ACTION_ID } from '../../browser/actions/chatActions.js';
 
 type Quotas = IChatEntitlementService['quotas'];
 
@@ -125,7 +125,7 @@ suite('ChatStatusBarEntry', () => {
 		};
 	}
 
-	function createEntry(opts: { quotas?: Quotas; entitlement?: ChatEntitlement; persisted?: ChatQuotaResumeState; updateTitleBar?: boolean; updateTitleBarChatInProgress?: boolean; inDebugMode?: boolean; inZenMode?: boolean; sentiment?: IChatSentiment; snoozed?: boolean; promo?: boolean; flowLeapSignedIn?: boolean }) {
+	function createEntry(opts: { quotas?: Quotas; entitlement?: ChatEntitlement; persisted?: ChatQuotaResumeState; updateTitleBar?: boolean; updateTitleBarChatInProgress?: boolean; inDebugMode?: boolean; inZenMode?: boolean; sentiment?: IChatSentiment; snoozed?: boolean; promo?: boolean }) {
 		const instantiationService = workbenchInstantiationService({
 			contextKeyService: () => new TestContextKeyService(),
 		}, store);
@@ -180,11 +180,6 @@ suite('ChatStatusBarEntry', () => {
 		UpdateTitleBarChatInProgressContext.bindTo(contextKeyService).set(opts.updateTitleBarChatInProgress ?? false);
 		contextKeyService.createKey<boolean>('inDebugMode', false).set(opts.inDebugMode ?? false);
 		InEditorZenModeContext.bindTo(contextKeyService).set(opts.inZenMode ?? false);
-		// The entry hides itself in Patent IDE mode (the product default); these tests exercise the entry, so opt out.
-		PatentIdeContextKeys.Mode.bindTo(contextKeyService).set(false);
-		if (opts.flowLeapSignedIn !== undefined) {
-			contextKeyService.createKey<boolean>('flowleap.signedIn', opts.flowLeapSignedIn);
-		}
 
 		const storageService = instantiationService.get(IStorageService);
 		if (opts.persisted) {
@@ -276,16 +271,13 @@ suite('ChatStatusBarEntry', () => {
 	test('toggles the dashboard while preserving the sign-in command', () => {
 		const signedIn = createEntry({ entitlement: ChatEntitlement.Free, quotas: { premiumChat: available } });
 		const signedOut = createEntry({ entitlement: ChatEntitlement.Unknown });
-		const flowLeapSignedIn = createEntry({ entitlement: ChatEntitlement.Unknown, flowLeapSignedIn: true });
 
 		assert.deepStrictEqual({
 			signedIn: signedIn.statusbar.current?.command,
 			signedOut: signedOut.statusbar.current?.command,
-			flowLeapSignedIn: flowLeapSignedIn.statusbar.current?.command,
 		}, {
 			signedIn: ToggleTooltipCommand,
-			signedOut: 'flowleap.signIn',
-			flowLeapSignedIn: ToggleTooltipCommand,
+			signedOut: CHAT_SETUP_ACTION_ID,
 		});
 	});
 
@@ -344,7 +336,7 @@ suite('ChatStatusBarEntry', () => {
 		svc.quotas = { premiumChat: available };
 		svc.fireQuotaExceeded();
 
-		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
 		assert.strictEqual(persistedState(storageService), 'resumed');
 	});
 
@@ -353,7 +345,7 @@ suite('ChatStatusBarEntry', () => {
 
 		await flushTimers();
 
-		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
 		assert.strictEqual(persistedState(storageService), 'resumed');
 	});
 
@@ -362,14 +354,14 @@ suite('ChatStatusBarEntry', () => {
 
 		await flushTimers();
 
-		assert.notStrictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
+		assert.notStrictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
 		assert.strictEqual(persistedState(storageService), undefined);
 	});
 
 	test('clears resumed when the dashboard is opened', async () => {
 		const { statusbar, storageService } = createEntry({ entitlement: ChatEntitlement.Free, quotas: { premiumChat: available }, persisted: 'blocked' });
 		await flushTimers();
-		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
 
 		// Opening the dashboard happens through the status entry tooltip element factory.
 		const tooltip = statusbar.current?.tooltip as { element: (token: CancellationToken) => HTMLElement };
@@ -384,7 +376,7 @@ suite('ChatStatusBarEntry', () => {
 
 	test('resumed is overridden when the user becomes blocked again', () => {
 		const { svc, statusbar, storageService } = createEntry({ entitlement: ChatEntitlement.Free, quotas: { premiumChat: available }, persisted: 'resumed' });
-		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
 
 		svc.quotas = { premiumChat: exhausted };
 		svc.fireQuotaExceeded();

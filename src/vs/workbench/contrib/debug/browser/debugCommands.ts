@@ -36,13 +36,12 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { ChatContextKeys } from '../../chat/common/actions/chatContextKeys.js';
 import { IExtensionsWorkbenchService } from '../../extensions/common/extensions.js';
 import { TEXT_FILE_EDITOR_ID } from '../../files/common/files.js';
-import { CONTEXT_BREAKPOINT_INPUT_FOCUSED, CONTEXT_BREAKPOINTS_FOCUSED, CONTEXT_DEBUG_STATE, CONTEXT_DEBUGGERS_AVAILABLE, CONTEXT_DISASSEMBLY_VIEW_FOCUS, CONTEXT_EXPRESSION_SELECTED, CONTEXT_FOCUSED_SESSION_IS_ATTACH, CONTEXT_IN_DEBUG_MODE, CONTEXT_IN_DEBUG_REPL, CONTEXT_JUMP_TO_CURSOR_SUPPORTED, CONTEXT_STEP_INTO_TARGETS_SUPPORTED, CONTEXT_VARIABLES_FOCUSED, CONTEXT_WATCH_EXPRESSIONS_FOCUSED, DataBreakpointSetType, EDITOR_CONTRIBUTION_ID, getStateLabel, IConfig, IDataBreakpointInfoResponse, IDebugConfiguration, IDebugEditorContribution, IDebugService, IDebugSession, IEnablement, IExceptionBreakpoint, isFrameDeemphasized, IStackFrame, IThread, REPL_VIEW_ID, State, VIEWLET_ID } from '../common/debug.js';
+import { CONTEXT_BREAKPOINT_INPUT_FOCUSED, CONTEXT_BREAKPOINTS_FOCUSED, CONTEXT_DEBUG_STATE, CONTEXT_DEBUGGERS_AVAILABLE, CONTEXT_DISASSEMBLY_VIEW_FOCUS, CONTEXT_EXPRESSION_SELECTED, CONTEXT_FOCUSED_SESSION_IS_ATTACH, CONTEXT_THREAD_HAS_MULTIPLE_STACK_FRAMES, CONTEXT_IN_DEBUG_MODE, CONTEXT_IN_DEBUG_REPL, CONTEXT_JUMP_TO_CURSOR_SUPPORTED, CONTEXT_STEP_INTO_TARGETS_SUPPORTED, CONTEXT_VARIABLES_FOCUSED, CONTEXT_WATCH_EXPRESSIONS_FOCUSED, DataBreakpointSetType, EDITOR_CONTRIBUTION_ID, getStateLabel, IConfig, IDataBreakpointInfoResponse, IDebugConfiguration, IDebugEditorContribution, IDebugService, IDebugSession, IEnablement, IExceptionBreakpoint, isFrameDeemphasized, IStackFrame, IThread, REPL_VIEW_ID, State, VIEWLET_ID } from '../common/debug.js';
 import { Breakpoint, DataBreakpoint, Expression, FunctionBreakpoint, Thread, Variable } from '../common/debugModel.js';
 import { saveAllBeforeDebugStart, resolveChildSession } from '../common/debugUtils.js';
 import { showLoadedScriptMenu } from '../common/loadedScriptsPicker.js';
 import { openBreakpointSource } from './breakpointsView.js';
 import { showDebugSessionMenu } from './debugSessionPicker.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 export const ADD_CONFIGURATION_ID = 'debug.addConfiguration';
 export const COPY_ADDRESS_ID = 'editor.debug.action.copyAddress';
@@ -537,7 +536,7 @@ KeybindingsRegistry.registerCommandAndKeybindingRule({
 	id: STEP_OUT_ID,
 	weight: KeybindingWeight.WorkbenchContrib,
 	primary: KeyMod.Shift | KeyCode.F11,
-	when: CONTEXT_DEBUG_STATE.isEqualTo('stopped'),
+	when: ContextKeyExpr.and(CONTEXT_DEBUG_STATE.isEqualTo('stopped'), CONTEXT_THREAD_HAS_MULTIPLE_STACK_FRAMES),
 	handler: async (accessor: ServicesAccessor, _: string, context: CallStackContext | unknown) => {
 		const contextKeyService = accessor.get(IContextKeyService);
 		if (CONTEXT_DISASSEMBLY_VIEW_FOCUS.getValue(contextKeyService)) {
@@ -989,7 +988,6 @@ registerAction2(class AddConfigurationAction extends Action2 {
 	constructor() {
 		super({
 			id: ADD_CONFIGURATION_ID,
-			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: nls.localize2('addConfiguration', "Add Configuration..."),
 			category: DEBUG_COMMAND_CATEGORY,
 			f1: true,
@@ -1086,7 +1084,7 @@ registerAction2(class ToggleExceptionBreakpointsAction extends Action2 {
 			title: nls.localize2('toggleExceptionBreakpoints', "Toggle Exception Breakpoints"),
 			category: DEBUG_COMMAND_CATEGORY,
 			f1: true,
-			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated())
+			precondition: CONTEXT_DEBUGGERS_AVAILABLE
 		});
 	}
 

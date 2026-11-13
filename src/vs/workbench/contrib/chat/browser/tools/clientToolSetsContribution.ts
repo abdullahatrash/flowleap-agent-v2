@@ -11,7 +11,6 @@ import { IWorkbenchContribution } from '../../../../common/contributions.js';
 import { browserChatToolReferenceNames } from '../../../../../platform/browserView/common/browserChatToolReferenceNames.js';
 import { IAICustomizationWorkspaceService } from '../../common/aiCustomizationWorkspaceService.js';
 import { ILanguageModelToolsService, IToolData, ToolDataSource } from '../../common/tools/languageModelToolsService.js';
-import { patentChatToolReferenceNames } from '../../common/tools/patentChatToolReferenceNames.js';
 
 /**
  * Describes a tool set whose membership is resolved dynamically from a list of tool reference names.
@@ -81,6 +80,31 @@ export class ClientToolSetsContribution extends Disposable implements IWorkbench
 					'deleteAutomation',
 				],
 			}));
+
+			this._register(this._registerDynamicToolSet(toolsService, {
+				id: 'vscode-sessions-list',
+				referenceName: 'vscodeSessionsList',
+				icon: Codicon.listTree,
+				description: localize('clientToolSet.sessionsList.description', "Sessions List"),
+				detail: localize('clientToolSet.sessionsList.detail', "Group, order, filter, and sort the sessions in the Sessions list."),
+				members: [
+					'readSessionsList',
+					'organizeSessionsList',
+				],
+			}));
+
+			this._register(this._registerDynamicToolSet(toolsService, {
+				id: 'vscode-appearance',
+				referenceName: 'vscodeAppearance',
+				icon: Codicon.paintcan,
+				description: localize('clientToolSet.appearance.description', "Appearance"),
+				detail: localize('clientToolSet.appearance.detail', "Read theme colors, change the chat background, and capture the Agents window."),
+				members: [
+					'getThemeColors',
+					'setChatBackground',
+					'screenshotWindow',
+				],
+			}));
 		}
 
 		this._register(this._registerDynamicToolSet(toolsService, {
@@ -102,16 +126,6 @@ export class ClientToolSetsContribution extends Disposable implements IWorkbench
 				...(workspaceService.isSessionsWindow ? [] : ['runTests', 'testFailure', 'rename', 'usages']),
 				'toolSearch',
 			],
-		}));
-
-		// FlowLeap: lets agent-host sessions (Claude in the Agents Window) call the Patent Agent's tools.
-		this._register(this._registerDynamicToolSet(toolsService, {
-			id: 'flowleap-patent',
-			referenceName: 'patent',
-			icon: Codicon.law,
-			description: localize('clientToolSet.patent.description', "Patent Data"),
-			detail: localize('clientToolSet.patent.detail', "Search and read patents, citations, prosecution history, legal sources and academic literature."),
-			members: patentChatToolReferenceNames,
 		}));
 
 		if (!workspaceService.isSessionsWindow) {
