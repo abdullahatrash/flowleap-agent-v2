@@ -121,7 +121,7 @@ suite('Sessions list density', () => {
 
 		assert.deepStrictEqual({ compact, standard }, {
 			// 28px compact row, 32px callout, 2px inset gap.
-			compact: { visible: true, label: 'Input needed', height: '62px' },
+			compact: { visible: true, label: 'Attention needed', height: '62px' },
 			// The details row carries the status at the default density, so no callout.
 			standard: { visible: false, label: '', height: '56px' },
 		});
