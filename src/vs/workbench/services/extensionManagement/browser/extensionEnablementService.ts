@@ -60,6 +60,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 	// Extension unification
 	private readonly _completionsExtensionId: string | undefined;
 	private readonly _chatExtensionId: string | undefined;
+	private readonly _alwaysEnableChatExtension: boolean;
 	private _extensionUnificationEnabled: boolean;
 
 	private _maliciousExtensionsCache: ReadonlyArray<MaliciousExtensionInfo> | undefined;
@@ -113,6 +114,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 		// Extension unification
 		this._completionsExtensionId = productService.defaultChatAgent?.extensionId.toLowerCase();
 		this._chatExtensionId = productService.defaultChatAgent?.chatExtensionId.toLowerCase();
+		this._alwaysEnableChatExtension = productService.defaultChatAgent?.alwaysEnabled === true;
 		const unificationExtensions = [this._completionsExtensionId, this._chatExtensionId].filter(id => !!id);
 
 		// Disabling extension unification should immediately disable the unified extension flow
@@ -161,6 +163,19 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 
 	private ensureChatExtensionInitialDisabledState(): void {
 		if (!this._chatExtensionId || this.environmentService.isSessionsWindow || this.environmentService.skipBuiltinExtensions?.some(id => id.toLowerCase() === this._chatExtensionId)) {
+			return;
+		}
+
+		// FlowLeap: the patent chat extension is this product's core agent and must always be enabled.
+		// The migration below disables the default chat extension until GitHub chat setup completes,
+		// but that setup flow is neutralized in this BYOK product, so `state.completed` is never true
+		// and the gate would disable the agent forever. Undo any prior run that left it globally
+		// disabled, and never disable it here.
+		if (this._alwaysEnableChatExtension) {
+			if (this._isDisabledGlobally({ id: this._chatExtensionId })) {
+				this._enableExtension({ id: this._chatExtensionId })
+					.catch(error => this.logService.error('Failed to re-enable builtin chat extension', error));
+			}
 			return;
 		}
 
@@ -668,6 +683,13 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 	}
 
 	private _isDisabledByUnification(identifier: IExtensionIdentifier): boolean {
+		// When the chat extension is the product's core agent (`alwaysEnabled`), it must never be disabled
+		// by unification. In BYOK products `extensionId` (the completions id) and `chatExtensionId` are the
+		// same extension, so the unification check (keyed on the completions id) would otherwise disable
+		// the core agent itself, removing it from the extension host entirely.
+		if (this._alwaysEnableChatExtension && identifier.id.toLowerCase() === this._chatExtensionId) {
+			return false;
+		}
 		return this._extensionUnificationEnabled && identifier.id.toLowerCase() === this._completionsExtensionId;
 	}
 
