@@ -128,13 +128,13 @@
 }
 
 .monaco-workbench .part.editor > .content .editor-group-container > .editor-group-watermark-wrapper .editor-group-watermark .letterpress {
-	width: 100%;
-	max-height: 100%;
-	aspect-ratio: 1/1;
+	/* FlowLeap - smaller brand mark with shortcuts below */
+	width: 80px;
+	height: 80px;
+	flex-shrink: 0;
 	background-size: contain;
-	background-position-x: center;
+	background-position: center;
 	background-repeat: no-repeat;
-	max-width: 256px;
 }
 
 /* The watermark of an empty editor group, also in the slot of a dragged card of a part grid. */
