@@ -632,10 +632,6 @@ importers:
         version: 24.12.4
 
   simple-browser:
-    dependencies:
-      '@vscode/extension-telemetry':
-        specifier: ^0.9.8
-        version: 0.9.9
     devDependencies:
       '@types/node':
         specifier: 24.x

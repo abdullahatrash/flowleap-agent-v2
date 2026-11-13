@@ -921,7 +921,7 @@ jobs:
       - name: Install system build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libkrb5-dev libxkbfile-dev fakeroot rpm
+          sudo apt-get install -y pkg-config libkrb5-dev libxkbfile-dev libsecret-1-dev fakeroot rpm
 
       # The packaging stream keeps three near-copies of the ~500 MB app tree
       # (VSCode-linux-*, the deb staging dir and the rpm buildroot). Reclaiming
