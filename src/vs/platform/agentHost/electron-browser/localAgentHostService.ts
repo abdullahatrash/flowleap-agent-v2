@@ -32,6 +32,7 @@ import { AgentHostClientState, AgentHostProtocolClient } from '../browser/agentH
 import { AhpJsonlLogger } from '../common/ahpJsonlLogger.js';
 import { getSessionLogContent } from '../common/sessionLogContent.js';
 import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from '../common/remoteAccessHost.js';
+import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostClientChatMirrorChannel, type ChatMirrorPublication } from '../common/agentHostChatMirror.js';
 import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AgentHostClientByokLmChannel, NullAgentHostClientByokLmChannel } from '../common/agentHostClientByokLmChannel.js';
 import { getAgentHostClientType } from '../common/agentHostClientInfo.js';
 import { AGENT_HOST_CLIENT_PROXY_CHANNEL, AgentHostClientProxyChannel } from '../common/agentHostClientProxyChannel.js';
@@ -878,6 +879,10 @@ export class LocalAgentHostServiceClient extends Disposable implements IAgentHos
 		return this._getManagementService().getRemoteAccessHostStatus();
 	}
 
+	publishChatMirror(publication: ChatMirrorPublication): Promise<void> {
+		return this._getManagementService().publishChatMirror(publication);
+	}
+
 	private _getManagementService(): IAgentHostManagementService {
 		return ProxyChannel.toService<IAgentHostManagementService>(
 			getDelayedChannel(this._managementConnection.client().then(client => client.getChannel(AgentHostIpcChannels.Management)))
@@ -927,5 +932,13 @@ export function registerAgentHostClientChannels(
 	} catch (error) {
 		logService.warn(`${LOG_PREFIX} BYOK language-model bridge not registered for this window. ${error instanceof Error ? error.message : String(error)}`);
 		client.registerChannel(AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, new NullAgentHostClientByokLmChannel());
+	}
+
+	// FlowLeap (PRD 0018 C1): the editor chat mirror's commands. Only a window that registers the
+	// mirror source publishes chats, and the agent host calls only a window that published.
+	try {
+		client.registerChannel(AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, instantiationService.createInstance(AgentHostClientChatMirrorChannel));
+	} catch {
+		logService.trace(`${LOG_PREFIX} editor chat mirror not available in this window.`);
 	}
 }

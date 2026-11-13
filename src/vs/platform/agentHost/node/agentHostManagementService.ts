@@ -12,6 +12,7 @@ import { IAgentHostInspectInfo, IAgentHostManagedSettingsDiagnostics, IAgentHost
 import { sealMissionControlCredential } from './missionControl/missionControlAuthentication.js';
 import { MissionControlEnvironment } from './missionControl/missionControlEnvironment.js';
 import { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from '../common/remoteAccessHost.js';
+import type { ChatMirrorPublication } from '../common/agentHostChatMirror.js';
 import { ISessionDataService } from '../common/sessionDataService.js';
 import { IAgentHostMacAccessibilityTrustService } from './agentHostMacAccessibilityTrustService.js';
 import { IAgentHostSystemWakeService } from './agentHostSystemWakeService.js';
@@ -401,5 +402,9 @@ export class AgentHostManagementService implements IAgentHostManagementService {
 
 	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
 		return this._connectionTrackerService.getRemoteAccessHostStatus();
+	}
+
+	publishChatMirror(publication: ChatMirrorPublication): Promise<void> {
+		return this._connectionTrackerService.publishChatMirror(publication);
 	}
 }

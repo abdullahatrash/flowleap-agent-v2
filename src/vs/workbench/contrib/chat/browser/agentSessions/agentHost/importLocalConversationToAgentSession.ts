@@ -20,9 +20,11 @@ import { IRange } from '../../../../../../editor/common/core/range.js';
 import { isLocation, type Location } from '../../../../../../editor/common/languages.js';
 import { localize } from '../../../../../../nls.js';
 import { identityAgentHostResourceUriMapper, type IAgentHostResourceUriMapper } from '../../../../../../platform/agentHost/common/agentHostUri.js';
+import type { IMirroredActiveTurn, IMirroredChat } from '../../../../../../platform/agentHost/common/agentHostChatMirror.js';
+import { toToolCallMeta } from '../../../../../../platform/agentHost/common/meta/agentToolCallMeta.js';
 import type { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
-import { MessageAttachmentKind, MessageKind, readUsageInfoMeta, ResponsePartKind, ToolCallCancellationReason, ToolCallConfirmationReason, ToolCallStatus, ToolResultContentType, TurnState, type AgentSelection, type ErrorInfo, type ITurnTokenTotal, type MessageAttachment, type ModelSelection, type ResponsePart, type StringOrMarkdown, type ToolCallCancelledState, type ToolCallCompletedState, type ToolResultContent, type Turn, type UsageInfo } from '../../../../../../platform/agentHost/common/state/sessionState.js';
-import { ElicitationState, IChatToolInvocation, isLegacyChatTerminalToolInvocationData, ToolConfirmKind, type IChatCodeCitation, type IChatConfirmation, type IChatContentInlineReference, type IChatContentReference, type IChatElicitationRequest, type IChatElicitationRequestSerialized, type IChatInfoMessage, type IChatMultiDiffData, type IChatMultiDiffDataSerialized, type IChatMultiDiffInnerData, type IChatQuestion, type IChatQuestionAnswerValue, type IChatQuestionCarousel, type IChatToolInvocationSerialized, type IChatWarningMessage, type IToolResultOutputDetailsSerialized, type ToolDeniedReason } from '../../../common/chatService/chatService.js';
+import { MessageAttachmentKind, MessageKind, readUsageInfoMeta, ResponsePartKind, ToolCallCancellationReason, ToolCallConfirmationReason, ToolCallStatus, ToolResultContentType, TurnState, type AgentSelection, type ErrorInfo, type ITurnTokenTotal, type MessageAttachment, type ModelSelection, type ResponsePart, type StringOrMarkdown, type ToolCallCancelledState, type ToolCallCompletedState, type ToolCallState, type ToolResultContent, type Turn, type UsageInfo } from '../../../../../../platform/agentHost/common/state/sessionState.js';
+import { ElicitationState, IChatToolInvocation, isLegacyChatTerminalToolInvocationData, ToolConfirmKind, type ConfirmedReason, type IChatCodeCitation, type IChatConfirmation, type IChatContentInlineReference, type IChatContentReference, type IChatElicitationRequest, type IChatElicitationRequestSerialized, type IChatInfoMessage, type IChatMultiDiffData, type IChatMultiDiffDataSerialized, type IChatMultiDiffInnerData, type IChatQuestion, type IChatQuestionAnswerValue, type IChatQuestionCarousel, type IChatTerminalToolInvocationData, type IChatToolInvocationSerialized, type IChatWarningMessage, type ILegacyChatTerminalToolInvocationData, type IToolResultOutputDetailsSerialized, type ToolDeniedReason } from '../../../common/chatService/chatService.js';
 import { isImageVariableEntry, type IChatRequestVariableEntry } from '../../../common/attachments/chatVariableEntries.js';
 import { coerceImageBuffer } from '../../../common/chatImageExtraction.js';
 import { LanguageModelPartAudience, type ILanguageModelsService } from '../../../common/languageModels.js';
@@ -330,6 +332,15 @@ function toolCallConfirmation(part: IChatToolInvocation | IChatToolInvocationSer
  * Phase presentations retain their textual output without a child-chat identity.
  */
 function toolCallResponsePart(part: IChatToolInvocation | IChatToolInvocationSerialized, resourceUris: IAgentHostResourceUriMapper, stats: IImportedConversationStats | undefined): ResponsePart {
+	return { kind: ResponsePartKind.ToolCall, toolCall: toolCallState(part, resourceUris, stats) };
+}
+
+/**
+ * The completed or cancelled agent-host state of a tool invocation (see
+ * {@link toolCallResponsePart}). The mirror (PRD 0018 C1) passes its own stable
+ * `toolCallId`; the import mints one when the invocation has none.
+ */
+function toolCallState(part: IChatToolInvocation | IChatToolInvocationSerialized, resourceUris: IAgentHostResourceUriMapper, stats: IImportedConversationStats | undefined, toolCallId: string = part.toolCallId || generateUuid()): ToolCallCompletedState | ToolCallCancelledState {
 	const invocationMessage = toolMessage(part.invocationMessage, resourceUris);
 	const resultDetails = IChatToolInvocation.resultDetails(part);
 	const subagentData = part.toolSpecificData?.kind === 'subagent' ? part.toolSpecificData : undefined;
@@ -377,24 +388,20 @@ function toolCallResponsePart(part: IChatToolInvocation | IChatToolInvocationSer
 	// A data result (e.g. an image) records no input, so it gets an empty input
 	// object; otherwise its output would not be shown.
 	const toolInput = recordedInput || (outputContent.length ? '{}' : '');
-	const toolCallId = part.toolCallId || generateUuid();
 	const displayName = subagentData?.agentName || part.toolId;
 	const shownInvocationMessage = invocationMessage ?? stringifyChatMessage(subagentData?.description);
 	const confirmation = toolCallConfirmation(part);
 	if (confirmation.cancelled) {
 		return {
-			kind: ResponsePartKind.ToolCall,
-			toolCall: {
-				status: ToolCallStatus.Cancelled,
-				toolCallId,
-				toolName: part.toolId,
-				displayName,
-				invocationMessage: shownInvocationMessage,
-				toolInput,
-				reason: confirmation.cancelled,
-				...(confirmation.reasonMessage ? { reasonMessage: confirmation.reasonMessage } : {}),
-			} satisfies ToolCallCancelledState,
-		};
+			status: ToolCallStatus.Cancelled,
+			toolCallId,
+			toolName: part.toolId,
+			displayName,
+			invocationMessage: shownInvocationMessage,
+			toolInput,
+			reason: confirmation.cancelled,
+			...(confirmation.reasonMessage ? { reasonMessage: confirmation.reasonMessage } : {}),
+		} satisfies ToolCallCancelledState;
 	}
 
 	const content: ToolResultContent[] = [];
@@ -417,26 +424,23 @@ function toolCallResponsePart(part: IChatToolInvocation | IChatToolInvocationSer
 	}
 
 	return {
-		kind: ResponsePartKind.ToolCall,
-		toolCall: {
-			status: ToolCallStatus.Completed,
-			toolCallId,
-			toolName: part.toolId,
-			displayName,
-			invocationMessage: shownInvocationMessage,
-			toolInput,
-			success: !isError,
-			pastTenseMessage: toolMessage(part.pastTenseMessage, resourceUris) ?? shownInvocationMessage,
-			confirmed: confirmation.confirmed,
-			...(content.length ? { content } : {}),
-			...(isError ? {
-				error: {
-					message: outputText || localize('chat.importConversation.toolFailed', "Tool failed."),
-					...(phaseStatus === 'cancelled' ? { code: 'cancelled' } : {}),
-				}
-			} : {}),
-		} satisfies ToolCallCompletedState,
-	};
+		status: ToolCallStatus.Completed,
+		toolCallId,
+		toolName: part.toolId,
+		displayName,
+		invocationMessage: shownInvocationMessage,
+		toolInput,
+		success: !isError,
+		pastTenseMessage: toolMessage(part.pastTenseMessage, resourceUris) ?? shownInvocationMessage,
+		confirmed: confirmation.confirmed,
+		...(content.length ? { content } : {}),
+		...(isError ? {
+			error: {
+				message: outputText || localize('chat.importConversation.toolFailed', "Tool failed."),
+				...(phaseStatus === 'cancelled' ? { code: 'cancelled' } : {}),
+			}
+		} : {}),
+	} satisfies ToolCallCompletedState;
 }
 
 /**
@@ -1092,4 +1096,270 @@ export function importedTurnsFromChatModel(model: IChatModel, options?: IImporte
 		turn.usage = combineTurnUsage(usages);
 	}
 	return turns;
+}
+
+// ---- Editor chat mirror (FlowLeap PRD 0018 C1) -------------------------------------------------
+//
+// The live editor chat mirror reads the same chat models as the import above, but needs part ids
+// stable across updates (`<requestId>:<index>`), live tool-call states (pending confirmation,
+// running), every response part kind at least as readable text, turns hidden in the editor left
+// out, and system-initiated requests as agent turns of their own (the mirror cannot change a turn
+// it already published). The import output above does not change.
+
+/** A markdown link to a file, labelled with its basename. */
+function fileLink(uri: URI): string {
+	return `[${basename(uri)}](${uri.toString()})`;
+}
+
+function confirmationReason(reason: ConfirmedReason): ToolCallConfirmationReason {
+	switch (reason.type) {
+		case ToolConfirmKind.UserAction: return ToolCallConfirmationReason.UserAction;
+		case ToolConfirmKind.Setting:
+		case ToolConfirmKind.LmServicePerTool: return ToolCallConfirmationReason.Setting;
+		default: return ToolCallConfirmationReason.NotNeeded;
+	}
+}
+
+/** The command an editor terminal tool runs, as the chat view shows it; `undefined` for other tools. */
+function terminalCommand(part: IChatToolInvocation | IChatToolInvocationSerialized): string | undefined {
+	const data = terminalData(part);
+	if (!data) {
+		return undefined;
+	}
+	if (isLegacyChatTerminalToolInvocationData(data)) {
+		return data.command;
+	}
+	const { forDisplay, toolEdited, userEdited, original } = data.commandLine;
+	return forDisplay ?? toolEdited ?? userEdited ?? original;
+}
+
+function terminalData(part: IChatToolInvocation | IChatToolInvocationSerialized): IChatTerminalToolInvocationData | ILegacyChatTerminalToolInvocationData | undefined {
+	return part.toolSpecificData?.kind === 'terminal' ? part.toolSpecificData : undefined;
+}
+
+/**
+ * Marks an editor terminal tool as a terminal tool call (mirror only, PRD 0018 C3), as the agent
+ * host's own agents do: `_meta.toolKind` and the command as the input. Without it a Viewer renders
+ * the tool as a generic confirmation, which it hides once the tool completes. The command output
+ * becomes the result text when the tool has none.
+ */
+function withTerminalKind(state: ToolCallState, part: IChatToolInvocation | IChatToolInvocationSerialized): ToolCallState {
+	const command = terminalCommand(part);
+	if (command === undefined || state.status === ToolCallStatus.Streaming) {
+		return state;
+	}
+	const marked = { ...state, toolInput: JSON.stringify({ command }), _meta: { ...state._meta, ...toToolCallMeta({ toolKind: 'terminal' }) } };
+	if (marked.status !== ToolCallStatus.Completed) {
+		return marked;
+	}
+	const data = terminalData(part);
+	const output = data && !isLegacyChatTerminalToolInvocationData(data) ? data.terminalCommandOutput?.text : undefined;
+	if (!output || marked.content?.some(content => content.type === ToolResultContentType.Text)) {
+		return marked;
+	}
+	return { ...marked, content: [...(marked.content ?? []), { type: ToolResultContentType.Text, text: output }] };
+}
+
+/**
+ * Maps a tool invocation to its live agent-host state (mirror only). A tool that still streams
+ * its input has no state yet. A result that waits for approval stays `running`: the Viewer cannot
+ * approve a result (Remote Access v1), the editor user does.
+ */
+function liveToolCall(part: IChatToolInvocation | IChatToolInvocationSerialized, toolCallId: string): ToolCallState | undefined {
+	const state = liveToolCallState(part, toolCallId);
+	return state && withTerminalKind(state, part);
+}
+
+function liveToolCallState(part: IChatToolInvocation | IChatToolInvocationSerialized, toolCallId: string): ToolCallState | undefined {
+	if (part.kind === 'toolInvocationSerialized') {
+		return toolCallState(part, identityAgentHostResourceUriMapper, undefined, toolCallId);
+	}
+	const base = {
+		toolCallId,
+		toolName: part.toolId,
+		displayName: part.toolSpecificData?.kind === 'subagent' && part.toolSpecificData.agentName || part.toolId,
+		invocationMessage: stringifyChatMessage(part.invocationMessage),
+		toolInput: part.toolSpecificData?.kind === 'input' ? stringifyToolInput(part.toolSpecificData.rawInput) : '',
+	};
+	const state = part.state.get();
+	switch (state.type) {
+		case IChatToolInvocation.StateKind.Streaming:
+			return undefined;
+		case IChatToolInvocation.StateKind.WaitingForConfirmation:
+			return {
+				...base,
+				status: ToolCallStatus.PendingConfirmation,
+				confirmationTitle: stringifyChatMessage(state.confirmationMessages?.title) || base.invocationMessage,
+			};
+		case IChatToolInvocation.StateKind.Executing:
+		case IChatToolInvocation.StateKind.WaitingForAuthentication:
+		case IChatToolInvocation.StateKind.WaitingForPostApproval:
+			return { ...base, status: ToolCallStatus.Running, confirmed: confirmationReason(state.confirmed) };
+		case IChatToolInvocation.StateKind.Cancelled:
+			return {
+				...base,
+				status: ToolCallStatus.Cancelled,
+				reason: state.reason === ToolConfirmKind.Skipped ? ToolCallCancellationReason.Skipped : ToolCallCancellationReason.Denied,
+				...(state.reasonMessage ? { reasonMessage: stringifyChatMessage(state.reasonMessage) } : {}),
+			};
+		case IChatToolInvocation.StateKind.Completed:
+			return toolCallState(part, identityAgentHostResourceUriMapper, undefined, toolCallId);
+	}
+}
+
+/**
+ * The readable text of a part kind that has no protocol counterpart, for the mirror. Kinds that
+ * only drive the editor UI (undo stops, code block URIs, buttons, progress lines) give nothing.
+ */
+function mirrorPlaceholder(part: IChatProgressResponseContent): string | undefined {
+	switch (part.kind) {
+		case 'markdownVuln':
+		case 'info':
+			return part.content.value;
+		case 'warning':
+			return localize('chatMirror.warning', "Warning: {0}", part.content.value);
+		case 'progressTask':
+		case 'progressTaskSerialized':
+			return part.content.value;
+		case 'textEditGroup':
+		case 'notebookEditGroup':
+			return localize('chatMirror.editedFile', "Edited {0}", fileLink(part.uri));
+		case 'workspaceEdit':
+			return localize('chatMirror.editedFiles', "Edited {0} files", part.edits.length);
+		case 'multiDiffData':
+			return localize('chatMirror.changedFiles', "Changed {0} files", multiDiffFiles(part).length);
+		case 'confirmation':
+			return part.isUsed
+				? localize('chatMirror.confirmationAnswered', "{0} (answered on the Host)", part.title)
+				: localize('chatMirror.confirmationOpen', "{0}: answer this in FlowLeap on the Host.", part.title);
+		case 'elicitation2':
+		case 'elicitationSerialized':
+			return localize('chatMirror.elicitation', "{0}: answer this in FlowLeap on the Host.", stringifyChatMessage(part.title));
+		case 'questionCarousel':
+			return part.isUsed
+				? localize('chatMirror.questionsAnswered', "The Patent Agent asked questions (answered on the Host).")
+				: localize('chatMirror.questionsOpen', "The Patent Agent asks questions: answer them in FlowLeap on the Host.");
+		case 'planReview':
+			return localize('chatMirror.planReview', "{0}: review the plan in FlowLeap on the Host.", part.title);
+		default:
+			return undefined;
+	}
+}
+
+/** The response's used references as one markdown line (mirror only, once the response is complete). */
+function referencesMarkdown(references: ReadonlyArray<IChatContentReference>): string | undefined {
+	const links: string[] = [];
+	for (const { reference } of references) {
+		const location = typeof reference === 'object' && !URI.isUri(reference) ? reference as { uri?: unknown } : undefined;
+		const uri = URI.isUri(reference) ? reference : URI.isUri(location?.uri) ? location.uri : undefined;
+		if (uri) {
+			links.push(fileLink(uri));
+		}
+	}
+	return links.length ? localize('chatMirror.references', "Used references: {0}", links.join(', ')) : undefined;
+}
+
+/**
+ * Collects a request's response stream into mirrored {@link ResponsePart}s, in stream order, with
+ * ids stable across updates: markdown, reasoning and inline references as the import maps them,
+ * tool invocations as live tool calls, and every other part kind the mirror can read as markdown
+ * text (see {@link mirrorPlaceholder}).
+ */
+function mirroredResponsePartsFromRequest(request: IChatRequestModel): ResponsePart[] {
+	const responseParts: ResponsePart[] = [];
+	const response = request.response;
+	if (!response) {
+		return responseParts;
+	}
+	const partId = (index: number | string) => `${request.id}:${index}`;
+	response.entireResponse.value.forEach((part, index) => {
+		if (part.kind === 'markdownContent') {
+			const content = part.content.value;
+			if (content) {
+				responseParts.push({ kind: ResponsePartKind.Markdown, id: partId(index), content });
+			}
+		} else if (part.kind === 'thinking') {
+			const content = Array.isArray(part.value) ? part.value.join('') : (part.value ?? '');
+			if (content) {
+				responseParts.push({ kind: ResponsePartKind.Reasoning, id: partId(index), content });
+			}
+		} else if (part.kind === 'inlineReference') {
+			const content = inlineReferenceToMarkdown(part.inlineReference, part.name, identityAgentHostResourceUriMapper);
+			if (content) {
+				responseParts.push({ kind: ResponsePartKind.Markdown, id: partId(index), content });
+			}
+		} else if (part.kind === 'toolInvocation' || part.kind === 'toolInvocationSerialized') {
+			const toolCall = liveToolCall(part, part.toolCallId || partId(index));
+			if (toolCall) {
+				responseParts.push({ kind: ResponsePartKind.ToolCall, toolCall });
+			}
+		} else {
+			const content = mirrorPlaceholder(part);
+			if (content) {
+				responseParts.push({ kind: ResponsePartKind.Markdown, id: partId(index), content });
+			}
+		}
+	});
+	if (response.isComplete) {
+		const content = referencesMarkdown(response.contentReferences);
+		if (content) {
+			responseParts.push({ kind: ResponsePartKind.Markdown, id: partId('references'), content });
+		}
+	}
+	return responseParts;
+}
+
+/** The user message of a request. A system-initiated request in the mirror is the agent's own. */
+function mirroredTurnMessage(request: IChatRequestModel): Turn['message'] {
+	return { text: request.message.text, origin: { kind: request.isSystemInitiated ? MessageKind.Agent : MessageKind.User } };
+}
+
+/** Whether the request still runs: its response has not completed. */
+export function isActiveChatRequest(request: IChatRequestModel): boolean {
+	return !!request.response && !request.response.isComplete;
+}
+
+/** The requests of a chat that the mirror shows, in order: turns hidden in the editor stay out. */
+export function mirroredRequests(model: IChatModel): IChatRequestModel[] {
+	return model.getRequests().filter(request => !request.isHiddenFromTranscript);
+}
+
+/** Maps one finished request to its mirrored turn; the turn id is the request id. */
+export function mirroredTurnFromRequest(request: IChatRequestModel): Turn {
+	const responseParts = mirroredResponsePartsFromRequest(request);
+	const outcome = turnOutcomeFromRequest(request);
+	if (outcome.error) {
+		responseParts.push({ kind: ResponsePartKind.Error, error: outcome.error });
+	}
+	return {
+		id: request.id,
+		message: mirroredTurnMessage(request),
+		responseParts,
+		usage: undefined,
+		state: outcome.state,
+	};
+}
+
+/** Maps the running request to the mirror's active turn. */
+export function mirroredActiveTurnFromRequest(request: IChatRequestModel): IMirroredActiveTurn {
+	return {
+		turnId: request.id,
+		startedAt: request.timestamp,
+		message: mirroredTurnMessage(request),
+		responseParts: mirroredResponsePartsFromRequest(request),
+	};
+}
+
+/** The full mirrored state of a chat: its finished turns and the request that runs now. */
+export function mirroredChatFromModel(id: string, model: IChatModel): IMirroredChat {
+	const turns: Turn[] = [];
+	let activeTurn: IMirroredActiveTurn | undefined;
+	for (const request of mirroredRequests(model)) {
+		if (isActiveChatRequest(request)) {
+			activeTurn = mirroredActiveTurnFromRequest(request);
+		} else {
+			turns.push(mirroredTurnFromRequest(request));
+		}
+	}
+	return { id, turns, ...(activeTurn ? { activeTurn } : {}) };
 }

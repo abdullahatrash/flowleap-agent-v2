@@ -1984,6 +1984,14 @@ export interface IAgentTurnModelResolution {
 	readonly notices: readonly string[];
 }
 
+/** The titles a provider allows on disk and on the wire (see {@link IAgent.sessionTitlePolicy}). */
+export interface IAgentSessionTitlePolicy {
+	/** The neutral title the host may write to disk for `session`. */
+	persisted(session: URI): string;
+	/** The real title, held in memory by the provider, or `undefined` when it does not know it. */
+	live(session: URI): string | undefined;
+}
+
 export interface IAgent {
 	/** Host-internal opt-in to client-backed, non-file working directories. */
 	readonly supportsVirtualWorkspaces?: true;
@@ -2265,6 +2273,18 @@ export interface IAgent {
 
 	/** Provides chats that are ready to be registered as Agent Host sessions. */
 	readonly onDidDiscoverChats: Event<readonly IAgentDiscoveredChat[]>;
+	/**
+	 * FlowLeap (PRD 0018 C3): for a provider whose sessions mirror chats that live elsewhere
+	 * (`isMirroredSessionProvider`), whether it offers `session` now. The host lists only the
+	 * sessions it offers; their registrations and catalog rows stay.
+	 */
+	offersSession?(session: URI): boolean;
+	/**
+	 * FlowLeap (PRD 0018 C3): sessions this provider no longer offers (the window that owned them
+	 * stopped publishing). The host drops their live state and tells clients they are gone; it
+	 * does not delete them, so they come back when the provider offers them again.
+	 */
+	readonly onDidRetractSessions?: Event<readonly URI[]>;
 	/** Passive transcript changes from another client; these must not start host-side turn execution. */
 	readonly onDidChangeChatHistory?: Event<IAgentChatHistoryChange>;
 	/** Observe another client's persisted transcript while a host client subscribes to this chat. */
@@ -2333,6 +2353,13 @@ export interface IAgent {
 	listLegacyChatBackings?(session: URI): Promise<readonly IAgentLegacyChat[]>;
 
 	// ---- Metadata -----------------------------------------------------------
+
+	/**
+	 * FlowLeap (PRD 0018 C2, decision D1): keeps this provider's real session titles off disk.
+	 * When set, the host writes {@link IAgentSessionTitlePolicy.persisted} wherever it would store
+	 * a title, and lists sessions with {@link IAgentSessionTitlePolicy.live}.
+	 */
+	readonly sessionTitlePolicy?: IAgentSessionTitlePolicy;
 
 	/**
 	 * Optionally warms metadata for a burst of {@link getChatMetadata} calls; the expected count lets providers avoid bulk reads for small bursts.

@@ -60,6 +60,8 @@ import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, createAgentHostClientByokLmConnectio
 import { IRemoteAccessHostConfig, IRemoteAccessHostStatus, REMOTE_ACCESS_STOPPED_STATUS } from '../common/remoteAccessHost.js';
 import { SUPPORTED_PROTOCOL_VERSIONS } from '../common/state/protocol/version/registry.js';
 import { RemoteAccessHostController } from './remoteAccessHostController.js';
+import { FlowLeapChatAgentRegistration, FlowLeapChatMirrorAgent } from './flowleapChatMirrorAgent.js';
+import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostChatMirrorRegistry, createAgentHostChatMirrorWindow, isRendererWindowConnection, type ChatMirrorPublication } from '../common/agentHostChatMirror.js';
 import { AGENT_HOST_CLIENT_PROXY_CHANNEL, createAgentHostClientProxyConnection } from '../common/agentHostClientProxyChannel.js';
 import { dirname, join } from '../../../base/common/path.js';
 import { FileAccess } from '../../../base/common/network.js';
@@ -153,6 +155,8 @@ async function startAgentHost(): Promise<void> {
 	// after the block) can forward agent-SDK download progress to clients.
 	let sdkDownloadProgress: Event<IAgentSdkDownloadProgress> | undefined;
 	let byokLmBridgeRegistry: ByokLmBridgeRegistry;
+	// FlowLeap (PRD 0018 C1/C2): the editor chats each window publishes while Remote Access is on.
+	const chatMirrorRegistry = disposables.add(new AgentHostChatMirrorRegistry());
 	let proxyResolver!: IAgentHostProxyResolver;
 	const hostLaunchKind = readAgentHostLaunchKind(process.env[AgentHostLaunchKindEnvVar]);
 	try {
@@ -216,6 +220,15 @@ async function startAgentHost(): Promise<void> {
 		if (isAgentEnabled(process.env[AgentHostClaudeAgentEnabledEnvVar], true) && (!environmentService.isBuilt || agentSdkDownloader.isAvailable(ClaudeSdkPackage))) {
 			providerService.registerProvider(instantiationService.createInstance(ClaudeAgent));
 		}
+		// FlowLeap (PRD 0018 C2/C3): the editor chat bridge agent. It runs no model. It exists only
+		// while a window publishes, which a window does only while Remote Access is on (D5). The
+		// local Agents Window never shows it (`shouldSurfaceLocalAgentHostProvider`).
+		disposables.add(new FlowLeapChatAgentRegistration(
+			chatMirrorRegistry,
+			providerService,
+			() => instantiationService.createInstance(FlowLeapChatMirrorAgent, chatMirrorRegistry),
+			logService,
+		));
 		// Codex registration is one-way (register-on-enable): the env-var toggle
 		// or the renderer-forwarded `codexAgentEnabled` root config enables it.
 		// Disabling requires an agent host restart.
@@ -327,6 +340,12 @@ async function startAgentHost(): Promise<void> {
 				if (byokLmBridgeRegistry) {
 					const byokLmConnection = createAgentHostClientByokLmConnection(getChannel(AGENT_HOST_CLIENT_BYOK_LM_CHANNEL));
 					connectionStore.add(byokLmBridgeRegistry.register(clientId, byokLmConnection));
+				}
+				// FlowLeap (PRD 0018 C1): renderer windows only (spike gap 6): the main process has no
+				// chat view and no mirror channel. Lazy: the agent host calls a window's mirror channel
+				// only after it published.
+				if (isRendererWindowConnection(clientId)) {
+					connectionStore.add(chatMirrorRegistry.attachWindow(clientId, createAgentHostChatMirrorWindow(getChannel(AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL))));
 				}
 				authorityRegistrations.set(connection, connectionStore);
 			};
@@ -549,6 +568,11 @@ async function startAgentHost(): Promise<void> {
 		},
 		async getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
 			return remoteAccessHost?.status ?? REMOTE_ACCESS_STOPPED_STATUS;
+		},
+		async publishChatMirror(publication: ChatMirrorPublication): Promise<void> {
+			if (!chatMirrorRegistry.publish(publication)) {
+				logService.trace(`[AgentHost] editor chat publication '${publication.kind}' from client ${publication.clientId} dropped`);
+			}
 		},
 	};
 	const missionControl = protocolIngressDisposables.add(instantiationService.createInstance(MissionControlHost, {
