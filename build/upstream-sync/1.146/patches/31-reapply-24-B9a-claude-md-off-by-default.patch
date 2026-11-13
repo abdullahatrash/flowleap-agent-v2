@@ -1,8 +1,8 @@
 diff --git a/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts b/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
-index e1eab4faefb..7e5ab1cf53b 100644
+index 7989bdde615..f9d8444b56a 100644
 --- a/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
 +++ b/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
-@@ -2147,7 +2147,11 @@ configurationRegistry.registerConfiguration({
+@@ -2174,7 +2174,11 @@ configurationRegistry.registerConfiguration({
  			type: 'boolean',
  			title: nls.localize('chat.useClaudeMd.title', "Use CLAUDE.md file",),
  			markdownDescription: nls.localize('chat.useClaudeMd.description', "Controls whether instructions from `CLAUDE.md` file found in workspace roots, .claude and ~/.claude folder are attached to all chat requests. This setting is only used by the Local agent harness.",),
