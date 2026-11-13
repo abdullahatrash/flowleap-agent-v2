@@ -1,8 +1,8 @@
 diff --git a/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts b/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts
-index b2733963fac..5a64e91a694 100644
+index 1f8cc382b4b..73a92cdfc93 100644
 --- a/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts
 +++ b/src/vs/workbench/contrib/chat/common/chatErrorMessages.ts
-@@ -26,6 +26,7 @@ export const enum ChatFetchResponseType {
+@@ -28,6 +28,7 @@ export const enum ChatFetchResponseType {
  	ExtensionBlocked = 'extensionBlocked',
  	BadRequest = 'badRequest',
  	NotFound = 'notFound',
@@ -10,7 +10,7 @@ index b2733963fac..5a64e91a694 100644
  	Failed = 'failed',
  	Unknown = 'unknown',
  	NetworkError = 'networkError',
-@@ -65,6 +66,12 @@ export interface IChatFetchErrorPayload {
+@@ -67,6 +68,12 @@ export interface IChatFetchErrorPayload {
  	readonly rateLimitKey?: string;
  	readonly isAuto?: boolean;
  	readonly capiError?: { code?: string; message?: string };
@@ -23,7 +23,7 @@ index b2733963fac..5a64e91a694 100644
  }
  
  /**
-@@ -82,6 +89,8 @@ export interface IForwardedChatError {
+@@ -84,6 +91,8 @@ export interface IForwardedChatError {
  const RATE_LIMIT_LEARN_MORE_URL = 'https://aka.ms/github-copilot-rate-limit-error';
  const FILTERED_DOCS_URL = 'https://aka.ms/copilot-chat-filtered-docs';
  const GITHUB_SUPPORT_URL = 'https://support.github.com/contact';
@@ -32,7 +32,7 @@ index b2733963fac..5a64e91a694 100644
  
  /**
   * Localized "canceled" message. Mirrors the extension's `CanceledMessage`,
-@@ -115,6 +124,39 @@ function secondsToHumanReadableTime(seconds: number): string {
+@@ -117,6 +126,39 @@ function secondsToHumanReadableTime(seconds: number): string {
  	return localize('chatError.duration.hours', "{0} hours", hours);
  }
  
@@ -72,7 +72,7 @@ index b2733963fac..5a64e91a694 100644
  function getRateLimitMessage(fetchError: IChatFetchErrorPayload, copilotPlan: string | undefined): string {
  	const retryAfterString = fetchError.retryAfter ? secondsToHumanReadableTime(fetchError.retryAfter) : localize('chatError.aMoment', "a moment");
  	const code = fetchError.capiError?.code;
-@@ -295,6 +337,8 @@ function getChatErrorDetailsInner(fetchError: IChatFetchErrorPayload, copilotPla
+@@ -297,6 +339,8 @@ function getChatErrorDetailsInner(fetchError: IChatFetchErrorPayload, copilotPla
  				isQuotaExceeded: true,
  				...(fetchError.capiError?.code && { code: fetchError.capiError.code }),
  			};
@@ -82,10 +82,10 @@ index b2733963fac..5a64e91a694 100644
  		case ChatFetchResponseType.Failed:
  			return fetchError.serverRequestId
 diff --git a/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts b/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts
-index 803144c281e..e6077def119 100644
+index 17e50ea0d79..97769706cf0 100644
 --- a/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts
 +++ b/src/vs/workbench/contrib/chat/test/common/chatErrorMessages.test.ts
-@@ -71,7 +71,7 @@ suite('ChatErrorMessages', () => {
+@@ -98,7 +98,7 @@ suite('ChatErrorMessages', () => {
  		// every fetchError.type its classifiers can produce — so a shape change on either
  		// side is caught here instead of silently failing to render.
  		test('accepts the payload shape and every type the node layer emits', () => {
@@ -94,7 +94,7 @@ index 803144c281e..e6077def119 100644
  			const resolved = nodeTypes.map(type => getChatErrorDetailsFromMeta(errorInfo({
  				chatError: {
  					fetchError: {
-@@ -87,7 +87,7 @@ suite('ChatErrorMessages', () => {
+@@ -114,7 +114,7 @@ suite('ChatErrorMessages', () => {
  			}))?.code);
  			// Every node-emitted type resolves to a defined details object whose code is
  			// the fetch type (or, for quota, the more specific capiError code).
@@ -103,7 +103,7 @@ index 803144c281e..e6077def119 100644
  		});
  	});
  
-@@ -138,6 +138,62 @@ suite('ChatErrorMessages', () => {
+@@ -165,6 +165,62 @@ suite('ChatErrorMessages', () => {
  			});
  		});
  
