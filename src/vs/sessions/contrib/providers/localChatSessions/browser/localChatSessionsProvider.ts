@@ -12,11 +12,13 @@ import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { URI, UriComponents } from '../../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IChatService, IChatSendRequestOptions, IChatDetail, convertLegacyChatSessionTiming } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
-import { IChatSessionFileChange2, IChatSessionProviderOptionItem, SessionType } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
-import { ISession, IChat, ISessionGitRepository, ISessionFolder, ISessionWorkspace, SessionStatus, ISessionType, ISessionFileChange, toSessionId, SESSION_WORKSPACE_GROUP_LOCAL, IChatCheckpoints, ChatInteractivity, ChatModelSource, ISideChatSelection, SessionTypeAuthRequirement } from '../../../../../workbench/services/sessions/common/session.js';
+import { IChatSessionProviderOptionItem, SessionType } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
+import { IChatSessionFileChange2 } from '../../../../../workbench/common/chatSessionFileChange.js';
+import { ISession, IChat, ISessionGitRepository, ISessionFolder, ISessionWorkspace, SessionStatus, ISessionType, ISessionFileChange, toSessionId, SESSION_WORKSPACE_GROUP_LOCAL, IChatCheckpoints, ChatInteractivity, ChatModelSource, ISideChatSelection, SessionTypeAuthRequirement, ISessionEnvironment } from '../../../../../workbench/services/sessions/common/session.js';
+import { getSessionApplication } from '../../../../../workbench/services/sessions/common/sessionApplication.js';
 import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, isChatPermissionLevel } from '../../../../../workbench/contrib/chat/common/constants.js';
 import { basename, dirname, isEqual } from '../../../../../base/common/resources.js';
-import { IDeleteChatOptions, ISendRequestOptions, ISessionChangeEvent, ISessionModelPickerOptions, ISessionModelsSnapshot, ISessionsProvider, ISessionsProviderCreateSessionOptions } from '../../../../services/sessions/common/sessionsProvider.js';
+import { IChatMovedEvent, IDeleteChatOptions, INestedChatFolderInfo, INestedChatWorkspace, INestedChatWorkspaceSupport, ISendRequestOptions, ISessionChangeEvent, ISessionChatMoveDestination, ISessionModelPickerOptions, ISessionModelsSnapshot, ISessionsProvider, ISessionsProviderCreateSessionOptions, NestedChatWorkspaceError, SessionMoveRefusedError } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { isBuiltinChatMode, IChatMode } from '../../../../../workbench/contrib/chat/common/chatModes.js';
 import { IChatModel } from '../../../../../workbench/contrib/chat/common/model/chatModel.js';
 import { IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
@@ -420,8 +422,11 @@ export class LocalChatSessionsProvider extends Disposable implements ISessionsPr
 
 	readonly id = LOCAL_PROVIDER_ID;
 	readonly label = localize('localChatSessionsProvider', "FlowLeap Chat");
+	readonly environment: ISessionEnvironment = { id: 'local', label: localize('environment.local', "This Computer") };
 	readonly icon = Codicon.vm;
 	readonly order = 0;
+	/** Local chats live in one window; nothing moves between sessions. */
+	readonly onDidMoveChat: Event<IChatMovedEvent> = Event.None;
 	readonly browseActions: readonly [] = [];
 	readonly supportsLocalWorkspaces = true;
 
@@ -774,8 +779,6 @@ export class LocalChatSessionsProvider extends Disposable implements ISessionsPr
 		// Local (in-process VS Code chat) sessions offer the "Manage Models"
 		// action so users can configure the general-purpose model set.
 		return {
-			useGroupedModelPicker: true,
-			showFeatured: true,
 			showUnavailableFeatured: false,
 			showManageModelsAction: true,
 		};
@@ -884,6 +887,38 @@ export class LocalChatSessionsProvider extends Disposable implements ISessionsPr
 		this._onDidChangeGroupMembership.fire({ groupKey: primary.sessionId });
 		this._onDidChangeSessions.fire({ added: [], removed: [], changed: [this._toISession(primary)] });
 		return true;
+	}
+
+	canMoveChat(_sessionId: string, _chatUri: URI): boolean {
+		return false;
+	}
+
+	async moveChat(_sessionId: string, _chatUri: URI, _destination: ISessionChatMoveDestination): Promise<void> {
+		throw new SessionMoveRefusedError(localize('localChatSessions.moveChatUnsupported', "Chats of a Local session can't be moved."));
+	}
+
+	canMoveSessionUnder(_sessionId: string): boolean {
+		return false;
+	}
+
+	async moveSessionUnder(_sessionId: string, _destinationSessionId: string, _after: URI | undefined): Promise<void> {
+		throw new SessionMoveRefusedError(localize('localChatSessions.moveSessionUnsupported', "A Local session can't be moved into another session."));
+	}
+
+	getNestedChatWorkspaceSupport(_sessionId: string, _chat: URI, _reader: IReader | undefined): INestedChatWorkspaceSupport | undefined {
+		return undefined;
+	}
+
+	async resolveNestedChatFolder(_sessionId: string, _chat: URI, _folder: URI, _token: CancellationToken): Promise<INestedChatFolderInfo> {
+		throw NestedChatWorkspaceError.notSupported();
+	}
+
+	async getNestedChatBranches(_sessionId: string, _chat: URI, _folder: URI, _query: string, _token: CancellationToken): Promise<readonly string[]> {
+		throw NestedChatWorkspaceError.notSupported();
+	}
+
+	async applyNestedChatWorkspace(_sessionId: string, _chat: URI, _workspace: INestedChatWorkspace, _prompt: string): Promise<void> {
+		throw NestedChatWorkspaceError.notSupported();
 	}
 
 	async forkChat(sessionId: string, _sourceChat: URI, _turnId: string): Promise<IChat> {
@@ -1235,6 +1270,9 @@ export class LocalChatSessionsProvider extends Disposable implements ISessionsPr
 			resource: primary.resource,
 			providerId: primary.providerId,
 			sessionType: primary.sessionType,
+			harness: primary.sessionType,
+			environment: this.environment.id,
+			application: constObservable(getSessionApplication('vscode')),
 			icon: primary.icon,
 			createdAt: primary.createdAt,
 			workspace: primary.workspace,

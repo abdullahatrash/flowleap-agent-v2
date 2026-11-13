@@ -48,7 +48,7 @@ import { WebWorkspacePicker } from './webWorkspacePicker.js';
 import { getStoredSessionOptionsExpanded, SessionOptionsRow, storeSessionOptionsExpanded } from './sessionOptionsRow.js';
 import { IconOnlySessionPickers } from './iconOnlySessionPickers.js';
 import { IPickedSessionType, IPreferredSessionType } from './sessionTypePicker.js';
-import { INewChatComposerInputOptions, NEW_SESSION_PROMPT_PLACEHOLDER } from './newChatComposerInput.js';
+import { getNewSessionPromptPlaceholder, INewChatComposerInputOptions } from './newChatComposerInput.js';
 import { SharedChatInputComposer } from './sharedChatInputComposer.js';
 import { getDefaultSessionCreationEnvironment, getEnvironmentWorkspaceProvider, getRemoteSessionCreationEnvironment, getSessionCreationEnvironments, ISessionCreationEnvironment, SessionEnvironmentPicker } from './sessionEnvironmentPicker.js';
 import { NoAgentHostEmptyState } from './noAgentHostEmptyState.js';
@@ -83,6 +83,9 @@ import { getAdditionalFolderContextId, getAdditionalRepositoryContextId } from '
 import { NewSessionBannerPriority, NewSessionBanners } from '../../common/newSessionBanners.js';
 import { COLLAPSED_SESSION_OPTIONS_SHOW_ICONS_SETTING, COMPARE_AGENTS_ENABLED_SETTING, COMPARE_AGENTS_OPEN_IN_GRID_SETTING, COMPARE_AGENTS_SHOW_PICKER_HINT_SETTING, ENVIRONMENT_PICKER_SETTING, NEW_SESSION_COMPOSER_OPTIONS_EXPANDED_SETTING, NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING, WORKSPACE_OPT_OUT_SETTING } from '../../common/chatConstants.js';
 import { getNewSessionWelcomePhrases, INewSessionWelcomeMessagesConfiguration } from '../../common/welcomePhrases.js';
+import { getDefaultHoverDelegate } from '../../../../../base/browser/ui/hover/hoverDelegateFactory.js';
+import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
+import { getSessionWorkflowTemplates } from '../../common/sessionWorkflowTemplates.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { getSessionComparisonWorkspaceError, ISessionComparisonHarness, ISessionComparisonService } from '../../common/sessionComparison.js';
 import { OPEN_SESSION_COMPARISON_COMMAND_ID } from '../../common/sessionComparisonConstants.js';
@@ -266,6 +269,7 @@ export class NewChatWidget extends Disposable {
 		@INotificationService private readonly notificationService: INotificationService,
 		@ITelemetryService private readonly telemetryService: ITelemetryService,
 		@ILanguageModelsService private readonly languageModelsService: ILanguageModelsService,
+		@IHoverService private readonly hoverService: IHoverService,
 	) {
 		super();
 		this._preserveCustomView = options.preserveCustomView === true;
@@ -539,7 +543,7 @@ export class NewChatWidget extends Disposable {
 			canSubmitWithoutSession,
 			hasAdditionalSendContent: hasFeedback,
 			loading,
-			placeholder: NEW_SESSION_PROMPT_PLACEHOLDER,
+			placeholder: getNewSessionPromptPlaceholder(),
 			onboardingTargetId: 'sessions.newSession.input',
 			supportsBackground: true,
 			...this._globalTargetOptions(),
@@ -879,6 +883,7 @@ export class NewChatWidget extends Disposable {
 
 		this._renderFeedbackBanner(chatWidgetContent);
 		this._newChatInput.render(chatWidgetContent, parent);
+		this._renderWorkflowTemplates(chatWidgetContent);
 		this._register(autorun(reader => {
 			const isQuickChat = this._isQuickChatComposer.read(reader);
 			const isWorkspacePickerQuickChat = this._isWorkspacePickerQuickChat.read(reader);
@@ -2833,6 +2838,27 @@ export class NewChatWidget extends Disposable {
 		} catch (error) {
 			this.logService.error('Failed to refresh new-session prompt options:', error);
 			this._newChatInput.showPromptOptions(undefined);
+		}
+	}
+
+	/**
+	 * FlowLeap: renders the patent workflow starter chips below the composer
+	 * input. Picking one seeds the input with the template's prompt (editable,
+	 * not auto-sent). The resulting session is an ordinary session of the type
+	 * the picker has selected; templates add no session type.
+	 */
+	private _renderWorkflowTemplates(container: HTMLElement): void {
+		const templates = getSessionWorkflowTemplates();
+		if (templates.length === 0) {
+			return;
+		}
+		const row = dom.append(container, dom.$('.new-session-workflow-templates'));
+		for (const template of templates) {
+			const chip = dom.append(row, dom.$('button.new-session-workflow-template-chip'));
+			dom.append(chip, dom.$('span.codicon.codicon-search'));
+			dom.append(chip, dom.$('span.new-session-workflow-template-chip-label', undefined, template.label));
+			this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), chip, template.description));
+			this._register(dom.addDisposableListener(chip, dom.EventType.CLICK, () => this._newChatInput.prefillInput(template.prompt)));
 		}
 	}
 

@@ -15,6 +15,7 @@ import { AgentHostPullRequestOperationId } from '../../../../../platform/agentHo
 import { ArtifactIntegrationsSettingId } from '../../../../../platform/artifactIntegrations/common/artifactIntegration.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService, RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
+import { PatentIdeContextKeys } from '../../../../../workbench/common/patent/patentIdeContextKeys.js';
 import { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -228,7 +229,7 @@ MenuRegistry.appendMenuItem(Menus.ChangesOperationsDropdown, {
 	icon: Codicon.gitMerge,
 	group: CHANGES_OPERATIONS_DROPDOWN_PRIMARY_GROUP,
 	order: 1,
-	when: ContextKeyExpr.and(agentMergeMenuPrecondition, agentMergeOwnsPrimaryButton),
+	when: ContextKeyExpr.and(agentMergeMenuPrecondition, agentMergeOwnsPrimaryButton, PatentIdeContextKeys.Mode.toNegated()), // FlowLeap Patent IDE: no Agent Merge in Patent IDE mode (#471)
 });
 
 /** Menus the top-level Agent Merge entries appear on: the operations dropdown, and their own context menu. */

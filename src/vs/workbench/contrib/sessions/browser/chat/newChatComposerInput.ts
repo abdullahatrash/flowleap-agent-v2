@@ -48,8 +48,41 @@ export function hasSendableNewChatContent(query: string, attachments: readonly I
 	return !!query.trim() || attachments.some(isExplicitFileOrImageVariableEntry) || hasAdditionalSendContent;
 }
 
-/** The new-session composer's prompt placeholder. */
-export const NEW_SESSION_PROMPT_PLACEHOLDER = localize('sessionsChatInput.placeholder.pitchYourIdea', "Pitch your idea");
+/**
+ * The new-session composer's prompt placeholders. FlowLeap: they lead with
+ * patent-research framings (prior art, freedom-to-operate, claim analysis) to
+ * signal what the product is for, while keeping a few open-ended research
+ * prompts. One is picked per composer instance, avoiding an immediate repeat
+ * of the previous pick (PRD 0017 A6, #65).
+ */
+const NEW_SESSION_PROMPT_PLACEHOLDERS = [
+	localize('sessionsChatInput.placeholder.searchPriorArt', "Search prior art for…"),
+	localize('sessionsChatInput.placeholder.runFreedomToOperate', "Run a freedom-to-operate check on…"),
+	localize('sessionsChatInput.placeholder.analyzeTheClaims', "Analyze the claims of a patent…"),
+	localize('sessionsChatInput.placeholder.mapThePatentLandscape', "Map the patent landscape for…"),
+	localize('sessionsChatInput.placeholder.findInvalidatingReferences', "Find references that challenge novelty…"),
+	localize('sessionsChatInput.placeholder.assessPatentability', "Assess the patentability of an idea…"),
+	localize('sessionsChatInput.placeholder.compareTwoPatents', "Compare the claims of two patents…"),
+	localize('sessionsChatInput.placeholder.summarizeProsecutionHistory', "Summarize a patent's prosecution history…"),
+	localize('sessionsChatInput.placeholder.findForwardCitations', "Find who cites a patent…"),
+	localize('sessionsChatInput.placeholder.reviewSpecificationForPriorArt', "Review a specification against prior art…"),
+	localize('sessionsChatInput.placeholder.searchAcademicLiterature', "Search the academic literature for…"),
+	localize('sessionsChatInput.placeholder.whatAreYouResearching', "What are you researching?"),
+	localize('sessionsChatInput.placeholder.whatPatentQuestion', "What patent question can I help with?"),
+	localize('sessionsChatInput.placeholder.describeWhatToAnalyze', "Describe what you want to analyze"),
+];
+
+let lastPlaceholderIndex = -1;
+
+/** The new-session composer's prompt placeholder: a random patent-research framing, never the previous one. */
+export function getNewSessionPromptPlaceholder(): string {
+	let index = Math.floor(Math.random() * NEW_SESSION_PROMPT_PLACEHOLDERS.length);
+	if (NEW_SESSION_PROMPT_PLACEHOLDERS.length > 1 && index === lastPlaceholderIndex) {
+		index = (index + 1) % NEW_SESSION_PROMPT_PLACEHOLDERS.length;
+	}
+	lastPlaceholderIndex = index;
+	return NEW_SESSION_PROMPT_PLACEHOLDERS[index];
+}
 
 /**
  * The labeled pickers in `container`, for responsive layouts that compact them

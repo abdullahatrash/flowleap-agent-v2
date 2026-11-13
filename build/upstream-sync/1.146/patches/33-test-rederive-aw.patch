@@ -1,0 +1,13 @@
+diff --git a/src/vs/sessions/contrib/sessions/test/browser/sessionsListDensity.test.ts b/src/vs/sessions/contrib/sessions/test/browser/sessionsListDensity.test.ts
+index 9430ed123a6..08d477f8a53 100644
+--- a/src/vs/sessions/contrib/sessions/test/browser/sessionsListDensity.test.ts
++++ b/src/vs/sessions/contrib/sessions/test/browser/sessionsListDensity.test.ts
+@@ -6,7 +6,7 @@
+ import assert from 'assert';
+ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+ import { SessionStatus } from '../../../../../workbench/services/sessions/common/session.js';
+-import { SessionsGrouping, SessionsList, SessionsSorting } from '../../browser/views/sessionsList.js';
++import { SessionsGrouping, SessionsList, SessionsSorting } from '../../../../../workbench/contrib/sessions/browser/views/sessionsList.js';
+ import { createListHarness, createTestSession } from './sessionsListTestUtils.js';
+ 
+ suite('Sessions list density', () => {

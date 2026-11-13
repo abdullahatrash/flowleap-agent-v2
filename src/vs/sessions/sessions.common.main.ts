@@ -16,7 +16,7 @@ import '../workbench/contrib/modernUI/browser/media/notificationsDialogs.css';
 import '../workbench/contrib/modernUI/browser/media/suggestWidget.css';
 import { agentsPanelBackground } from '../workbench/contrib/sessions/common/theme.js';
 import './common/sizes.js';
-import './contrib/providers/remoteAgentHost/browser/connectionDiagnostics.contribution.js';
+// FlowLeap keep-out: remote agent host connection diagnostics (remote hosts stay out, PRD 0017/0027)
 
 getColorRegistry().updateDefaultColor(PANEL_BACKGROUND, agentsPanelBackground);
 getColorRegistry().updateDefaultColor(TERMINAL_BACKGROUND_COLOR, agentsPanelBackground);
@@ -490,14 +490,16 @@ import './contrib/providers/agentHost/browser/agentHostSessionConfigPicker.contr
 import './contrib/providers/agentHost/browser/agentHostPolicyContinuationPresenter.contribution.js';
 import './contrib/providers/agentHost/browser/agentHostForkActions.js';
 import './contrib/chat/browser/customizationsDebugLog.contribution.js';
-import './contrib/providers/copilotChatSessions/browser/copilotChatSessions.contribution.js';
+// FlowLeap keep-out: the Copilot Cloud / Sandbox provider needs GitHub sign-in and the GitHub service (PRD 0017).
+// Local agent host provider (PRD 0018 A1, ADR 0009) is registered from sessions.desktop.main.ts.
+// FlowLeap: Local (in-process) sessions; upstream removed the Local harness (PRD 0017 A11).
+import './contrib/providers/localChatSessions/browser/localChatSessions.contribution.js';
 import './contrib/sessions/browser/sessions.contribution.js';
 import './contrib/canvases/browser/pinnedCanvases.contribution.js';
 import './contrib/sessions/browser/customizationsToolbar.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
-import './contrib/codeReview/browser/codeReview.contributions.js';
+// FlowLeap keep-out: codeReview and github contributions (PR/CI/review UI); their services come from keptOutServices below.
 import './contrib/files/browser/files.contribution.js';
-import './contrib/github/browser/github.contribution.js';
 import './contrib/applyCommitsToParentRepo/browser/applyChangesToParentRepo.js';
 import './contrib/fileTreeView/browser/fileTreeView.contribution.js'; // view registration disabled; filesystem provider still needed
 import './contrib/configuration/browser/configuration.contribution.js';
@@ -509,18 +511,24 @@ import './contrib/terminal/browser/sessionsTerminalContribution.js';
 import './contrib/chatDebug/browser/chatDebug.contribution.js';
 import './contrib/workspace/browser/workspace.contribution.js';
 import './contrib/aquarium/browser/aquarium.contribution.js';
-import './contrib/policyBlocked/browser/policyBlocked.contribution.js';
+// FlowLeap keep-out: policyBlocked (Copilot policy UI), automations (entry points; services in keptOutServices), remoteSessions (PRD 0017/0027)
 import '../workbench/services/policies/browser/managedSettingsUpdate.contribution.js';
-import './contrib/automations/browser/automations.contribution.js';
+// Canvases: the window canvas service is injected by core parts (sessions service, navigation, new session); canvas
+// content is gated off by `chat.canvases.enabled` (default false). Inbox One: its notifications service is injected by
+// the sessions list; the Inbox itself is off (`chat.agentSessions.inbox.enabled` default false, not included).
 import './contrib/canvases/browser/windowCanvases.contribution.js';
 import './contrib/inboxOne/browser/inboxOne.contribution.js';
-import './contrib/remoteSessions/browser/remoteSessions.contribution.js';
 import './contrib/customViewTest/browser/customViewTest.contribution.js';
 
 // Onboarding: the engine + spotlight presentation (from the workbench layer) and
 // the Agents window scenario data.
 import '../workbench/contrib/onboarding/browser/onboarding.contribution.js';
-import '../workbench/contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
+// FlowLeap keep-out: services of the kept-out github/codeReview/automations contribs that core parts inject (PRD 0017)
+import './contrib/keptOutServices/browser/keptOutServices.contribution.js';
+// FlowLeap keep-out: services of the kept-out remote agent host / Mission Control contribution that core parts inject (PRD 0027)
+import '../workbench/contrib/sessions/browser/keptOutRemoteAgentHostServices.contribution.js';
+// FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
+// import '../workbench/contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
 import '../workbench/contrib/codeEditor/browser/diffEditorTryout.contribution.js';
 import './contrib/onboardingTours/browser/onboardingTours.contribution.js';
 import './contrib/getStarted/browser/getStarted.contribution.js';

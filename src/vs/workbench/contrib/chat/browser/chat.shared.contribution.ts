@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import './agentSessions/agentHost/codexContinuation.contribution.js';
+// FlowLeap keep-out: Codex continuation offers to continue Codex chats with GitHub Copilot; Codex is hidden (PRD 0018 A3.2).
+// Computer Use setup stays registered: the agent host session handler injects IComputerUseSetupService (`chat.agentHost.computerUse.enabled` defaults to false).
 import './agentSessions/agentHost/computerUseSetup.contribution.js';
 import './agentSessions/agentHost/localModel.contribution.js';
 import { getDefaultModelPolicyDescription } from '../common/modelSelection.js';
@@ -2174,7 +2175,11 @@ configurationRegistry.registerConfiguration({
 			type: 'boolean',
 			title: nls.localize('chat.useClaudeMd.title', "Use CLAUDE.md file",),
 			markdownDescription: nls.localize('chat.useClaudeMd.description', "Controls whether instructions from `CLAUDE.md` file found in workspace roots, .claude and ~/.claude folder are attached to all chat requests. This setting is only used by the Local agent harness.",),
-			default: true,
+			// Patent AI: off by default. A personal ~/.claude/CLAUDE.md belongs to the user's coding
+			// assistant, not their patent assistant; with it on, every chat opened by hunting for the
+			// files it names (2026-09-02). Claude sessions in the Agents window read CLAUDE.md through
+			// their own provider and are unaffected.
+			default: false,
 			restricted: true,
 			disallowConfigurationDefault: true,
 			tags: ['prompts', 'reusable prompts', 'prompt snippets', 'instructions']
@@ -2238,7 +2243,10 @@ configurationRegistry.registerConfiguration({
 				migrationsTabLink,
 			),
 			default: {
-				...DEFAULT_SKILL_SOURCE_FOLDERS.map((folder) => ({ [folder.path]: true })).reduce((acc, curr) => ({ ...acc, ...curr }), {}),
+				// FlowLeap: the personal Claude skills folder holds CLI-oriented recipes (flowleap-cli skill packs)
+				// that describe commands this app does not have; loading them beside the bundled patent skills
+				// gives the agent two conflicting instruction sets for the same task. Users can turn it on.
+				...DEFAULT_SKILL_SOURCE_FOLDERS.map((folder) => ({ [folder.path]: folder.path !== '~/.claude/skills' })).reduce((acc, curr) => ({ ...acc, ...curr }), {}),
 			},
 			additionalProperties: { type: 'boolean' },
 			propertyNames: {

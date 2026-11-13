@@ -7,6 +7,7 @@ import { Codicon } from '../../../../base/common/codicons.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { PatentIdeContextKeys } from '../../../../workbench/common/patent/patentIdeContextKeys.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { constObservable } from '../../../../base/common/observable.js';
@@ -38,7 +39,7 @@ class FixCIChecksAction extends Action2 {
 				id: MenuId.AgentsChangesPrimaryActionSubMenu,
 				group: '5_checks',
 				order: 4,
-				when: ContextKeyExpr.and(IsSessionsWindowContext, hasActiveSessionFailedCIChecks, activeSessionCIFixRequested.negate()),
+				when: ContextKeyExpr.and(IsSessionsWindowContext, hasActiveSessionFailedCIChecks, activeSessionCIFixRequested.negate(), PatentIdeContextKeys.Mode.toNegated()), // FlowLeap Patent IDE: no CI checks in Patent IDE mode (#471)
 			}],
 		});
 	}

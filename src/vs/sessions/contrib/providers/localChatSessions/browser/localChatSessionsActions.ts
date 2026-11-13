@@ -14,10 +14,9 @@ import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase 
 import { ChatPermissionLevel } from '../../../../../workbench/contrib/chat/common/constants.js';
 import { Menus } from '../../../../../workbench/contrib/sessions/browser/menus.js';
 import { SessionProviderIdContext, SessionTypeContext } from '../../../../../workbench/contrib/sessions/common/contextkeys.js';
-import { ISessionContext } from '../../../../services/sessions/browser/sessionContext.js';
-import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
+import { ISessionsProvidersService } from '../../../../../workbench/contrib/sessions/browser/sessionsProvidersService.js';
 import { ISession } from '../../../../../workbench/services/sessions/common/session.js';
-import { IActiveSession } from '../../../../../workbench/contrib/sessions/common/sessionsManagement.js';
+import { ISessionHost } from '../../../../../workbench/services/sessions/browser/sessionHost.js';
 import { ModePicker, ScopedModePickerModelCache } from '../../../../../workbench/contrib/sessions/providers/copilotChatSessions/browser/modePicker.js';
 import { IPermissionLevelMeta, IPermissionPickerDelegate, PermissionPicker } from '../../../../../workbench/contrib/sessions/providers/copilotChatSessions/browser/permissionPicker.js';
 import { ILocalSessionConfiguration, LOCAL_PROVIDER_ID, LocalChatSessionsProvider, LocalSessionType } from './localChatSessionsProvider.js';
@@ -42,7 +41,7 @@ registerAction2(class extends Action2 {
 			id: LOCAL_MODE_PICKER_ID,
 			title: localize2('localModePicker', "Mode"),
 			f1: false,
-			menu: [{ id: Menus.NewSessionConfig, group: 'navigation', order: 0, when: IsActiveLocalSession }],
+			menu: [{ id: Menus.NewSessionControl, group: 'navigation', order: 0, when: IsActiveLocalSession }],
 		});
 	}
 	override async run(): Promise<void> { /* handled by the action view item */ }
@@ -88,7 +87,7 @@ class LocalPermissionPickerDelegate implements IPermissionPickerDelegate {
 	readonly currentPermissionLevel: IObservable<ChatPermissionLevel | undefined>;
 
 	constructor(
-		private readonly _session: IObservable<IActiveSession | undefined>,
+		private readonly _session: IObservable<ISession | undefined>,
 		private readonly _sessionsProvidersService: ISessionsProvidersService,
 	) {
 		this.currentPermissionLevel = derived(reader => this._configuration(this._session.read(reader))?.permissionLevel.read(reader));
@@ -119,12 +118,15 @@ class LocalPickerActionViewItemContribution extends Disposable implements IWorkb
 		const modePickerModels = this._register(new ScopedModePickerModelCache(session => session.providerId === LOCAL_PROVIDER_ID));
 
 		this._register(actionViewItemService.register(
-			Menus.NewSessionConfig, LOCAL_MODE_PICKER_ID,
+			Menus.NewSessionControl, LOCAL_MODE_PICKER_ID,
 			(_action, _options, scopedInstantiationService) => {
-				const { session } = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionContext));
+				// The host the toolbar lives in (a composer or a session pane) provides itself through the scoped
+				// instantiation service; its `session` is the draft of the new-session composer or the shown session.
+				const host = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionHost));
+				const session = host.session;
 				const store = new DisposableStore();
-				const modePickerModel = store.add(modePickerModels.acquire(session, scopedInstantiationService));
-				const picker = scopedInstantiationService.createInstance(ModePicker, modePickerModel.model, session);
+				const modePickerModel = store.add(modePickerModels.acquire(host, scopedInstantiationService));
+				const picker = scopedInstantiationService.createInstance(ModePicker, modePickerModel.model, host);
 				store.add(picker.onDidSelect(mode => {
 					const active = session.get();
 					const provider = active ? sessionsProvidersService.getProvider(active.providerId) : undefined;
@@ -139,8 +141,8 @@ class LocalPickerActionViewItemContribution extends Disposable implements IWorkb
 		this._register(actionViewItemService.register(
 			Menus.NewSessionControl, LOCAL_PERMISSION_PICKER_ID,
 			(_action, _options, scopedInstantiationService) => {
-				const { session } = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionContext));
-				const delegate = new LocalPermissionPickerDelegate(session, sessionsProvidersService);
+				const host = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionHost));
+				const delegate = new LocalPermissionPickerDelegate(host.session, sessionsProvidersService);
 				return new PickerActionViewItem(scopedInstantiationService.createInstance(PermissionPicker, delegate));
 			},
 		));

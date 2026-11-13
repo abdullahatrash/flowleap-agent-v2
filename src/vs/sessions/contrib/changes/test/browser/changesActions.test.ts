@@ -17,7 +17,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { IActionViewItemService, NullActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
 import { createActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { isIMenuItem, MenuId, MenuItemAction, MenuRegistry } from '../../../../../platform/actions/common/actions.js';
-import { AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID, AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, AGENT_HOST_SYNC_CHANGESET_OPERATION_ID } from '../../../../../platform/agentHost/common/agentHostChangesetOperationService.js';
+import { AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID, AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, AGENT_HOST_MERGE_CHANGESET_OPERATION_ID, AGENT_HOST_SYNC_CHANGESET_OPERATION_ID } from '../../../../../platform/agentHost/common/agentHostChangesetOperationService.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
@@ -29,8 +29,8 @@ import { Menus } from '../../../../../workbench/contrib/sessions/browser/menus.j
 import { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
 import { ISessionsHostLayoutService } from '../../../../../workbench/services/sessions/browser/sessionsHostLayoutService.js';
 import { ISessionsService } from '../../../../../workbench/contrib/sessions/browser/sessionsService.js';
-import { IChat, ISessionChangeset, ISessionChangesetOperation, ISessionFolder, ISessionGitRepository, ISessionWorkspace, SessionChangesetOperationScope, SessionChangesetOperationStatus, SessionStatus, UNCOMMITTED_CHANGES_CHANGESET_ID } from '../../../../../workbench/services/sessions/common/session.js';
-import { bindChangesetOperations, ChangesHeaderChangesetOperationsActionContribution } from '../../browser/changesActions.js';
+import { IChat, ISession, ISessionChangeset, ISessionChangesetOperation, ISessionFolder, ISessionGitRepository, ISessionWorkspace, SessionChangesetOperationScope, SessionChangesetOperationStatus, SessionStatus, UNCOMMITTED_CHANGES_CHANGESET_ID } from '../../../../../workbench/services/sessions/common/session.js';
+import { bindChangesetOperations, ChangesHeaderChangesetOperationsActionContribution, getChangesetOperations } from '../../browser/changesActions.js';
 import { SessionChangesEditor } from '../../../../../workbench/contrib/sessionChanges/browser/sessionChangesEditor.js';
 import { ISessionChangesService } from '../../../../../workbench/contrib/sessionChanges/browser/sessionChangesService.js';
 import { IChangesSessionObservables, IChangesSessionScope, IChangesViewService } from '../../../../../workbench/contrib/sessions/common/changesViewService.js';
@@ -459,6 +459,40 @@ suite('Changes Actions', () => {
 		}, {
 			menuActions: 0,
 			commitCommandRegistered: false,
+		});
+	});
+
+	test('Patent IDE mode drops pull request and merge operations from the draft Changes title (#471)', () => {
+		const operation = (id: string, label: string): ISessionChangesetOperation => ({
+			id,
+			label,
+			scopes: [SessionChangesetOperationScope.Changeset],
+			status: SessionChangesetOperationStatus.Idle,
+		});
+		const changeset = upcastPartial<ISessionChangeset>({
+			id: UNCOMMITTED_CHANGES_CHANGESET_ID,
+			isEnabled: constObservable(true),
+			operations: constObservable([
+				operation(AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, 'Commit'),
+				operation('create-pr', 'Create PR'),
+				operation(AGENT_HOST_MERGE_CHANGESET_OPERATION_ID, 'Merge Changes'),
+			]),
+		});
+		const chat = upcastPartial<IChat>({ changesets: constObservable([changeset]) });
+		const session = upcastPartial<ISession>({
+			status: constObservable(SessionStatus.Untitled),
+			workspace: constObservable(undefined),
+			mainChat: constObservable(chat),
+		});
+		const changes = { changesetObs: constObservable(undefined), changesetOperationsObs: constObservable([]) };
+		const keys = (patentIdeMode: boolean) => getChangesetOperations(session, chat, changes, undefined, patentIdeMode).entries.map(entry => entry.key);
+
+		assert.deepStrictEqual({
+			developer: keys(false),
+			patent: keys(true),
+		}, {
+			developer: [`changeset:${AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID}`, 'changeset:create-pr', `changeset:${AGENT_HOST_MERGE_CHANGESET_OPERATION_ID}`],
+			patent: [`changeset:${AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID}`],
 		});
 	});
 });

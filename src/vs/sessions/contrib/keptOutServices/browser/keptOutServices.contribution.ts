@@ -20,9 +20,10 @@ import { IAutomationService } from '../../../../workbench/contrib/chat/common/au
 import { AutomationDialogService } from '../../automations/browser/automationDialogService.js';
 import { AutomationRunner } from '../../automations/browser/automationRunner.js';
 import { ProviderAutomationService } from '../../automations/browser/providerAutomationService.js';
-import { CodeReviewService, ICodeReviewService } from '../../codeReview/browser/codeReviewService.js';
+import { CodeReviewService } from '../../codeReview/browser/codeReviewService.js';
+import { ICodeReviewService } from '../../../../workbench/contrib/sessions/browser/codeReviewService.js';
 import { GitHubService, IGitHubService } from '../../../../workbench/contrib/sessions/browser/github/githubService.js';
-import { IPullRequestIconCache, PullRequestIconCache } from '../../github/browser/pullRequestIconCache.js';
+import { IPullRequestIconCache, PullRequestIconCache } from '../../../../workbench/contrib/sessions/browser/github/pullRequestIconCache.js';
 
 registerSingleton(IGitHubService, GitHubService, InstantiationType.Delayed);
 registerSingleton(IPullRequestIconCache, PullRequestIconCache, InstantiationType.Delayed);

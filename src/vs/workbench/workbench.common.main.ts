@@ -230,7 +230,9 @@ import './contrib/speech/browser/speech.contribution.js';
 import './contrib/chat/browser/chat.shared.contribution.js';
 import './contrib/chat/browser/chat.contribution.js';
 import './contrib/chat/browser/agentSessions/agentHost/agentHost.contribution.js';
-import './contrib/chat/browser/remoteAgentHost/remoteAgentHost.contribution.js';
+// FlowLeap keep-out: remote agent hosts, Copilot cloud sandboxes and Mission Control (GitHub environments) stay out;
+// the services core still injects come from the kept-out services contribution (PRD 0027).
+import './contrib/sessions/browser/keptOutRemoteAgentHostServices.contribution.js';
 import './contrib/chat/browser/chat.view.contribution.js';
 import './contrib/inlineChat/browser/inlineChat.contribution.js';
 
@@ -241,6 +243,10 @@ import './contrib/mcp/browser/mcp.view.contribution.js';
 import './contrib/chat/browser/chatSessions/chatSessions.contribution.js';
 import './contrib/chat/browser/contextContrib/chatContext.contribution.js';
 import './contrib/imageCarousel/browser/imageCarousel.contribution.js';
+
+// FlowLeap (Patent)
+import './contrib/patent/browser/patentAuth.contribution.js';
+import './contrib/patent/browser/patentWalkthrough.contribution.js';
 
 // Interactive
 import './contrib/interactive/browser/interactive.contribution.js';
@@ -281,7 +287,7 @@ import './contrib/sash/browser/sash.contribution.js';
 
 // Git
 import './contrib/git/browser/git.contributions.js';
-import './contrib/github/browser/githubLinkPresentation.contribution.js';
+// FlowLeap keep-out: GitHub rich link presentation (needs the GitHub account client) (PRD 0027)
 
 // SCM
 import './contrib/scm/browser/scm.contribution.js';
@@ -404,8 +410,9 @@ import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
 
 // Onboarding (scenario engine)
 import './contrib/onboarding/browser/onboarding.contribution.js';
-import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
-import './contrib/chat/browser/onboarding/chatInputSpotlightTour.js';
+// FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
+// import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
+// FlowLeap keep-out: the chat input spotlight tour introduces the Copilot harness (PRD 0027)
 import './contrib/codeEditor/browser/diffEditorTryout.contribution.js';
 
 // Call Hierarchy

@@ -28,7 +28,7 @@ registerOpenAgentsWindowCommand();
 // Per-session layout controller (desktop / web desktop layout).
 import './contrib/layout/browser/sessions.layout.contribution.js';
 import './contrib/canvases/electron-browser/sessionCanvases.contribution.js';
-import './contrib/inboxOne/electron-browser/inboxCanvasHost.js';
+// FlowLeap keep-out: the Inbox One canvas host (GitHub feed); the browser-side Unsupported host stays registered (PRD 0027)
 import './contrib/sessionInputBanners/electron-browser/sessionDiskSpace.contribution.js';
 
 //#endregion
@@ -102,6 +102,7 @@ import '../platform/userDataProfile/electron-browser/userDataProfileStorageServi
 import '../workbench/services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
 import '../platform/extensionManagement/electron-browser/extensionsProfileScannerService.js';
 import '../platform/sandbox/electron-browser/sandboxHelperService.js';
+import '../platform/flowleapCli/electron-browser/flowleapCliService.js';
 import '../platform/webContentExtractor/electron-browser/webContentExtractorService.js';
 import '../platform/agentHost/electron-browser/agentHostMcpOAuthMetadataService.js';
 import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
@@ -117,6 +118,10 @@ import { IRemoteAgentHostLocationPreferenceService } from '../platform/agentHost
 import { RemoteAgentHostLocationPreferenceService } from '../platform/agentHost/browser/remoteAgentHostLocationPreferenceService.js';
 import { ISSHHostKeyTrustService } from '../platform/agentHost/common/sshHostKeyTrust.js';
 import { SSHHostKeyTrustService } from '../platform/agentHost/browser/sshHostKeyTrustService.js';
+import { ISSHRemoteAgentHostService } from '../platform/agentHost/common/sshRemoteAgentHost.js';
+import { NullSSHRemoteAgentHostService } from '../platform/agentHost/browser/nullSshRemoteAgentHostService.js';
+import { IWSLRemoteAgentHostService } from '../platform/agentHost/common/wslRemoteAgentHost.js';
+import { NullWSLRemoteAgentHostService } from '../platform/agentHost/browser/nullWslRemoteAgentHostService.js';
 import { registerSharedProcessRemoteService } from '../platform/ipc/electron-browser/services.js';
 import { IPluginGitService } from '../workbench/contrib/chat/common/plugins/pluginGitService.js';
 import { NativePluginGitCommandService } from '../workbench/contrib/chat/electron-browser/pluginGitCommandService.js';
@@ -130,6 +135,9 @@ registerSingleton(IUserDataInitializationService, new SyncDescriptor(UserDataIni
 registerSingleton(IPluginGitService, NativePluginGitCommandService, InstantiationType.Delayed);
 registerSingleton(IRemoteAgentHostService, AgentsWindowRemoteAgentHostService, InstantiationType.Delayed);
 registerSingleton(IRemoteAgentHostLocationPreferenceService, RemoteAgentHostLocationPreferenceService, InstantiationType.Delayed);
+// FlowLeap: no SSH/WSL agent host transports (PRD 0017 keep-out). The local agent host process runs (PRD 0018 A1, ADR 0009).
+registerSingleton(ISSHRemoteAgentHostService, NullSSHRemoteAgentHostService, InstantiationType.Delayed);
+registerSingleton(IWSLRemoteAgentHostService, NullWSLRemoteAgentHostService, InstantiationType.Delayed);
 registerSingleton(ISSHHostKeyTrustService, SSHHostKeyTrustService, InstantiationType.Delayed);
 registerSharedProcessRemoteService(ILocalGitService, 'localGit');
 
@@ -235,8 +243,7 @@ import '../workbench/contrib/policyExport/electron-browser/policyExport.contribu
 // Keybindings Export
 import '../workbench/contrib/keybindingsExport/electron-browser/keybindingsExport.contribution.js';
 
-// Computer Use setup: drag Copilot Computer Use into System Settings
-import '../workbench/contrib/chat/electron-browser/agentSessions/computerUseHelperApp.contribution.js';
+// FlowLeap keep-out: Computer Use helper app setup (Copilot local sessions only; `chat.agentHost.computerUse.enabled` default false)
 
 //#endregion
 
@@ -249,31 +256,25 @@ import './contrib/openAgentsWindow/electron-browser/openAgentsWindowKeybindingTi
 
 // Remote Agent Host
 import '../workbench/services/agentHost/electron-browser/agentHostService.js';
-import '../platform/agentHost/electron-browser/sshRemoteAgentHostService.js';
-import '../platform/agentHost/electron-browser/wslRemoteAgentHostService.js';
+// FlowLeap keep-out: the remote agent host providers (SSH, WSL, tunnels, dev containers, WebSocket hosts, Remotes
+// UI, Copilot cloud sandboxes) stay out (PRD 0017/0027). What stays is what core still injects:
+// LocalAgentHostSessionsProvider injects IDevContainerAgentHostService (inert without a stored dev container host);
+// the Agents Window chat contribution injects IRemoteWorkspaceHandoffService, which injects ITunnelAgentHostService
+// (a delayed shared-process proxy; it does nothing until a remote workspace is handed off).
 import './contrib/providers/remoteAgentHost/electron-browser/tunnelAgentHostService.js';
-import './contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js';
-import './contrib/providers/remoteAgentHost/browser/remoteAgentHostTerminal.contribution.js';
-import './contrib/providers/remoteAgentHost/browser/tunnelAgentHost.contribution.js';
-import './contrib/providers/remoteAgentHost/browser/wslAgentHost.contribution.js';
-import './contrib/providers/remoteAgentHost/browser/sshAgentHost.contribution.js';
-import './contrib/providers/remoteAgentHost/browser/webSocketAgentHost.contribution.js';
 import './contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.contribution.js';
 import './contrib/providers/remoteAgentHost/browser/remoteWorkspaceHandoffService.js';
-import './contrib/providers/remoteAgentHost/electron-browser/devContainerAgentHostConnector.contribution.js';
-import './contrib/providers/remoteAgentHost/electron-browser/remotes.contribution.js';
-// Change Preferred Remote Agent Location (Chat: ... command)
-import './contrib/providers/remoteAgentHost/electron-browser/remoteAgentHostLocationPreferenceCommand.js';
-import './contrib/providers/remoteAgentHost/electron-browser/forgetSSHHostKeyCommand.js';
-// Copilot cloud sandbox connections (copilot-developer-cli) over a Web PubSub AHP relay
-import './contrib/providers/remoteAgentHost/browser/cloudSandboxAgentHost.contribution.js';
 // Chat
 import './contrib/agentFeedback/browser/agentFeedback.contribution.js';
 import './contrib/chat/electron-browser/chat.contribution.js';
+// FlowLeap Remote Access (PRD 0018 C): Host side of the Relay pairing, and keep the Host awake while an Agent Session runs
+import '../workbench/contrib/chat/electron-browser/remoteAccess/remoteAccess.contribution.js';
+import './contrib/remoteAccess/browser/remoteAccess.contribution.js';
+import './contrib/remoteAccess/electron-browser/remoteAccessKeepAwake.contribution.js';
 
 // Local Agent Host
 import './contrib/providers/agentHost/browser/localAgentHost.contribution.js';
-import './contrib/providers/agentHost/browser/codexContinuation.contribution.js';
+// FlowLeap keep-out: Codex continuation (offers to continue Codex chats with GitHub Copilot; Codex is hidden, PRD 0018 A3.2)
 import './contrib/providers/agentHost/electron-browser/localAgentHostLifecycle.contribution.js';
 import './contrib/providers/agentHost/browser/agentSessionSettings.contribution.js';
 import './contrib/providers/agentHost/browser/agentHostSettings.contribution.js';
@@ -283,8 +284,10 @@ import './contrib/providers/agentHost/browser/agentHostSkillButtons.contribution
 import './contrib/providers/agentHost/browser/openSubagentChat.contribution.js';
 import './contrib/providers/agentHost/electron-browser/agentHost.contribution.js';
 
-// Tunnel Host (allow remote connections to local agent host)
-import './contrib/tunnelHost/electron-browser/tunnelHost.contribution.js';
+// FlowLeap keep-out: Tunnel Host (remote connections to the local agent host through Dev Tunnels / GitHub environments)
+
+// FlowLeap CLI
+import './contrib/flowleapCli/browser/flowleapCliNudge.contribution.js';
 
 // Sessions (desktop only)
 import './contrib/sessions/electron-browser/sessions.contribution.js';
