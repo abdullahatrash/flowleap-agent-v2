@@ -34,6 +34,7 @@ import { IWorkbenchLayoutService, Parts } from '../../../../services/layout/brow
 import { ChatStatusPromo } from './chatStatusPromo.js';
 import { ILifecycleService, LifecyclePhase } from '../../../../services/lifecycle/common/lifecycle.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
+import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 
 /**
  * Tracks whether Copilot is currently blocked by a reached quota limit, has
@@ -181,6 +182,11 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
 				return elem;
 			}
 		};
+
+		// FlowLeap Patent IDE: no Copilot status bar entry in Patent IDE mode
+		if (PatentIdeContextKeys.Mode.getValue(contextKeyService) !== false) {
+			return;
+		}
 
 		this.update();
 

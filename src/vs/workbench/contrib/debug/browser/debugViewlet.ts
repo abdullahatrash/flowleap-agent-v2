@@ -36,6 +36,7 @@ import { IWorkbenchLayoutService } from '../../../services/layout/browser/layout
 import { IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 export class DebugViewPaneContainer extends ViewPaneContainer {
 
@@ -205,7 +206,7 @@ registerAction2(class extends Action2 {
 			},
 			f1: true,
 			icon: debugConfigure,
-			precondition: CONTEXT_DEBUG_UX.notEqualsTo('simple'),
+			precondition: ContextKeyExpr.and(CONTEXT_DEBUG_UX.notEqualsTo('simple'), PatentIdeContextKeys.Mode.toNegated()),
 			menu: [{
 				id: MenuId.ViewContainerTitle,
 				group: 'navigation',

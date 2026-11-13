@@ -61,6 +61,7 @@ import * as icons from './debugIcons.js';
 import { DisassemblyView } from './disassemblyView.js';
 import { equals } from '../../../../base/common/arrays.js';
 import { hasKey } from '../../../../base/common/types.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 const $ = dom.$;
 
@@ -1954,6 +1955,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.debug.viewlet.action.addFunctionBreakpointAction',
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: {
 				...localize2('addFunctionBreakpoint', "Add Function Breakpoint"),
 				mnemonicTitle: localize({ key: 'miFunctionBreakpoint', comment: ['&& denotes a mnemonic'] }, "&&Function Breakpoint..."),
@@ -2110,6 +2112,7 @@ registerAction2(class extends MemoryBreakpointAction {
 	constructor() {
 		super({
 			id: 'workbench.debug.viewlet.action.addDataBreakpointOnAddress',
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: {
 				...localize2('addDataBreakpointOnAddress', "Add Data Breakpoint at Address"),
 				mnemonicTitle: localize({ key: 'miDataBreakpoint', comment: ['&& denotes a mnemonic'] }, "&&Data Breakpoint..."),
@@ -2150,6 +2153,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.debug.viewlet.action.toggleBreakpointsActivatedAction',
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: localize2('activateBreakpoints', 'Toggle Activate Breakpoints'),
 			f1: true,
 			icon: icons.breakpointsActivate,
@@ -2206,6 +2210,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.debug.viewlet.action.removeAllBreakpoints',
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: {
 				...localize2('removeAllBreakpoints', "Remove All Breakpoints"),
 				mnemonicTitle: localize({ key: 'miRemoveAllBreakpoints', comment: ['&& denotes a mnemonic'] }, "Remove &&All Breakpoints"),
@@ -2249,7 +2254,7 @@ registerAction2(class extends Action2 {
 				mnemonicTitle: localize({ key: 'miEnableAllBreakpoints', comment: ['&& denotes a mnemonic'] }, "&&Enable All Breakpoints"),
 			},
 			f1: true,
-			precondition: CONTEXT_DEBUGGERS_AVAILABLE,
+			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated()),
 			menu: [{
 				id: MenuId.DebugBreakpointsContext,
 				group: 'z_commands',
@@ -2279,7 +2284,7 @@ registerAction2(class extends Action2 {
 				mnemonicTitle: localize({ key: 'miDisableAllBreakpoints', comment: ['&& denotes a mnemonic'] }, "Disable A&&ll Breakpoints"),
 			},
 			f1: true,
-			precondition: CONTEXT_DEBUGGERS_AVAILABLE,
+			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated()),
 			menu: [{
 				id: MenuId.DebugBreakpointsContext,
 				group: 'z_commands',
@@ -2306,7 +2311,7 @@ registerAction2(class extends Action2 {
 			id: 'workbench.debug.viewlet.action.reapplyBreakpointsAction',
 			title: localize2('reapplyAllBreakpoints', 'Reapply All Breakpoints'),
 			f1: true,
-			precondition: CONTEXT_IN_DEBUG_MODE,
+			precondition: ContextKeyExpr.and(CONTEXT_IN_DEBUG_MODE, PatentIdeContextKeys.Mode.toNegated()),
 			menu: [{
 				id: MenuId.DebugBreakpointsContext,
 				group: 'z_commands',

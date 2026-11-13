@@ -18,6 +18,7 @@ import { IOutlinePane } from './outline.js';
 // --- actions
 
 import './outlineActions.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 // --- view
 
@@ -34,7 +35,8 @@ Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([{
 	collapsed: true,
 	order: 2,
 	weight: 30,
-	focusCommand: { id: 'outline.focus' }
+	focusCommand: { id: 'outline.focus' },
+	when: PatentIdeContextKeys.Mode.toNegated()
 }], VIEW_CONTAINER);
 
 // --- configurations
