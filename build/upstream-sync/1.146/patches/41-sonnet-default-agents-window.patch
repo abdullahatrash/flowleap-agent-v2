@@ -1,0 +1,104 @@
+diff --git a/src/vs/workbench/contrib/sessions/browser/chat/sessionModelSelection.ts b/src/vs/workbench/contrib/sessions/browser/chat/sessionModelSelection.ts
+index b9ba9c71968..a44356bb3af 100644
+--- a/src/vs/workbench/contrib/sessions/browser/chat/sessionModelSelection.ts
++++ b/src/vs/workbench/contrib/sessions/browser/chat/sessionModelSelection.ts
+@@ -65,6 +65,38 @@ class ConversationModelSelection {
+ 
+ export const ISessionModelSelection = createDecorator<ISessionModelSelection>('sessionModelSelection');
+ 
++/** The first dotted number in a model name ("Claude Sonnet 4.6" -> [4, 6]), for ordering releases of one family. */
++function parseModelNameVersion(name: string): number[] {
++	const match = /\d+(?:\.\d+)*/.exec(name);
++	return match ? match[0].split('.').map(Number) : [];
++}
++
++function compareModelNameVersions(a: number[], b: number[]): number {
++	for (let i = 0; i < Math.max(a.length, b.length); i++) {
++		const difference = (a[i] ?? 0) - (b[i] ?? 0);
++		if (difference !== 0) {
++			return difference;
++		}
++	}
++	return 0;
++}
++
++/**
++ * FlowLeap: the recommended default of a Claude catalog is its newest Sonnet; `undefined` when the
++ * catalog has none, so the provider's declared default applies. Workbench chat applies the same
++ * rule through its own model picker (B9c).
++ */
++export function findRecommendedClaudeDefaultModel(models: readonly ILanguageModelChatMetadataAndIdentifier[]): ILanguageModelChatMetadataAndIdentifier | undefined {
++	const candidates = models.filter(candidate => /\bsonnet\b/i.test(candidate.metadata.name));
++	if (candidates.length === 0) {
++		return undefined;
++	}
++	return candidates.reduce((best, candidate) =>
++		compareModelNameVersions(parseModelNameVersion(candidate.metadata.name), parseModelNameVersion(best.metadata.name)) > 0 ? candidate : best
++	);
++}
++
++
+ export interface ISessionModelSelection {
+ 	readonly comparison?: IModelPickerComparison;
+ 	readonly comparisonBusy?: IObservable<boolean>;
+@@ -329,7 +361,9 @@ export class SessionModelSelection extends Disposable implements ISessionModelSe
+ 			getConfiguredModelValue: () => this._configurationService.getValue<string>(ChatConfiguration.DefaultModel),
+ 			// A session runs whatever its provider published: no mode, nowhere else to show it.
+ 			isModelSupportedHere: () => true,
+-			getDeclaredDefaultModel: models => models.find(model => model.metadata.isDefaultForLocation[ChatAgentLocation.Chat]),
++			// FlowLeap (B9c / PRD 0018 A5.2): the recommended tier (the newest Sonnet) outranks a provider's
++			// own default, the same as Workbench chat: the agent host's Claude catalog declares Opus first.
++			getDeclaredDefaultModel: models => findRecommendedClaudeDefaultModel(models) ?? models.find(model => model.metadata.isDefaultForLocation[ChatAgentLocation.Chat]),
+ 			getBoundConversationKey: () => this._boundConversationKey,
+ 			getIntentHolder: () => this._conversation().intent,
+ 			applyModel: model => this._pushModelToProvider(model),
+diff --git a/src/vs/workbench/contrib/sessions/test/browser/chat/sessionModelSelection.test.ts b/src/vs/workbench/contrib/sessions/test/browser/chat/sessionModelSelection.test.ts
+index 55a2000cc4f..93bd7900070 100644
+--- a/src/vs/workbench/contrib/sessions/test/browser/chat/sessionModelSelection.test.ts
++++ b/src/vs/workbench/contrib/sessions/test/browser/chat/sessionModelSelection.test.ts
+@@ -1317,6 +1317,45 @@ suite('SessionModelSelection', () => {
+ 		});
+ 	});
+ 
++	test('a fresh draft defaults to the newest Sonnet over the provider\'s declared default (FlowLeap B9c)', () => {
++		const named = (identifier: string, name: string, isDefault = false): ILanguageModelChatMetadataAndIdentifier => ({
++			...model(identifier),
++			metadata: { ...model(identifier).metadata, name, isDefaultForLocation: isDefault ? { [ChatAgentLocation.Chat]: true } : {} },
++		});
++		const opus = named('claude/opus-1m', 'Claude Opus 4.8 (1M)', true);
++		const olderSonnet = named('claude/sonnet-4-6', 'Claude Sonnet 4.6');
++		const sonnet = named('claude/sonnet-5', 'Claude Sonnet 5');
++		const haiku = named('claude/haiku', 'Claude Haiku 4.5');
++		const select = (remembered?: string, configured?: string) => {
++			const testSession = createSession('provider', SessionStatus.Untitled, undefined, `provider:${remembered}:${configured}`);
++			const provider = disposables.add(createProvider('provider', (identifier, source) => testSession.modelId.set(identifier, undefined, source)));
++			provider.models = [opus, olderSonnet, sonnet, haiku];
++			const storage = disposables.add(new InMemoryStorageService());
++			if (remembered) {
++				storeSelectedModel(storage, ChatAgentLocation.Chat, modelTarget, remembered);
++			}
++			const selection = disposables.add(new SessionModelSelection(
++				testChatSourceOf(observableValue<ITestSessionWithChat | undefined>('session', testSession.session)),
++				{},
++				createProvidersService([provider]),
++				storage,
++				createConfigurationService(configured),
++				disposables.add(new NullLogService()),
++			));
++			return { current: selection.state.get().currentModel?.identifier, writes: provider.writes };
++		};
++
++		assert.deepStrictEqual({
++			fresh: select(),
++			remembered: select(haiku.identifier),
++			configured: select(undefined, opus.identifier),
++		}, {
++			fresh: { current: sonnet.identifier, writes: [sonnet.identifier] },
++			remembered: { current: haiku.identifier, writes: [haiku.identifier] },
++			configured: { current: opus.identifier, writes: [opus.identifier] },
++		});
++	});
++
+ 	test('falls back instead of waiting for an inapplicable configured model', () => {
+ 		const testSession = createSession('provider', SessionStatus.Untitled);
+ 		const provider = disposables.add(createProvider('provider', (identifier, source) => testSession.modelId.set(identifier, undefined, source)));
