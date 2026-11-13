@@ -25,6 +25,7 @@ import { IAgentConnection } from '../../../../../../../platform/agentHost/common
 import { LocalModelEnabledSettingId } from '../../../../../../../platform/agentHost/common/localModel.js';
 import { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../../../../platform/contextkey/common/contextkey.js';
 import { IOpenerService } from '../../../../../../../platform/opener/common/opener.js';
 import { getManagedSupportUrl, IManagedSettingsService } from '../../../../../../../platform/policy/common/copilotManagedSettings.js';
 import { IProductService } from '../../../../../../../platform/product/common/productService.js';
@@ -33,7 +34,7 @@ import { COPILOT_HYDRA_FUSION_MAX_MODEL_ID, COPILOT_HYDRA_FUSION_MODEL_ID, isCop
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../../../platform/storage/common/storage.js';
 import { COPILOT_VENDOR_ID, getLanguageModelProviderDisplayName, IModelControlEntry, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService, isUserProvidedModel } from '../../../../common/languageModels.js';
 import { getAddModelsUnavailableReason, SessionType } from '../../../../common/chatSessionsService.js';
-import { ChatConfiguration } from '../../../../common/constants.js';
+import { ChatConfiguration, MANAGE_CHAT_COMMAND_ID } from '../../../../common/constants.js';
 import { getLanguageModelDisplayNameWithSubscriptionSource } from '../../../../common/languageModelSourcePresentation.js';
 import { ChatEntitlement, IChatEntitlementService } from '../../../../../../services/chat/common/chatEntitlementService.js';
 import { IModelPickerDelegate } from './modelPickerActionItem.js';
@@ -69,6 +70,18 @@ export interface IModelPickerOpenOptions {
 }
 
 const CACHE_BREAK_HINT_DISMISSED_STORAGE_KEY = 'chat.cacheBreakHintDismissed';
+
+/**
+ * Context key (owned by the FlowLeap extension, PRD 0002 Issue 4) mirroring whether a FlowLeap
+ * Session exists. Referenced here by string on purpose so core never becomes a second owner of it.
+ */
+const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
+
+/**
+ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
+ * Referenced here by string on purpose so core does not take a dependency on the extension.
+ */
+const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
 
 const MODEL_PICKER_MINIMUM_LABEL_WIDTH = 60;
 const MODEL_PICKER_NAME_CHROME_WIDTH = 30;
@@ -210,6 +223,7 @@ export class ModelPickerWidget extends Disposable {
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IWorkbenchEnvironmentService private readonly _environmentService: IWorkbenchEnvironmentService,
 		@IManagedSettingsService private readonly _managedSettingsService: IManagedSettingsService,
+		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 	) {
 		super();
 		if (this._delegate.comparison) {
@@ -445,6 +459,7 @@ export class ModelPickerWidget extends Disposable {
 			entitlement: this._entitlementService.entitlement,
 			anonymous: this._entitlementService.anonymous,
 			hasByokModels: this._entitlementService.hasByokModels,
+			clientByokEnabled: this._entitlementService.clientByokEnabled,
 		});
 	}
 
@@ -629,6 +644,26 @@ export class ModelPickerWidget extends Disposable {
 		}
 		if (this._delegate.getPresentationOptions().showAutoModel) {
 			return [{ vendor, label, message: localize('chat.modelPicker.modelsPending', "Models will appear here once they are available.") }];
+		}
+		if (this._entitlementService.clientByokEnabled) {
+			// FlowLeap's BYOK-only mode: the empty state carries the ways out of it. Signed out there
+			// are two (sign in for the free Trial models, or bring an own key); signed in there is
+			// one. "Manage Models..." in the tab bar is the second path while signed out.
+			const signedOut = this._contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) !== true;
+			return [{
+				vendor,
+				label,
+				message: signedOut
+					? localize('chat.modelPicker.byokNoModels.signedOut', "No AI model connected yet. Sign in to FlowLeap to use the free Trial models, or add your AI model with your own API key.")
+					: localize('chat.modelPicker.byokNoModels.signedIn', "No AI model connected yet. Add your AI model with your own API key to start chatting."),
+				action: {
+					label: signedOut ? localize('chat.modelPicker.byokNoModels.signIn', "Sign In") : localize('chat.modelPicker.byokNoModels.addModel', "Add Model"),
+					run: () => {
+						this._tabbedPicker.value?.hide();
+						void this._commandService.executeCommand(signedOut ? FLOWLEAP_SIGN_IN_COMMAND_ID : MANAGE_CHAT_COMMAND_ID);
+					},
+				},
+			}];
 		}
 		const entitlement = this._entitlementService.entitlement;
 		const canUpgrade = entitlement === ChatEntitlement.Free || entitlement === ChatEntitlement.EDU;

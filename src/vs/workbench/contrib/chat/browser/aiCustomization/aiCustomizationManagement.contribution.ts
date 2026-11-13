@@ -909,7 +909,9 @@ class AICustomizationManagementActionsContribution extends Disposable implements
 				const preserveFocus = typeof target !== 'string' && target?.preserveFocus;
 				const pane = await editorService.openEditor(input, { pinned: true, preserveFocus });
 				if (pane instanceof AICustomizationManagementEditor) {
-					const section = typeof target === 'string' ? target : target?.section ?? AICustomizationManagementSection.McpServers;
+					// FlowLeap: default to the Plugins section (Skill Packs), the destination of the
+					// Skills section's Browse action.
+					const section = typeof target === 'string' ? target : target?.section ?? AICustomizationManagementSection.Plugins;
 					if (typeof target !== 'string' && target?.mcpServer) {
 						await pane.showMcpMarketplaceDetail(target.mcpServer.name, target.mcpServer.registryUrl, preserveFocus);
 					} else if (typeof target !== 'string' && target?.connectorName) {

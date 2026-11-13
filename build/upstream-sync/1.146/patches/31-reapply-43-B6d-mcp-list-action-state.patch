@@ -1,8 +1,8 @@
 diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
-index e594233cf20..65f04e22622 100644
+index f427ecb8ad9..2aec1c07c8d 100644
 --- a/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
 +++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
-@@ -39,7 +39,7 @@ import { IContextMenuService, IContextViewService } from '../../../../../platfor
+@@ -47,7 +47,7 @@ import { IContextMenuService, IContextViewService } from '../../../../../platfor
  import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
  import { Delayer } from '../../../../../base/common/async.js';
  import { Action, IAction, Separator } from '../../../../../base/common/actions.js';
@@ -11,7 +11,7 @@ index e594233cf20..65f04e22622 100644
  import { LocalMcpServerScope } from '../../../../services/mcp/common/mcpWorkbenchManagementService.js';
  import { IAgentPlugin, IAgentPluginService } from '../../common/plugins/agentPluginService.js';
  import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-@@ -1479,9 +1479,13 @@ export function getServerItemContextMenuActions(menuActionGroups: readonly (read
+@@ -1894,9 +1894,13 @@ export function getServerItemContextMenuActions(menuActionGroups: readonly (read
  		actions.push(activeSessionLifecycleAction, new Separator());
  	}
  	for (const menuActions of menuActionGroups) {
@@ -20,27 +20,27 @@ index e594233cf20..65f04e22622 100644
 +		// that silently does nothing when clicked.
 +		const applicableMenuActions = menuActions.filter(action => !(action instanceof McpServerAction) || !action.hidden);
  		const visibleMenuActions = hasActiveSession
--			? menuActions.filter(action => !shouldHideLocalActionForActiveSessionServer(action))
+-			? menuActions.filter(action => !shouldHideLocalActionForActiveSessionServer(action) && !(hideLocalEnablement && isLocalMcpServerEnablementAction(action)))
 -			: menuActions;
-+			? applicableMenuActions.filter(action => !shouldHideLocalActionForActiveSessionServer(action))
++			? applicableMenuActions.filter(action => !shouldHideLocalActionForActiveSessionServer(action) && !(hideLocalEnablement && isLocalMcpServerEnablementAction(action)))
 +			: applicableMenuActions;
  		actions.push(...visibleMenuActions);
- 		if (hasActiveSession && menuActions.some(isLocalMcpServerEnablementAction)) {
+ 		if (hasActiveSession && !agentHostEnablementAdded && menuActions.some(isLocalMcpServerEnablementAction)) {
  			actions.push(...agentHostEnablementActions);
 diff --git a/src/vs/workbench/contrib/chat/test/browser/aiCustomization/mcpListWidget.test.ts b/src/vs/workbench/contrib/chat/test/browser/aiCustomization/mcpListWidget.test.ts
-index 0ea27a6aa2f..770d1fc007a 100644
+index 391b8e19098..dd54f562557 100644
 --- a/src/vs/workbench/contrib/chat/test/browser/aiCustomization/mcpListWidget.test.ts
 +++ b/src/vs/workbench/contrib/chat/test/browser/aiCustomization/mcpListWidget.test.ts
-@@ -37,7 +37,7 @@ import { CustomizationMcpServerCompatibilityKind, ICustomizationHarnessService }
+@@ -46,7 +46,7 @@ import { CustomizationMcpServerCompatibilityKind, ICustomizationHarnessService,
  import { IAgentHostCustomizationService } from '../../../browser/agentSessions/agentHost/agentHostCustomizationService.js';
- import { IAgentPluginService } from '../../../common/plugins/agentPluginService.js';
- import { IMcpServer, IMcpService, IMcpWorkbenchService, IMcpSamplingService, IWorkbenchMcpServer, MCP_PLUGIN_COLLECTION_ID_PREFIX, McpCollectionDefinition, McpCollectionProvenance, McpConnectionState, McpServerInstallState, McpServerTransportType } from '../../../../mcp/common/mcpTypes.js';
+ import { IAgentPlugin, IAgentPluginService } from '../../../common/plugins/agentPluginService.js';
+ import { IMcpServer, IMcpService, IMcpWorkbenchService, IMcpSamplingService, IWorkbenchMcpServer, MCP_PLUGIN_COLLECTION_ID_PREFIX, McpCollectionDefinition, McpCollectionProvenance, McpConnectionState, McpServerDefinition, McpServerInstallState, McpServerTransportType } from '../../../../mcp/common/mcpTypes.js';
 -import { DisableMcpServerForWorkspaceAction, DisableMcpServerGloballyAction, EnableMcpServerForWorkspaceAction, EnableMcpServerGloballyAction } from '../../../../mcp/browser/mcpServerActions.js';
 +import { DisableMcpServerForWorkspaceAction, DisableMcpServerGloballyAction, EnableMcpServerForWorkspaceAction, EnableMcpServerGloballyAction, McpServerAction } from '../../../../mcp/browser/mcpServerActions.js';
+ import { McpCommandIds } from '../../../../mcp/common/mcpCommandIds.js';
  import {
  	AgentHostMcpServer,
- 	authenticateMcpServer,
-@@ -1097,6 +1097,24 @@ suite('mcpListWidget', () => {
+@@ -1997,6 +1997,24 @@ suite('mcpListWidget', () => {
  			]);
  		});
  

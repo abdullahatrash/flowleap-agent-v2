@@ -166,10 +166,43 @@ export interface IResolvedPromptSourceFolder {
 	readonly isDefault?: boolean;
 }
 
+//#region FlowLeap
+
+/**
+ * FlowLeap configuration folder name. The `.flowleap/` workspace folder and the
+ * `~/.flowleap/` user folder have the same shape as `.github/` (no hooks).
+ * Their entries come first in each default list, so new files go there and an
+ * item in `.flowleap/` wins over an item with the same name in a developer folder.
+ */
+export const FLOWLEAP_CONFIG_FOLDER = '.flowleap';
+
+/**
+ * Always-on FlowLeap instructions file name (`.flowleap/instructions.md`),
+ * the FlowLeap counterpart of `.github/copilot-instructions.md`.
+ */
+export const FLOWLEAP_INSTRUCTIONS_FILENAME = 'instructions.md';
+
+function flowLeapSourceFolders(kind: string): readonly IPromptSourceFolder[] {
+	return [
+		{ path: `${FLOWLEAP_CONFIG_FOLDER}/${kind}`, source: PromptFileSource.FlowLeapWorkspace, storage: PromptsStorage.local },
+		{ path: `~/${FLOWLEAP_CONFIG_FOLDER}/${kind}`, source: PromptFileSource.FlowLeapPersonal, storage: PromptsStorage.user },
+	];
+}
+
+/**
+ * Checks if a source is a FlowLeap folder (`.flowleap/` or `~/.flowleap/`).
+ */
+export function isFlowLeapSource(source: PromptFileSource | undefined): boolean {
+	return source === PromptFileSource.FlowLeapWorkspace || source === PromptFileSource.FlowLeapPersonal;
+}
+
+//#endregion
+
 /**
  * All default skill source folders (both workspace and user home).
  */
 export const DEFAULT_SKILL_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
+	...flowLeapSourceFolders('skills'),
 	{ path: '.agents/skills', source: PromptFileSource.AgentsWorkspace, storage: PromptsStorage.local },
 	{ path: '.github/skills', source: PromptFileSource.GitHubWorkspace, storage: PromptsStorage.local },
 	{ path: '.claude/skills', source: PromptFileSource.ClaudeWorkspace, storage: PromptsStorage.local },
@@ -182,6 +215,7 @@ export const DEFAULT_SKILL_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
  * Default instructions source folders.
  */
 export const DEFAULT_INSTRUCTIONS_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
+	...flowLeapSourceFolders('instructions'),
 	{ path: INSTRUCTIONS_DEFAULT_SOURCE_FOLDER, source: PromptFileSource.GitHubWorkspace, storage: PromptsStorage.local },
 	{ path: CLAUDE_RULES_SOURCE_FOLDER, source: PromptFileSource.ClaudeWorkspace, storage: PromptsStorage.local },
 	{ path: '~/.copilot/instructions', source: PromptFileSource.CopilotPersonal, storage: PromptsStorage.user },
@@ -192,6 +226,7 @@ export const DEFAULT_INSTRUCTIONS_SOURCE_FOLDERS: readonly IPromptSourceFolder[]
  * Default prompt source folders.
  */
 export const DEFAULT_PROMPT_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
+	...flowLeapSourceFolders('prompts'),
 	{ path: PROMPT_DEFAULT_SOURCE_FOLDER, source: PromptFileSource.GitHubWorkspace, storage: PromptsStorage.local },
 ];
 
@@ -199,6 +234,7 @@ export const DEFAULT_PROMPT_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
  * Default agent source folders.
  */
 export const DEFAULT_AGENT_SOURCE_FOLDERS: readonly IPromptSourceFolder[] = [
+	...flowLeapSourceFolders('agents'),
 	{ path: AGENTS_SOURCE_FOLDER, source: PromptFileSource.GitHubWorkspace, storage: PromptsStorage.local },
 	{ path: CLAUDE_AGENTS_SOURCE_FOLDER, source: PromptFileSource.ClaudeWorkspace, storage: PromptsStorage.local },
 	{ path: COPILOT_USER_AGENTS_SOURCE_FOLDER, source: PromptFileSource.CopilotPersonal, storage: PromptsStorage.user },

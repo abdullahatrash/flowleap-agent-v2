@@ -34,7 +34,7 @@ import { ContributionEnablementState } from '../../../common/enablement.js';
 import { AgentPluginEnablementService } from '../../../common/plugins/agentPluginEnablement.js';
 import { IAgentPluginRepositoryService } from '../../../common/plugins/agentPluginRepositoryService.js';
 import { IAgentPluginEnablementService } from '../../../common/plugins/agentPluginService.js';
-import { getPluginCacheUri, parseMarketplaceObjectEntry, validatePluginCacheUri } from '../../../common/plugins/marketplaceReference.js';
+import { DEFAULT_PLUGIN_MARKETPLACE, getPluginCacheUri, parseMarketplaceObjectEntry, validatePluginCacheUri } from '../../../common/plugins/marketplaceReference.js';
 import { IMarketplacePlugin, IMarketplaceReference, IPluginSourceDescriptor, MarketplaceReferenceKind, MarketplaceType, PluginMarketplaceService, PluginSourceKind, extraKnownMarketplacesToConfigDict, getGitHubRepositorySourceUri, getGitHubRepositoryUri, getMarketplacePluginRepositoryUri, getMarketplacePluginSourceUri, getPluginSourceLabel, parseMarketplaceReference, parseMarketplaceReferences, parsePluginSource, readConfiguredMarketplaces } from '../../../common/plugins/pluginMarketplaceService.js';
 import { IWorkspacePluginSettingsService } from '../../../common/plugins/workspacePluginSettingsService.js';
 import { StrictKnownMarketplaces } from '../../../common/plugins/strictKnownMarketplaces.js';
@@ -875,6 +875,17 @@ suite('PluginMarketplaceService - getMarketplacePluginMetadata', () => {
 		const result = service.getMarketplacePluginMetadata(pluginUri);
 
 		assert.deepStrictEqual(result, plugin);
+	});
+
+	test('pre-trusts only the product-default marketplace', () => {
+		const service = createService();
+		assert.deepStrictEqual({
+			productDefault: service.isMarketplaceTrusted(parseMarketplaceReference(DEFAULT_PLUGIN_MARKETPLACE)!),
+			userAdded: service.isMarketplaceTrusted(marketplaceRef),
+		}, {
+			productDefault: true,
+			userAdded: false,
+		});
 	});
 
 	test('returns undefined for a URI that is not installed', () => {

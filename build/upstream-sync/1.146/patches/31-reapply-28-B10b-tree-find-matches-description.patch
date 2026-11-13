@@ -1,5 +1,5 @@
 diff --git a/src/vs/workbench/browser/parts/views/treeView.ts b/src/vs/workbench/browser/parts/views/treeView.ts
-index bf917583d16..45c2f2f18f1 100644
+index 75399b805c2..7068f8e3af7 100644
 --- a/src/vs/workbench/browser/parts/views/treeView.ts
 +++ b/src/vs/workbench/browser/parts/views/treeView.ts
 @@ -740,10 +740,18 @@ abstract class AbstractTreeView extends Disposable implements ITreeView {

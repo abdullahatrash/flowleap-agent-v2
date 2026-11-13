@@ -1,17 +1,17 @@
 diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts b/src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts
-index def73d80072..3bedd152e2e 100644
+index 586f8aadee7..c4c1b2178f9 100644
 --- a/src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts
 +++ b/src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts
-@@ -107,7 +107,7 @@ import { AgentHostAutoTierScope } from '../../agentSessions/agentHost/agentHostA
+@@ -114,7 +114,7 @@ import { AgentHostAutoTierScope } from '../../agentSessions/agentHost/agentHostA
  import { ChatModelSelectionDiagnostics } from './chatModelSelectionDiagnostics.js';
  import { deserializeUntitledInputAttachments, deserializeUntitledInputState, serializeUntitledInputAttachments, serializeUntitledInputState } from './chatInputStatePersistence.js';
  import { ChatInputStateOrigin, IChatModel, IChatModelInputState, IChatRequestModeInfo, IChatRequestModel, IInputModel, IIntendedModelHolder, IntendedModelSlot, logChangesToStateModel } from '../../../common/model/chatModel.js';
--import { isInConversationModelChoice, ModelSelectionReason, resolveConfiguredModel, RestoredModelReason } from '../../../common/modelSelection.js';
-+import { findRecommendedDefaultModel, isInConversationModelChoice, ModelSelectionReason, resolveConfiguredModel, RestoredModelReason } from '../../../common/modelSelection.js';
- import { filterModelsForSession, hasModelsTargetingSession, isModelHiddenInPicker, isModelSupportedForInlineChat, isModelSupportedForMode, isNewConversation, isSessionStarted, mergeModelsWithCache, shouldDropAgnosticDraftModel, shouldResetOnModelListChange, shouldRestorePerTypeModelOnSessionSwitch } from './chatInputModelUtils.js';
+-import { getRegisteredLanguageModels, isInConversationModelChoice, ModelSelectionReason, resolveConfiguredModel, resolveModelIdentifierFromLanguageModels, RestoredModelReason } from '../../../common/modelSelection.js';
++import { findRecommendedDefaultModel, getRegisteredLanguageModels, isInConversationModelChoice, ModelSelectionReason, resolveConfiguredModel, resolveModelIdentifierFromLanguageModels, RestoredModelReason } from '../../../common/modelSelection.js';
+ import { filterModelsForSession, getNextModelInCycle, hasModelsTargetingSession, isModelHiddenInPicker, isModelSupportedForInlineChat, isModelSupportedForMode, isNewConversation, isSessionStarted, mergeModelsWithCache, shouldDropAgnosticDraftModel, shouldResetOnModelListChange, shouldRestorePerTypeModelOnSessionSwitch } from './chatInputModelUtils.js';
  import { getChatSessionType, isUntitledChatSession, LocalChatSessionUri } from '../../../common/model/chatUri.js';
  import { IChatResponseViewModel, isResponseVM } from '../../../common/model/chatViewModel.js';
-@@ -1008,7 +1008,9 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
+@@ -1229,7 +1229,9 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
  			getConfiguredModelValue: () => this.getConfiguredModelValue(),
  			// Workbench chat runs a mode, and can be shown inline, so both bear on what it can run.
  			isModelSupportedHere: model => isModelSupportedForMode(model, this.currentModeKind) && isModelSupportedForInlineChat(model, this.location),
@@ -23,10 +23,10 @@ index def73d80072..3bedd152e2e 100644
  			getBoundConversationKey: () => this._inputModelSessionResource?.toString(),
  			getIntentHolder: () => this._intentHolder,
 diff --git a/src/vs/workbench/contrib/chat/common/modelSelection.ts b/src/vs/workbench/contrib/chat/common/modelSelection.ts
-index b5cdfd2f935..01e0248ebe5 100644
+index b892ceace2e..b98b47c7683 100644
 --- a/src/vs/workbench/contrib/chat/common/modelSelection.ts
 +++ b/src/vs/workbench/contrib/chat/common/modelSelection.ts
-@@ -132,6 +132,40 @@ function compareModelVersions(a: string | undefined, b: string | undefined): num
+@@ -139,6 +139,40 @@ function compareModelVersions(a: string | undefined, b: string | undefined): num
  	return rawA.localeCompare(rawB);
  }
  
@@ -68,19 +68,19 @@ index b5cdfd2f935..01e0248ebe5 100644
  export function resolveConfiguredModel(
  	configuredValue: string | undefined,
 diff --git a/src/vs/workbench/contrib/chat/test/common/modelSelection.test.ts b/src/vs/workbench/contrib/chat/test/common/modelSelection.test.ts
-index e1a95139b01..7831d4d5616 100644
+index d22954216dd..8d3dc81c489 100644
 --- a/src/vs/workbench/contrib/chat/test/common/modelSelection.test.ts
 +++ b/src/vs/workbench/contrib/chat/test/common/modelSelection.test.ts
 @@ -7,7 +7,7 @@ import assert from 'assert';
  import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
  import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
  import { ILanguageModelChatMetadataAndIdentifier } from '../../common/languageModels.js';
--import { getVisibleLanguageModelsForTarget, ModelSelectionReason, resolveConfiguredModel, resolveInitialModelSelection, resolveModelIdentifier, resolveModelIdentifierFromCatalog, resolveModelIdentifierFromLanguageModels } from '../../common/modelSelection.js';
-+import { findRecommendedDefaultModel, getVisibleLanguageModelsForTarget, ModelSelectionReason, resolveConfiguredModel, resolveInitialModelSelection, resolveModelIdentifier, resolveModelIdentifierFromCatalog, resolveModelIdentifierFromLanguageModels } from '../../common/modelSelection.js';
+-import { getDefaultModelPolicyDescription, getVisibleLanguageModelsForTarget, ModelSelectionReason, resolveConfiguredModel, resolveInitialModelSelection, resolveModelIdentifier, resolveModelIdentifierFromCatalog, resolveModelIdentifierFromLanguageModels } from '../../common/modelSelection.js';
++import { findRecommendedDefaultModel, getDefaultModelPolicyDescription, getVisibleLanguageModelsForTarget, ModelSelectionReason, resolveConfiguredModel, resolveInitialModelSelection, resolveModelIdentifier, resolveModelIdentifierFromCatalog, resolveModelIdentifierFromLanguageModels } from '../../common/modelSelection.js';
  
  function model(identifier: string, metadataId = identifier, family = identifier, version = '1.0'): ILanguageModelChatMetadataAndIdentifier {
  	return {
-@@ -181,4 +181,33 @@ suite('ModelSelection', () => {
+@@ -195,4 +195,33 @@ suite('ModelSelection', () => {
  			undefined,
  		]);
  	});

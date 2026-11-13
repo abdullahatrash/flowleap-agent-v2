@@ -167,6 +167,9 @@ export enum PromptFileSource {
 	ExtensionContribution = 'extension-contribution',
 	ExtensionAPI = 'extension-api',
 	Plugin = 'plugin',
+	// FlowLeap: the `.flowleap/` workspace folder and the `~/.flowleap/` user folder.
+	FlowLeapWorkspace = 'flowleap-workspace',
+	FlowLeapPersonal = 'flowleap-personal',
 }
 
 /**
@@ -194,6 +197,10 @@ export function getSourceDescription(source: PromptFileSource): string | undefin
 			return localize('source.configWorkspace', "Workspace (contributed from settings)");
 		case PromptFileSource.ConfigPersonal:
 			return localize('source.configPersonal', "Global (contributed from settings)");
+		case PromptFileSource.FlowLeapWorkspace:
+			return localize('source.flowleapWorkspace', "FlowLeap (Workspace)");
+		case PromptFileSource.FlowLeapPersonal:
+			return localize('source.flowleapPersonal', "FlowLeap (Global)");
 		default:
 			return undefined;
 	}

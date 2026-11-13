@@ -294,8 +294,11 @@ suite('extHostTypeConverters', function () {
 	});
 
 	suite('ChatToolInvocationPart', function () {
-		test('converts subagent data with its model name', function () {
+		test('converts subagent data with its display name and model name', function () {
+			// The subagent header titles a specialized subagent by its display name, so it has to
+			// survive the extension host boundary next to the internal agent name.
 			const data = new ChatSubagentToolInvocationData('Run tests', 'execution', 'npm test', 'Passed');
+			data.agentDisplayName = 'Execution';
 			data.modelName = 'Execution Model';
 			const part = new ExtHostChatToolInvocationPart('execution_subagent', 'tool-call-id');
 			(part as unknown as { toolSpecificData: ChatSubagentToolInvocationData }).toolSpecificData = data;
@@ -303,6 +306,7 @@ suite('extHostTypeConverters', function () {
 			assert.deepStrictEqual(ChatToolInvocationPart.from(part as unknown as Parameters<typeof ChatToolInvocationPart.from>[0]).toolSpecificData, {
 				kind: 'subagent',
 				description: 'Run tests',
+				agentDisplayName: 'Execution',
 				agentName: 'execution',
 				prompt: 'npm test',
 				result: 'Passed',

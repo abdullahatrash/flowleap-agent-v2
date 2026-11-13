@@ -1,16 +1,8 @@
 diff --git a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
-index 461b34bd992..50a23aa16fd 100644
+index f02af686c5d..5c69b05eb63 100644
 --- a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
 +++ b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
-@@ -37,6 +37,7 @@ import { IAccessibilityService } from '../../../../../platform/accessibility/com
- import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
- import { MenuId } from '../../../../../platform/actions/common/actions.js';
- import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
- import { IContextKey, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
- import { IAgentHostService } from '../../../../../platform/agentHost/common/agentService.js';
- import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-@@ -45,6 +46,7 @@ import { ITextResourceEditorInput } from '../../../../../platform/editor/common/
+@@ -48,6 +48,7 @@ import { ITextResourceEditorInput } from '../../../../../platform/editor/common/
  import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
  import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
  import { ILogService } from '../../../../../platform/log/common/log.js';
@@ -18,7 +10,7 @@ index 461b34bd992..50a23aa16fd 100644
  import { bindContextKey } from '../../../../../platform/observable/common/platformObservableUtils.js';
  import { Link } from '../../../../../platform/opener/browser/link.js';
  import product from '../../../../../platform/product/common/product.js';
-@@ -300,6 +302,21 @@ const supportsAllAttachments: Required<Omit<IChatAgentAttachmentCapabilities, 't
+@@ -310,6 +311,21 @@ const supportsAllAttachments: Required<Omit<IChatAgentAttachmentCapabilities, 't
  
  const DISCLAIMER = localize('chatDisclaimer', "AI responses may be inaccurate");
  
@@ -40,16 +32,15 @@ index 461b34bd992..50a23aa16fd 100644
  /** Set on the container when {@link IChatWidgetViewOptions.persistentContentHeight} is, floating the persistent content. */
  export const chatFloatingPersistentContentClass = 'chat-floating-persistent-content';
  
-@@ -631,6 +648,8 @@ export class ChatWidget extends Disposable implements IChatWidget {
- 		@IAgentHostNewSessionFolderService private readonly _agentHostNewSessionFolderService: IAgentHostNewSessionFolderService,
- 		@IUriIdentityService private readonly _uriIdentityService: IUriIdentityService,
- 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+@@ -684,6 +700,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
+ 		@ICommandService private readonly commandService: ICommandService,
+ 		@IAgentHostPolicyContinuationService private readonly policyContinuationService: IAgentHostPolicyContinuationService,
+ 		@IChatOpenDiagnosticsService private readonly chatOpenDiagnosticsService: IChatOpenDiagnosticsService,
 +		@INotificationService private readonly notificationService: INotificationService,
-+		@ICommandService private readonly commandService: ICommandService,
  	) {
  		super();
  		this._persistentContentHeight = viewOptions.persistentContentHeight ?? 0;
-@@ -1610,6 +1629,25 @@ export class ChatWidget extends Disposable implements IChatWidget {
+@@ -1689,6 +1706,25 @@ export class ChatWidget extends Disposable implements IChatWidget {
  		this.updateChatViewVisibility();
  	}
  
@@ -75,7 +66,7 @@ index 461b34bd992..50a23aa16fd 100644
  	/**
  	 * Renders the welcome view content when needed.
  	 */
-@@ -1638,14 +1676,22 @@ export class ChatWidget extends Disposable implements IChatWidget {
+@@ -1717,14 +1753,22 @@ export class ChatWidget extends Disposable implements IChatWidget {
  				if (this.chatEntitlementService.anonymous && !this.chatEntitlementService.sentiment.completed) {
  					const providers = product.defaultChatAgent.provider;
  					additionalMessage = new MarkdownString(localize({ key: 'settings', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0} Copilot, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3}).", providers.default.name, providers.default.name, product.defaultChatAgent.termsStatementUrl, product.defaultChatAgent.privacyStatementUrl), { isTrusted: true });
@@ -105,7 +96,7 @@ index 461b34bd992..50a23aa16fd 100644
  				} else {
  					additionalMessage = defaultAgent?.metadata.additionalWelcomeMessage;
  				}
-@@ -2738,9 +2784,11 @@ export class ChatWidget extends Disposable implements IChatWidget {
+@@ -3053,9 +3097,11 @@ export class ChatWidget extends Disposable implements IChatWidget {
  			if (e.affectsSome(foregroundSessionCountContextKeys) && this.isEmpty()) {
  				this.renderGettingStartedTipIfNeeded();
  			}
@@ -118,8 +109,8 @@ index 461b34bd992..50a23aa16fd 100644
  				this.renderWelcomeViewContentIfNeeded();
  			}
  		}));
-@@ -3374,6 +3422,37 @@ export class ChatWidget extends Disposable implements IChatWidget {
- 		return true;
+@@ -3896,6 +3942,37 @@ export class ChatWidget extends Disposable implements IChatWidget {
+ 		return blocked;
  	}
  
 +	/**
@@ -153,10 +144,10 @@ index 461b34bd992..50a23aa16fd 100644
 +		);
 +	}
 +
- 	private async _acceptInput(query: { query: string } | undefined, options: IChatAcceptInputOptions = {}, onDidCreateResponse?: IChatSendRequestOptions['onDidCreateResponse']): Promise<IChatResponseModel | undefined> {
- 		if (this.isTranscriptProgressActive) {
+ 	private async _acceptInput(query: { query: string } | undefined, options: IChatAcceptInputOptions = {}, onDidCreateResponse?: IChatSendRequestOptions['onDidCreateResponse'], forkPromptSourceInput?: IForkPromptSourceInput): Promise<IChatResponseModel | undefined> {
+ 		if (this.isTranscriptProgressActive || this.isSubmissionBlockedByManagedSettingsRefresh()) {
  			return undefined;
-@@ -3396,6 +3475,16 @@ export class ChatWidget extends Disposable implements IChatWidget {
+@@ -3918,6 +3995,16 @@ export class ChatWidget extends Disposable implements IChatWidget {
  			return;
  		}
  
@@ -173,107 +164,55 @@ index 461b34bd992..50a23aa16fd 100644
  		let savedBeforeSend = false;
  		// Check if a custom submit handler wants to handle this submission
  		if (this.viewOptions.submitHandler) {
-diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts
-index c7ef8cda936..2f43ab704d0 100644
---- a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts
-+++ b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts
-@@ -12,6 +12,7 @@ import { localize } from '../../../../../../../nls.js';
- import { ActionListItemKind, IActionListItem } from '../../../../../../../platform/actionWidget/browser/actionList.js';
- import { IActionWidgetDropdownAction } from '../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
- import { ChatEntitlement } from '../../../../../../services/chat/common/chatEntitlementService.js';
-+import { MANAGE_CHAT_COMMAND_ID } from '../../../../common/constants.js';
- import { IModelControlEntry, ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier } from '../../../../common/languageModels.js';
- import { buildModelToProviderGroupMap, createModelAction, createModelItem, createPinAction, createUnavailableModelItem, getProviderGroupForModel, getProviderGroupKey, getUnavailableReason, isVersionAtLeast, ProviderGroupKey, requiresNewerVSCode } from './modelPickerItemPrimitives.js';
- import type { IBuildModelPickerItemsOptions } from './modelPickerItemTypes.js';
-@@ -24,6 +25,12 @@ export const ModelPickerSection = {
- export const RESTRICTED_MODE_TRUST_ACTION_ID = 'restrictedModeTrust';
- export const SETUP_REQUIRED_SIGN_IN_ACTION_ID = 'setupRequiredSignIn';
- 
-+/**
-+ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
-+ * Referenced here by string on purpose so core does not take a dependency on the extension.
-+ */
-+const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
-+
- function createSyntheticAutoItem(): IActionListItem<IActionWidgetDropdownAction> {
- 	return createModelItem({
- 		id: 'auto',
-@@ -102,13 +109,26 @@ export function buildUnavailableStateItems(options: IBuildModelPickerItemsOption
- 	if (showAutoModel) {
- 		return undefined;
- 	}
-+	// In FlowLeap's BYOK-only mode the entry carries the ways out of the no-model state;
-+	// otherwise, for Copilot Free / Student users, it carries an inline upgrade link.
-+	const byokActions = options.chatEntitlementService.clientByokEnabled ? options.byokNoModelActions : undefined;
- 	const entitlement = options.chatEntitlementService.entitlement;
--	const canUpgrade = entitlement === ChatEntitlement.Free || entitlement === ChatEntitlement.EDU;
--	const description = canUpgrade
--		? new MarkdownString(localize('chat.modelPicker.upgradeLink', "[Upgrade](command:workbench.action.chat.upgradePlan \" \")"), { isTrusted: true })
--		: undefined;
--	const hover = canUpgrade ? new MarkdownString('', { isTrusted: true, supportThemeIcons: true }) : undefined;
--	hover?.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
-+	const canUpgrade = !byokActions && (entitlement === ChatEntitlement.Free || entitlement === ChatEntitlement.EDU);
-+	let description: MarkdownString | undefined;
-+	let hover: MarkdownString | undefined;
-+	if (byokActions) {
-+		description = new MarkdownString(byokActions.signedOut
-+			? localize('chat.modelPicker.byokNoModels.linksSignedOut', "[Sign In](command:{0} \" \") · [Add Model](command:{1} \" \")", FLOWLEAP_SIGN_IN_COMMAND_ID, MANAGE_CHAT_COMMAND_ID)
-+			: localize('chat.modelPicker.byokNoModels.links', "[Add Model](command:{0} \" \")", MANAGE_CHAT_COMMAND_ID), { isTrusted: true });
-+		hover = new MarkdownString('', { isTrusted: true, supportThemeIcons: true });
-+		hover.appendMarkdown(byokActions.signedOut
-+			? localize('chat.modelPicker.byokNoModels.hoverSignedOut', "[Sign in](command:{0} \" \") to FlowLeap to use the free Trial models, or [add your AI model](command:{1} \" \") with your own API key.", FLOWLEAP_SIGN_IN_COMMAND_ID, MANAGE_CHAT_COMMAND_ID)
-+			: localize('chat.modelPicker.byokNoModels.hover', "[Add your AI model](command:{0} \" \") with your own API key to start chatting.", MANAGE_CHAT_COMMAND_ID));
-+	} else if (canUpgrade) {
-+		description = new MarkdownString(localize('chat.modelPicker.upgradeLink', "[Upgrade](command:workbench.action.chat.upgradePlan \" \")"), { isTrusted: true });
-+		hover = new MarkdownString('', { isTrusted: true, supportThemeIcons: true });
-+		hover.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
-+	}
- 	return [{
- 		item: {
- 			id: 'noModels',
-diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemTypes.ts b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemTypes.ts
-index ea92c3b3ef7..7cddac0dee1 100644
---- a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemTypes.ts
-+++ b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemTypes.ts
-@@ -10,6 +10,15 @@ import { StateType } from '../../../../../../../platform/update/common/update.js
- import { IChatEntitlementService } from '../../../../../../services/chat/common/chatEntitlementService.js';
- import { IModelControlEntry, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService } from '../../../../common/languageModels.js';
- 
-+/**
-+ * Describes how to escape the "no models" state in FlowLeap's BYOK-only mode: adding an own API key
-+ * always works, and while signed out signing in additionally unlocks the free Trial models.
-+ */
-+export interface IByokNoModelActions {
-+	/** Whether there is no FlowLeap Session, in which case the Sign In path is offered as well. */
-+	readonly signedOut: boolean;
-+}
-+
- export interface IBuildModelPickerItemsOptions {
- 	readonly models: ILanguageModelChatMetadataAndIdentifier[];
- 	readonly selectedModelId: string | undefined;
-@@ -40,4 +49,9 @@ export interface IBuildModelPickerItemsOptions {
- 		readonly onRequestTrust: (() => void) | undefined;
- 		readonly onRequestSetup: (() => void) | undefined;
- 	};
-+	/**
-+	 * Honoured only while BYOK is enabled: turns the otherwise dead "No models available" entry
-+	 * into the ways out of that state (sign in, add a key).
-+	 */
-+	readonly byokNoModelActions?: IByokNoModelActions;
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerPresentation.ts b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerPresentation.ts
+index 42031fcc603..8bd08be4f7b 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerPresentation.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerPresentation.ts
+@@ -165,11 +165,22 @@ export const enum ModelPickerUnavailableReason {
+ 	SetupRequired = 'setupRequired',
  }
+ 
++/**
++ * Whether the picker's empty state is Copilot's "sign in to set up chat" rather than a plain
++ * "no models". In FlowLeap's BYOK-only mode (`clientByokEnabled`) the Copilot setup never
++ * applies: a signed-in subscriber with no key is simply model-less, and the way out is the
++ * BYOK no-model placeholder (Sign In / Add Model), not the GitHub setup flow — which in this
++ * build hangs at "Getting chat ready..." and never produces a model.
++ */
+ export function modelPickerRequiresSetup(context: {
+ 	readonly entitlement: ChatEntitlement;
+ 	readonly anonymous: boolean;
+ 	readonly hasByokModels: boolean;
++	readonly clientByokEnabled: boolean;
+ }): boolean {
++	if (context.clientByokEnabled) {
++		return false;
++	}
+ 	return context.entitlement === ChatEntitlement.Available
+ 		|| (context.entitlement === ChatEntitlement.Unknown
+ 			&& !context.anonymous
 diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts
-index 3128370bebe..e2d7e58d473 100644
+index 107ec4c98d3..baafd96af88 100644
 --- a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts
 +++ b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts
-@@ -24,6 +24,7 @@ import { IActionWidgetService } from '../../../../../../../platform/actionWidget
- import { IActionWidgetDropdownAction } from '../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
- import { AgentHostAllowSignedOutWhenUsableSettingId } from '../../../../../../../platform/agentHost/common/agentService.js';
+@@ -25,6 +25,7 @@ import { IAgentConnection } from '../../../../../../../platform/agentHost/common
+ import { LocalModelEnabledSettingId } from '../../../../../../../platform/agentHost/common/localModel.js';
  import { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
-+import { IContextKeyService } from '../../../../../../../platform/contextkey/common/contextkey.js';
  import { IConfigurationService } from '../../../../../../../platform/configuration/common/configuration.js';
++import { IContextKeyService } from '../../../../../../../platform/contextkey/common/contextkey.js';
  import { IOpenerService } from '../../../../../../../platform/opener/common/opener.js';
+ import { getManagedSupportUrl, IManagedSettingsService } from '../../../../../../../platform/policy/common/copilotManagedSettings.js';
  import { IProductService } from '../../../../../../../platform/product/common/productService.js';
-@@ -52,6 +53,12 @@ import { getModelPickerUnavailableReason, isAutoModel, isHydraFusionModel, Model
+@@ -33,7 +34,7 @@ import { COPILOT_HYDRA_FUSION_MAX_MODEL_ID, COPILOT_HYDRA_FUSION_MODEL_ID, isCop
+ import { IStorageService, StorageScope, StorageTarget } from '../../../../../../../platform/storage/common/storage.js';
+ import { COPILOT_VENDOR_ID, getLanguageModelProviderDisplayName, IModelControlEntry, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService, isUserProvidedModel } from '../../../../common/languageModels.js';
+ import { getAddModelsUnavailableReason, SessionType } from '../../../../common/chatSessionsService.js';
+-import { ChatConfiguration } from '../../../../common/constants.js';
++import { ChatConfiguration, MANAGE_CHAT_COMMAND_ID } from '../../../../common/constants.js';
+ import { getLanguageModelDisplayNameWithSubscriptionSource } from '../../../../common/languageModelSourcePresentation.js';
+ import { ChatEntitlement, IChatEntitlementService } from '../../../../../../services/chat/common/chatEntitlementService.js';
+ import { IModelPickerDelegate } from './modelPickerActionItem.js';
+@@ -70,6 +71,18 @@ export interface IModelPickerOpenOptions {
  
  const CACHE_BREAK_HINT_DISMISSED_STORAGE_KEY = 'chat.cacheBreakHintDismissed';
  
@@ -283,128 +222,178 @@ index 3128370bebe..e2d7e58d473 100644
 + */
 +const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
 +
- /** Opt-in setting for the tabbed model picker and its model details page. */
- export const TABBED_MODEL_PICKER_SETTING_ID = 'chat.experimentalModelPicker';
- 
-@@ -162,6 +169,7 @@ export class ModelPickerWidget extends Disposable {
- 		@IStorageService private readonly _storageService: IStorageService,
++/**
++ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
++ * Referenced here by string on purpose so core does not take a dependency on the extension.
++ */
++const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
++
+ const MODEL_PICKER_MINIMUM_LABEL_WIDTH = 60;
+ const MODEL_PICKER_NAME_CHROME_WIDTH = 30;
+ const MODEL_PICKER_MINIMUM_NAME_WIDTH = MODEL_PICKER_MINIMUM_LABEL_WIDTH + MODEL_PICKER_NAME_CHROME_WIDTH;
+@@ -210,6 +223,7 @@ export class ModelPickerWidget extends Disposable {
  		@IConfigurationService private readonly _configurationService: IConfigurationService,
- 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
+ 		@IWorkbenchEnvironmentService private readonly _environmentService: IWorkbenchEnvironmentService,
+ 		@IManagedSettingsService private readonly _managedSettingsService: IManagedSettingsService,
 +		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
  	) {
  		super();
- 		this._configuration = this._instantiationService.createInstance(ModelPickerConfiguration, {
-@@ -669,6 +677,7 @@ export class ModelPickerWidget extends Disposable {
- 				onRequestTrust: () => { void this._requestWorkspaceTrust(); },
- 				onRequestSetup: () => { this._requestSetup(); },
- 			},
-+			byokNoModelActions: { signedOut: this._contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) !== true },
+ 		if (this._delegate.comparison) {
+@@ -445,6 +459,7 @@ export class ModelPickerWidget extends Disposable {
+ 			entitlement: this._entitlementService.entitlement,
+ 			anonymous: this._entitlementService.anonymous,
+ 			hasByokModels: this._entitlementService.hasByokModels,
++			clientByokEnabled: this._entitlementService.clientByokEnabled,
  		});
+ 	}
  
- 		// Collect all hover disposables so they are properly cleaned up when the
-diff --git a/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts b/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts
-index 411d3bb297f..e5ca1001637 100644
---- a/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts
-+++ b/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts
-@@ -12,18 +12,20 @@ import { ActionListItemKind, IActionListItem } from '../../../../../../../../pla
- import { IActionWidgetDropdownAction } from '../../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
- import { StateType } from '../../../../../../../../platform/update/common/update.js';
- import { buildModelPickerItems, getControlModelsForEntitlement, getModelPickerAccessibilityProvider, getModelPickerControlModels } from '../../../../../browser/widget/input/modelPicker/modelPickerItems.js';
-+import { IByokNoModelActions } from '../../../../../browser/widget/input/modelPicker/modelPickerItemTypes.js';
- import { filterModelsForSession } from '../../../../../browser/widget/input/chatInputModelUtils.js';
- import { ChatAgentLocation, ChatModeKind } from '../../../../../common/constants.js';
- import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService, IModelControlEntry, IModelsControlManifest } from '../../../../../common/languageModels.js';
- import { ChatEntitlement, IChatEntitlementService } from '../../../../../../../services/chat/common/chatEntitlementService.js';
- import { languageModelSourcePresentationRegistry } from '../../../../../common/languageModelSourcePresentation.js';
+@@ -630,6 +645,26 @@ export class ModelPickerWidget extends Disposable {
+ 		if (this._delegate.getPresentationOptions().showAutoModel) {
+ 			return [{ vendor, label, message: localize('chat.modelPicker.modelsPending', "Models will appear here once they are available.") }];
+ 		}
++		if (this._entitlementService.clientByokEnabled) {
++			// FlowLeap's BYOK-only mode: the empty state carries the ways out of it. Signed out there
++			// are two (sign in for the free Trial models, or bring an own key); signed in there is
++			// one. "Manage Models..." in the tab bar is the second path while signed out.
++			const signedOut = this._contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) !== true;
++			return [{
++				vendor,
++				label,
++				message: signedOut
++					? localize('chat.modelPicker.byokNoModels.signedOut', "No AI model connected yet. Sign in to FlowLeap to use the free Trial models, or add your AI model with your own API key.")
++					: localize('chat.modelPicker.byokNoModels.signedIn', "No AI model connected yet. Add your AI model with your own API key to start chatting."),
++				action: {
++					label: signedOut ? localize('chat.modelPicker.byokNoModels.signIn', "Sign In") : localize('chat.modelPicker.byokNoModels.addModel', "Add Model"),
++					run: () => {
++						this._tabbedPicker.value?.hide();
++						void this._commandService.executeCommand(signedOut ? FLOWLEAP_SIGN_IN_COMMAND_ID : MANAGE_CHAT_COMMAND_ID);
++					},
++				},
++			}];
++		}
+ 		const entitlement = this._entitlementService.entitlement;
+ 		const canUpgrade = entitlement === ChatEntitlement.Free || entitlement === ChatEntitlement.EDU;
+ 		return [{
+diff --git a/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerPresentation.test.ts b/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerPresentation.test.ts
+index b31df1eba66..7c457937e31 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerPresentation.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerPresentation.test.ts
+@@ -114,9 +114,12 @@ suite('ModelPickerPresentation', () => {
+ 			{ name: 'Pro', entitlement: ChatEntitlement.Pro, anonymous: false, hasByokModels: false },
+ 			{ name: 'EDU', entitlement: ChatEntitlement.EDU, anonymous: false, hasByokModels: false },
+ 			{ name: 'Enterprise', entitlement: ChatEntitlement.Enterprise, anonymous: false, hasByokModels: false },
++			// FlowLeap BYOK-only mode: a signed-in subscriber with no key is model-less, never "set up Copilot".
++			{ name: 'Unknown + client BYOK', entitlement: ChatEntitlement.Unknown, anonymous: false, hasByokModels: false, clientByokEnabled: true },
++			{ name: 'Available + client BYOK', entitlement: ChatEntitlement.Available, anonymous: false, hasByokModels: false, clientByokEnabled: true },
+ 		];
  
--function createStubEntitlementService(opts?: { entitlement?: ChatEntitlement; isInternal?: boolean; anonymous?: boolean }): IChatEntitlementService {
-+function createStubEntitlementService(opts?: { entitlement?: ChatEntitlement; isInternal?: boolean; anonymous?: boolean; clientByokEnabled?: boolean }): IChatEntitlementService {
- 	return {
- 		entitlement: opts?.entitlement ?? ChatEntitlement.Pro,
- 		sentiment: { completed: true } as IChatEntitlementService['sentiment'],
- 		isInternal: opts?.isInternal ?? false,
- 		anonymous: opts?.anonymous ?? false,
-+		clientByokEnabled: opts?.clientByokEnabled ?? false,
- 	} as IChatEntitlementService;
- }
- 
-@@ -146,12 +148,15 @@ function callBuild(
- 		onRequestSetup?: () => void;
- 		onSelect?: (model: ILanguageModelChatMetadataAndIdentifier) => void;
- 		entitlementService?: IChatEntitlementService;
-+		clientByokEnabled?: boolean;
-+		byokNoModelActions?: IByokNoModelActions;
- 	} = {},
- ): IActionListItem<IActionWidgetDropdownAction>[] {
- 	const onSelect = opts.onSelect ?? (() => { });
- 	const entitlementService = opts.entitlementService ?? createStubEntitlementService({
- 		entitlement: opts.entitlement ?? ChatEntitlement.Pro,
- 		anonymous: opts.anonymous ?? false,
-+		clientByokEnabled: opts.clientByokEnabled ?? false,
+-		assert.deepStrictEqual(Object.fromEntries(cases.map(c => [c.name, modelPickerRequiresSetup(c)])), {
++		assert.deepStrictEqual(Object.fromEntries(cases.map(c => [c.name, modelPickerRequiresSetup({ clientByokEnabled: false, ...c })])), {
+ 			'Unknown': true,
+ 			'Unknown + anonymous': false,
+ 			'Unknown + BYOK': false,
+@@ -128,6 +131,8 @@ suite('ModelPickerPresentation', () => {
+ 			'Pro': false,
+ 			'EDU': false,
+ 			'Enterprise': false,
++			'Unknown + client BYOK': false,
++			'Available + client BYOK': false,
+ 		});
  	});
- 	return buildModelPickerItems({
- 		models,
-@@ -183,6 +188,7 @@ function callBuild(
- 			onRequestTrust: opts.onRequestTrust,
- 			onRequestSetup: opts.onRequestSetup,
- 		},
-+		byokNoModelActions: opts.byokNoModelActions,
- 	});
- }
  
-@@ -340,6 +346,34 @@ suite('buildModelPickerItems', () => {
- 		assert.strictEqual(noModels!.description, undefined);
- 	});
- 
-+	test('BYOK with no models offers both the sign-in and the add-key path while signed out', () => {
-+		const items = callBuild([], { showAutoModel: false, clientByokEnabled: true, byokNoModelActions: { signedOut: true } });
-+		const noModels = getActionItems(items).find(a => a.item?.id === 'noModels');
-+		assert.deepStrictEqual(
-+			{
-+				description: (noModels?.description as MarkdownString | undefined)?.value,
-+				hover: (noModels?.hover?.content as MarkdownString | undefined)?.value,
-+			},
-+			{
-+				description: '[Sign In](command:flowleap.signIn " ") · [Add Model](command:workbench.action.chat.manage " ")',
-+				hover: '[Sign in](command:flowleap.signIn " ") to FlowLeap to use the free Trial models, or [add your AI model](command:workbench.action.chat.manage " ") with your own API key.',
-+			});
-+	});
-+
-+	test('BYOK with no models offers only the add-key path while signed in', () => {
-+		const items = callBuild([], { showAutoModel: false, clientByokEnabled: true, byokNoModelActions: { signedOut: false } });
-+		const noModels = getActionItems(items).find(a => a.item?.id === 'noModels');
-+		assert.deepStrictEqual(
-+			{
-+				description: (noModels?.description as MarkdownString | undefined)?.value,
-+				hover: (noModels?.hover?.content as MarkdownString | undefined)?.value,
-+			},
-+			{
-+				description: '[Add Model](command:workbench.action.chat.manage " ")',
-+				hover: '[Add your AI model](command:workbench.action.chat.manage " ") with your own API key to start chatting.',
-+			});
-+	});
-+
- 	test('showAutoModel=false with available models shows the models, not the empty state', () => {
- 		const items = callBuild([createModel('gpt-4o', 'GPT-4o')], { showAutoModel: false });
- 		const actions = getActionItems(items);
 diff --git a/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerTelemetry.test.ts b/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerTelemetry.test.ts
-index 526441de212..9f43e7bc1b4 100644
+index 56c569a04b2..ca44feabed9 100644
 --- a/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerTelemetry.test.ts
 +++ b/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerTelemetry.test.ts
-@@ -39,6 +39,8 @@ import { ModelPickerTelemetrySession } from '../../../../../browser/widget/input
- import { ModelPickerWidget, TABBED_MODEL_PICKER_SETTING_ID } from '../../../../../browser/widget/input/modelPicker/modelPickerWidget.js';
- import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService, IModelPinTelemetryContext } from '../../../../../common/languageModels.js';
- import { NullLanguageModelsService } from '../../../../common/languageModels.js';
+@@ -21,8 +21,10 @@ import { ITabbedActionListDetailsOptions, TabbedActionListWidget } from '../../.
+ import { ICommandService } from '../../../../../../../../platform/commands/common/commands.js';
+ import { IConfigurationService } from '../../../../../../../../platform/configuration/common/configuration.js';
+ import { TestConfigurationService } from '../../../../../../../../platform/configuration/test/common/testConfigurationService.js';
 +import { IContextKeyService } from '../../../../../../../../platform/contextkey/common/contextkey.js';
+ import { IDefaultAccountService } from '../../../../../../../../platform/defaultAccount/common/defaultAccount.js';
+ import { TestInstantiationService } from '../../../../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 +import { MockContextKeyService } from '../../../../../../../../platform/keybinding/test/common/mockKeybindingService.js';
+ import { IOpenerService, OpenOptions } from '../../../../../../../../platform/opener/common/opener.js';
+ import { COPILOT_COMMUNICATION_SUPPORT_URL_KEY, IManagedSettingsService, NullManagedSettingsService } from '../../../../../../../../platform/policy/common/copilotManagedSettings.js';
+ import { IProductService } from '../../../../../../../../platform/product/common/productService.js';
+@@ -86,8 +88,12 @@ suite('ModelPickerTelemetry', () => {
+ 		},
+ 	});
  
- function createModel(id: string, metadata: Partial<ILanguageModelChatMetadata> = {}): ILanguageModelChatMetadataAndIdentifier {
- 	return {
-@@ -287,6 +289,7 @@ suite('ModelPickerTelemetry', () => {
- 		instantiationService.stub(IWorkspaceTrustManagementService, store.add(new TestWorkspaceTrustManagementService()));
- 		instantiationService.stub(IWorkspaceTrustRequestService, {});
- 		instantiationService.stub(IStorageService, store.add(new InMemoryStorageService()));
-+		instantiationService.stub(IContextKeyService, new MockContextKeyService());
- 		instantiationService.stub(IConfigurationService, new TestConfigurationService({ [TABBED_MODEL_PICKER_SETTING_ID]: tabbed }));
+-	function createPicker(selectedModel = model, beforeSave?: (id: string) => Promise<void>, models = [autoModel, model, fastModel, otherModel, thirdPartyModel], entitlement = ChatEntitlement.Pro, supportsProgrammaticSelection = true, showAutoModel = true, controlManifest: IModelsControlManifest = { free: {}, paid: {} }, presentsConfiguration = true, presentConfiguration = (access: IModelConfigurationAccess) => access) {
++	function createPicker(selectedModel = model, beforeSave?: (id: string) => Promise<void>, models = [autoModel, model, fastModel, otherModel, thirdPartyModel], entitlement = ChatEntitlement.Pro, supportsProgrammaticSelection = true, showAutoModel = true, controlManifest: IModelsControlManifest = { free: {}, paid: {} }, presentsConfiguration = true, presentConfiguration = (access: IModelConfigurationAccess) => access, byok?: { clientByokEnabled: boolean; flowleapSignedIn: boolean }) {
+ 		const instantiationService = store.add(new TestInstantiationService());
++		const executedCommands: string[] = [];
++		const contextKeyService = store.add(new MockContextKeyService());
++		contextKeyService.createKey('flowleap.signedIn', byok?.flowleapSignedIn ?? false);
++		instantiationService.stub(IContextKeyService, contextKeyService);
+ 		const events: { name: string; data: unknown }[] = [];
+ 		const pickerEvents: { name: string; data: unknown }[] = [];
+ 		const pickerSessionIds: string[] = [];
+@@ -242,7 +248,7 @@ suite('ModelPickerTelemetry', () => {
+ 			hide: () => hideTabbedPicker(),
+ 			dispose: () => { },
+ 		});
+-		instantiationService.stub(ICommandService, {});
++		instantiationService.stub(ICommandService, { executeCommand: async (id: string) => { executedCommands.push(id); } });
+ 		instantiationService.stub(IOpenerService, {
+ 			open: async (resource: URI | string, options?: OpenOptions) => {
+ 				openedLinks.push(resource.toString());
+@@ -305,6 +311,7 @@ suite('ModelPickerTelemetry', () => {
+ 		const entitlementChanged = store.add(new Emitter<void>());
+ 		const entitlementService = new class extends TestChatEntitlementService {
+ 			override readonly onDidChangeEntitlement = entitlementChanged.event;
++			override readonly clientByokEnabled = byok?.clientByokEnabled ?? false;
+ 		}();
+ 		entitlementService.entitlement = entitlement;
+ 		instantiationService.stub(IChatEntitlementService, entitlementService);
+@@ -336,7 +343,7 @@ suite('ModelPickerTelemetry', () => {
+ 		picker.show(container);
  
- 		const picker = store.add(instantiationService.createInstance(ModelPickerWidget, {
+ 		return {
+-			events, pickerEvents, eventNames, openedLinks, openedExternally, picker, container, configurations, savedConfigurations, pinnedModelIds, delegateSelections, programmaticDelegateSelections, configurationService,
++			events, pickerEvents, eventNames, openedLinks, openedExternally, executedCommands, picker, container, configurations, savedConfigurations, pinnedModelIds, delegateSelections, programmaticDelegateSelections, configurationService,
+ 			get visible() { return visible; },
+ 			fireManagedSettingsChange: () => managedSettingsChange.fire(),
+ 			get tabbedShows() { return tabbedShows; },
+@@ -428,6 +435,25 @@ suite('ModelPickerTelemetry', () => {
+ 		});
+ 	}
+ 
++	for (const flowleapSignedIn of [false, true]) {
++		test(`BYOK-only mode without models offers ${flowleapSignedIn ? 'adding a key' : 'signing in to FlowLeap'} instead of Copilot setup`, () => {
++			const result = createPicker(model, undefined, [], ChatEntitlement.Unknown, true, false, undefined, undefined, undefined, { clientByokEnabled: true, flowleapSignedIn });
++			const welcome = result.welcome();
++			welcome?.runAction();
++			assert.deepStrictEqual({ setupRequired: result.picker.isSetupRequired(), welcome: welcome?.text, visible: result.visible, executedCommands: result.executedCommands }, flowleapSignedIn ? {
++				setupRequired: false,
++				welcome: ['Copilot', 'No AI model connected yet. Add your AI model with your own API key to start chatting.', 'Add Model'],
++				visible: false,
++				executedCommands: ['workbench.action.chat.manage'],
++			} : {
++				setupRequired: false,
++				welcome: ['Copilot', 'No AI model connected yet. Sign in to FlowLeap to use the free Trial models, or add your AI model with your own API key.', 'Sign In'],
++				visible: false,
++				executedCommands: ['flowleap.signIn'],
++			});
++		});
++	}
++
+ 	test('Restricted Mode lists no cached models and offers to trust the workspace in the picker', async () => {
+ 		const result = createPicker();
+ 		result.hide();
+diff --git a/src/vs/workbench/test/common/workbenchTestServices.ts b/src/vs/workbench/test/common/workbenchTestServices.ts
+index 26761dfee1e..09e9d4e1372 100644
+--- a/src/vs/workbench/test/common/workbenchTestServices.ts
++++ b/src/vs/workbench/test/common/workbenchTestServices.ts
+@@ -839,8 +839,8 @@ export class TestChatEntitlementService implements IChatEntitlementService {
+ 	markSetupCompleted(): void { }
+ 	setForceHidden(_hidden: boolean): void { }
+ 
+-	readonly clientByokEnabled = false;
+-	readonly hasByokModels = false;
++	readonly clientByokEnabled: boolean = false;
++	readonly hasByokModels: boolean = false;
+ }
+ 
+ export class TestLifecycleService extends Disposable implements ILifecycleService {

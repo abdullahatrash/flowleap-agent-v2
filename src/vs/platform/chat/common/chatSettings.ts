@@ -119,6 +119,9 @@ export const ALWAYS_CHECKED_EDIT_PATTERNS: ChatEditAutoApprovePatterns = {
 	'**/.devcontainer/*/devcontainer.json': false,
 	'**/.github/agents/**': false,
 	'**/.github/hooks/**': false,
+	// FlowLeap: `.flowleap/agents/` is a default agent location (promptFileLocations.ts), so its
+	// edits need the same confirmation as the other agent folders.
+	'**/.flowleap/agents/**': false,
 	'**/.github/copilot/settings.json': false,
 	'**/.github/copilot/settings.local.json': false,
 	'**/.claude/agents/**': false,

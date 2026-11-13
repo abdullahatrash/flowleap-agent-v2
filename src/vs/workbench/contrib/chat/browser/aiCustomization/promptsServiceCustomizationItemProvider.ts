@@ -17,6 +17,7 @@ import { IAICustomizationWorkspaceService, AICustomizationSources } from '../../
 import { HookType, HOOK_METADATA } from '../../common/promptSyntax/hookTypes.js';
 import { formatHookCommandLabel } from '../../common/promptSyntax/hookSchema.js';
 import { PromptsType, getSourceDescription } from '../../common/promptSyntax/promptTypes.js';
+import { getSkillFolderName } from '../../common/promptSyntax/config/promptFileLocations.js';
 import { ICustomAgent, IPromptsService, matchesSessionType, PromptsStorage } from '../../common/promptSyntax/service/promptsService.js';
 import { ICustomizationItem, ICustomizationItemProvider, ICustomizationSourceFolder } from '../../common/customizationHarnessService.js';
 import { BUILTIN_STORAGE } from './aiCustomizationManagement.js';
@@ -136,6 +137,27 @@ export class PromptsServiceCustomizationItemProvider implements ICustomizationIt
 					pluginLabel: skill.pluginLabel,
 					userInvocable: skill.userInvocable
 				});
+			}
+			// FlowLeap: a user skill with the name of a built-in skill does not load. Show it with the reason.
+			const builtinSkillUris = new ResourceSet(allSkillFiles.filter(f => f.storage === PromptsStorage.extension && f.extension.isBuiltin).map(f => f.uri));
+			const skillDiscovery = builtinSkillUris.size > 0 ? await this.promptsService.getDiscoveryInfo(PromptsType.skill, token) : undefined;
+			for (const file of skillDiscovery?.files ?? []) {
+				if (file.skipReason === 'duplicate-name' && file.duplicateOf && builtinSkillUris.has(file.duplicateOf) && !seenUris.has(file.promptPath.uri)) {
+					seenUris.add(file.promptPath.uri);
+					const message = localize('skillShadowedByBuiltin', "A built-in skill has this name, so this skill does not load. Rename your skill to use it.");
+					items.push({
+						uri: file.promptPath.uri,
+						type: promptType,
+						name: getSkillFolderName(file.promptPath.uri),
+						description: message,
+						source: file.promptPath.storage,
+						status: 'error',
+						statusMessage: message,
+						extensionId: undefined,
+						pluginUri: undefined,
+						userInvocable: false
+					});
+				}
 			}
 			if (disabledUris.size > 0) {
 				for (const file of allSkillFiles) {

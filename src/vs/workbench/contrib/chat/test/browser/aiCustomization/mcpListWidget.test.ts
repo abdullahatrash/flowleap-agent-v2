@@ -46,7 +46,7 @@ import { CustomizationMcpServerCompatibilityKind, ICustomizationHarnessService, 
 import { IAgentHostCustomizationService } from '../../../browser/agentSessions/agentHost/agentHostCustomizationService.js';
 import { IAgentPlugin, IAgentPluginService } from '../../../common/plugins/agentPluginService.js';
 import { IMcpServer, IMcpService, IMcpWorkbenchService, IMcpSamplingService, IWorkbenchMcpServer, MCP_PLUGIN_COLLECTION_ID_PREFIX, McpCollectionDefinition, McpCollectionProvenance, McpConnectionState, McpServerDefinition, McpServerInstallState, McpServerTransportType } from '../../../../mcp/common/mcpTypes.js';
-import { DisableMcpServerForWorkspaceAction, DisableMcpServerGloballyAction, EnableMcpServerForWorkspaceAction, EnableMcpServerGloballyAction } from '../../../../mcp/browser/mcpServerActions.js';
+import { DisableMcpServerForWorkspaceAction, DisableMcpServerGloballyAction, EnableMcpServerForWorkspaceAction, EnableMcpServerGloballyAction, McpServerAction } from '../../../../mcp/browser/mcpServerActions.js';
 import { McpCommandIds } from '../../../../mcp/common/mcpCommandIds.js';
 import {
 	AgentHostMcpServer,
@@ -1995,6 +1995,24 @@ suite('mcpListWidget', () => {
 				'Disable (Workspace)',
 				'Disable (Session)',
 			]);
+		});
+
+		test('drops MCP server actions that hide themselves for the current state', () => {
+			class TestServerAction extends McpServerAction {
+				constructor(label: string, hidden: boolean) {
+					super(`test.${label}`, label);
+					this.hidden = hidden;
+				}
+				update(): void { }
+			}
+			const localActions = trackActions(disposables, [
+				new TestServerAction('Start Server', true),
+				new TestServerAction('Stop Server', false),
+				new Action('unrelated', 'Unrelated'),
+			]);
+			const actions = getServerItemContextMenuActions([localActions], undefined, undefined, []);
+
+			assert.deepStrictEqual(actions.filter(action => !(action instanceof Separator)).map(action => action.label), ['Stop Server', 'Unrelated']);
 		});
 
 		test('keeps the VS Code-owned enablement set without an active agent-host session', () => {
