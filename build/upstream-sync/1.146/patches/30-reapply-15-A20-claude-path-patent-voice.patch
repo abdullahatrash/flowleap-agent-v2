@@ -1,0 +1,82 @@
+diff --git a/src/vs/platform/agentHost/node/claude/claudeInteractiveTools.ts b/src/vs/platform/agentHost/node/claude/claudeInteractiveTools.ts
+index 20fbc791846..3c78ea0e84e 100644
+--- a/src/vs/platform/agentHost/node/claude/claudeInteractiveTools.ts
++++ b/src/vs/platform/agentHost/node/claude/claudeInteractiveTools.ts
+@@ -38,7 +38,7 @@ export function buildExitPlanModeConfirmationState(input: Record<string, unknown
+ 		displayName: getClaudeToolDisplayName('ExitPlanMode'),
+ 		invocationMessage: { markdown: plan },
+ 		toolInput: JSON.stringify(input),
+-		confirmationTitle: localize('claude.exitPlanMode.title', "Ready to code?"),
++		confirmationTitle: localize('claude.exitPlanMode.title', "Approve the plan?"),
+ 		options: [
+ 			{ id: 'approve', label: localize('claude.exitPlanMode.approve', "Approve"), kind: ConfirmationOptionKind.Approve },
+ 			{ id: 'deny', label: localize('claude.exitPlanMode.deny', "Deny"), kind: ConfirmationOptionKind.Deny },
+diff --git a/src/vs/platform/agentHost/node/claude/claudeToolDisplay.ts b/src/vs/platform/agentHost/node/claude/claudeToolDisplay.ts
+index 9df670e5ef8..8cba38c1ffe 100644
+--- a/src/vs/platform/agentHost/node/claude/claudeToolDisplay.ts
++++ b/src/vs/platform/agentHost/node/claude/claudeToolDisplay.ts
+@@ -161,7 +161,7 @@ export function getClaudeToolDisplayName(toolName: string): string {
+ 		case 'WebFetch': return localize('claude.tool.webFetch', "Fetch URL");
+ 		case 'Task':
+ 		case 'Agent': return localize('claude.tool.task', "Run subagent task");
+-		case 'ExitPlanMode': return localize('claude.tool.exitPlanMode', "Ready to code?");
++		case 'ExitPlanMode': return localize('claude.tool.exitPlanMode', "Approve the plan?");
+ 		case 'AskUserQuestion': return localize('claude.tool.askUserQuestion', "Ask user a question");
+ 		case 'Skill': return localize('claude.tool.skill', "Run skill");
+ 		case 'TaskCreate': return localize('claude.tool.taskCreate', "Create task");
+diff --git a/src/vs/platform/agentHost/test/node/claudeAgent.test.ts b/src/vs/platform/agentHost/test/node/claudeAgent.test.ts
+index a0dc02141de..77b3064a918 100644
+--- a/src/vs/platform/agentHost/test/node/claudeAgent.test.ts
++++ b/src/vs/platform/agentHost/test/node/claudeAgent.test.ts
+@@ -7851,10 +7851,10 @@ suite('ClaudeAgent (Phase 7 §3.5 — INTERACTIVE_CLAUDE_TOOLS)', () => {
+ 					status: ToolCallStatus.PendingConfirmation,
+ 					toolCallId: 'tu_plan_ok',
+ 					toolName: 'ExitPlanMode',
+-					displayName: 'Ready to code?',
++					displayName: 'Approve the plan?',
+ 					invocationMessage: { markdown: '1. Read foo\n2. Edit foo' },
+ 					toolInput: '{"plan":"1. Read foo\\n2. Edit foo"}',
+-					confirmationTitle: 'Ready to code?',
++					confirmationTitle: 'Approve the plan?',
+ 					options: [
+ 						{ id: 'approve', label: 'Approve', kind: 'approve' },
+ 						{ id: 'deny', label: 'Deny', kind: 'deny' },
+diff --git a/src/vs/platform/agentHost/test/node/claudeInteractiveTools.test.ts b/src/vs/platform/agentHost/test/node/claudeInteractiveTools.test.ts
+index ab7eb51901f..05853bf1b72 100644
+--- a/src/vs/platform/agentHost/test/node/claudeInteractiveTools.test.ts
++++ b/src/vs/platform/agentHost/test/node/claudeInteractiveTools.test.ts
+@@ -33,10 +33,10 @@ suite('claudeInteractiveTools', () => {
+ 				status: ToolCallStatus.PendingConfirmation,
+ 				toolCallId: 'tool_use_42',
+ 				toolName: 'ExitPlanMode',
+-				displayName: 'Ready to code?',
++				displayName: 'Approve the plan?',
+ 				invocationMessage: { markdown: '# step 1' },
+ 				toolInput: '{"plan":"# step 1"}',
+-				confirmationTitle: 'Ready to code?',
++				confirmationTitle: 'Approve the plan?',
+ 				options: [
+ 					{ id: 'approve', label: 'Approve', kind: ConfirmationOptionKind.Approve },
+ 					{ id: 'deny', label: 'Deny', kind: ConfirmationOptionKind.Deny },
+diff --git a/src/vs/platform/agentHost/test/node/claudeToolDisplay.test.ts b/src/vs/platform/agentHost/test/node/claudeToolDisplay.test.ts
+index b08e0461ec0..78b93d1f589 100644
+--- a/src/vs/platform/agentHost/test/node/claudeToolDisplay.test.ts
++++ b/src/vs/platform/agentHost/test/node/claudeToolDisplay.test.ts
+@@ -59,7 +59,7 @@ suite('claudeToolDisplay — §4 mapping table', () => {
+ 			['TodoWrite', AgentPermissionKind.Write, 'Update todo list'],
+ 			['WebFetch', AgentPermissionKind.Url, 'Fetch URL'],
+ 			['Task', AgentPermissionKind.CustomTool, 'Run subagent task'],
+-			['ExitPlanMode', AgentPermissionKind.CustomTool, 'Ready to code?'],
++			['ExitPlanMode', AgentPermissionKind.CustomTool, 'Approve the plan?'],
+ 			['AskUserQuestion', AgentPermissionKind.CustomTool, 'Ask user a question'],
+ 			['Skill', AgentPermissionKind.Skill, 'Run skill'],
+ 			['TaskCreate', AgentPermissionKind.CustomTool, 'Create task'],
+@@ -279,7 +279,7 @@ suite('claudeToolDisplay — §4 mapping table', () => {
+ 			['TodoWrite', undefined, undefined, 'Update todo list', 'Update todo list', '"Update todo list" failed', '{\n  "todos": []\n}'],
+ 			['WebFetch', undefined, undefined, { markdown: 'Fetching [https://example.com](https://example.com)' }, { markdown: 'Fetched [https://example.com](https://example.com)' }, '"Fetch URL" failed', '{\n  "url": "https://example.com"\n}'],
+ 			['Task', 'subagent', { toolKind: 'subagent' }, 'find the bug', 'Ran subagent', '"Run subagent task" failed', '{\n  "description": "find the bug",\n  "subagent_type": "Explore"\n}'],
+-			['ExitPlanMode', undefined, undefined, 'Ready to code?', 'Ready to code?', '"Ready to code?" failed', '{\n  "plan": "..."\n}'],
++			['ExitPlanMode', undefined, undefined, 'Approve the plan?', 'Approve the plan?', '"Approve the plan?" failed', '{\n  "plan": "..."\n}'],
+ 			['AskUserQuestion', undefined, undefined, 'Ask user a question', 'Ask user a question', '"Ask user a question" failed', '{\n  "question": "why?"\n}'],
+ 			['Skill', undefined, undefined, { markdown: 'Running skill `deep-research`' }, { markdown: 'Ran skill `deep-research`' }, '"Run skill" failed', '{\n  "skill": "deep-research",\n  "args": "foo"\n}'],
+ 			['TaskCreate', undefined, undefined, 'Create task: Fix auth bug', 'Create task: Fix auth bug', '"Create task" failed', '{\n  "subject": "Fix auth bug",\n  "description": "..."\n}'],
