@@ -263,8 +263,16 @@ suite('PluginCustomizationMarketplaceProvider', () => {
 				id: getPluginCustomizationMarketplaceSourceId(defaultReference),
 				displayName: defaultReference.displayLabel,
 			}],
-			copilotDefault: [],
+			// FlowLeap: the GitHub public feed mirrors github/awesome-copilot, not the fork's default marketplace,
+			// so the default stays listed while the feed is on.
+			copilotDefault: [{
+				id: getPluginCustomizationMarketplaceSourceId(defaultReference),
+				displayName: defaultReference.displayLabel,
+			}],
 			copilotWithCustom: [{
+				id: getPluginCustomizationMarketplaceSourceId(defaultReference),
+				displayName: defaultReference.displayLabel,
+			}, {
 				id: getPluginCustomizationMarketplaceSourceId(customReference),
 				displayName: customReference.displayLabel,
 			}],

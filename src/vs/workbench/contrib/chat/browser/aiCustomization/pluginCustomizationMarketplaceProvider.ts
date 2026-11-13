@@ -11,11 +11,12 @@ import { createLazyCustomizationMarketplaceProvider, CustomizationMarketplaceMed
 import { CustomizationMarketplaceConfiguration, CustomizationMarketplaceSources } from '../../../../../platform/customizationMarketplace/common/customizationMarketplaceSources.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatConfiguration } from '../../common/constants.js';
-import { DEFAULT_PLUGIN_MARKETPLACE, IMarketplaceReference, parseMarketplaceReference, parseProviderMarketplaceReference } from '../../common/plugins/marketplaceReference.js';
+import { DEFAULT_PLUGIN_MARKETPLACE, IMarketplaceReference, parseMarketplaceReference, parseProviderMarketplaceReference, PUBLIC_FEED_PLUGIN_MARKETPLACE } from '../../common/plugins/marketplaceReference.js';
 import { getMarketplacePluginRepositoryUri, IMarketplacePlugin, IPluginMarketplaceService, MarketplaceType, PluginSourceKind } from '../../common/plugins/pluginMarketplaceService.js';
 
 const defaultMarketplaceReference = parseMarketplaceReference(DEFAULT_PLUGIN_MARKETPLACE)!;
 const defaultMarketplaceId = defaultMarketplaceReference.canonicalId;
+const publicFeedMarketplaceReference = parseMarketplaceReference(PUBLIC_FEED_PLUGIN_MARKETPLACE)!;
 const pluginMarketplaceSourceInfo: ICustomizationMarketplaceSourceInfo = {
 	...CustomizationMarketplaceSources.PluginMarketplaces,
 	configurationDependencies: [
@@ -59,7 +60,7 @@ export function isPluginMarketplaceAvailableInDiscover(configurationService: ICo
 	return !githubFeedAvailable ||
 		configurationService.getValue<boolean>(CustomizationMarketplaceConfiguration.MarketplaceEnabled) !== true ||
 		configurationService.getValue<boolean>(CustomizationMarketplaceConfiguration.AgentFinderPublicFeedEnabled) !== true ||
-		reference?.githubRepo?.toLowerCase() !== defaultMarketplaceReference.githubRepo;
+		reference?.githubRepo?.toLowerCase() !== publicFeedMarketplaceReference.githubRepo;
 }
 
 export function getPluginCustomizationMarketplaceSourceInfos(

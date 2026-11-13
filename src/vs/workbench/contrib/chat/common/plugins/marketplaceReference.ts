@@ -23,6 +23,12 @@ export { extraKnownMarketplacesToConfigDict } from '../../../../../base/common/m
  */
 export const DEFAULT_PLUGIN_MARKETPLACE = 'flowleap-ai/flowleap-plugins';
 
+/**
+ * The marketplace the GitHub public feed (Agent Finder) mirrors. Upstream this is its default
+ * marketplace; the fork ships its own default, so the feed replaces this repository only.
+ */
+export const PUBLIC_FEED_PLUGIN_MARKETPLACE = 'github/awesome-copilot';
+
 export const enum MarketplaceReferenceKind {
 	GitHubShorthand = 'githubShorthand',
 	GitUri = 'gitUri',
