@@ -14,21 +14,25 @@ index 9588465219d..fc544a1f47a 100644
  
  	protected async createMcpGalleryManifest(url: string, version?: string): Promise<IMcpGalleryManifest> {
 diff --git a/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts b/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts
-index 65b6b126a64..3696163c488 100644
+index b772d339ec8..d0301bf6281 100644
 --- a/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts
 +++ b/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts
-@@ -17,6 +17,10 @@ import { IRequestService } from '../../../request/common/request.js';
+@@ -16,11 +16,13 @@ import { NullLogService } from '../../../log/common/log.js';
+ import { IRequestContext, IRequestOptions } from '../../../../base/parts/request/common/request.js';
+ import { IRequestService } from '../../../request/common/request.js';
  import { IGalleryMcpServer, IMcpServerInput, McpGalleryResolveStatus } from '../../common/mcpManagement.js';
- import { IMcpGalleryManifest, IMcpGalleryManifestService, McpGalleryManifestStatus, McpGalleryResourceType } from '../../common/mcpGalleryManifest.js';
- import { McpGalleryService, UnsupportedMcpGalleryPackageError } from '../../common/mcpGalleryService.js';
+-import { IMcpGalleryManifest, IMcpGalleryManifestService, McpGalleryManifestStatus, McpGalleryResourceType } from '../../common/mcpGalleryManifest.js';
++import { getMcpGalleryManifestResourceUri, IMcpGalleryManifest, IMcpGalleryManifestService, McpGalleryManifestStatus, McpGalleryResourceType } from '../../common/mcpGalleryManifest.js';
+ import { McpGalleryInvalidCursorError, McpGalleryService, UnsupportedMcpGalleryPackageError } from '../../common/mcpGalleryService.js';
 +import { McpGalleryManifestService } from '../../common/mcpGalleryManifestService.js';
-+import { getMcpGalleryManifestResourceUri } from '../../common/mcpGalleryManifest.js';
+ import { CustomizationMarketplaceService } from '../../../customizationMarketplace/common/customizationMarketplaceService.js';
+ import { McpGalleryMarketplaceProvider } from '../../../customizationMarketplace/common/mcpGalleryMarketplaceProvider.js';
+ import { TestConfigurationService } from '../../../configuration/test/common/testConfigurationService.js';
 +import product from '../../../product/common/product.js';
-+import { IProductService } from '../../../product/common/productService.js';
+ import { IProductService } from '../../../product/common/productService.js';
  
  const SERVERS_URL = 'https://registry.test/servers';
- const NAMED_TEMPLATE = 'https://registry.test/servers/{name}';
-@@ -535,3 +539,48 @@ suite('McpGalleryService - getMcpServer validation', () => {
+@@ -793,3 +795,48 @@ suite('McpGalleryService - getMcpServer validation', () => {
  		});
  	});
  });
@@ -78,10 +82,10 @@ index 65b6b126a64..3696163c488 100644
 +	});
 +});
 diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
-index d33e61416c1..e594233cf20 100644
+index 79a5595ef96..f427ecb8ad9 100644
 --- a/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
 +++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
-@@ -1778,7 +1778,7 @@ export class McpListWidget extends Disposable {
+@@ -2272,7 +2272,7 @@ export class McpListWidget extends Disposable {
  		sectionTitleDescription.appendChild(document.createTextNode(' '));
  		this.sectionLink = DOM.append(sectionTitleDescription, $('a.section-title-link')) as HTMLAnchorElement;
  		this.sectionLink.textContent = localize('learnMoreMcp', "Learn more about MCP servers");
