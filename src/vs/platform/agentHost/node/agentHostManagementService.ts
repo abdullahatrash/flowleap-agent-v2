@@ -11,6 +11,7 @@ import { type AgentCanvasDefinitionSnapshot, type AgentProvider, type IAgentCanv
 import { IAgentHostInspectInfo, IAgentHostManagedSettingsDiagnostics, IAgentHostManagementService, IAgentHostNetworkDiagnosticsInfo, IAgentHostNetworkFetchResult, IAgentHostSocketInfo, IAgentService, IConnectionTrackerService, type AgentHostDebugLogsArtifactKind, type IAgentHostDebugLogsArtifact, type IAgentHostDebugLogsChunk, type IMissionControlOptions, type IMissionControlCredentialSealingRequest } from '../common/agentService.js';
 import { sealMissionControlCredential } from './missionControl/missionControlAuthentication.js';
 import { MissionControlEnvironment } from './missionControl/missionControlEnvironment.js';
+import { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from '../common/remoteAccessHost.js';
 import { ISessionDataService } from '../common/sessionDataService.js';
 import { IAgentHostMacAccessibilityTrustService } from './agentHostMacAccessibilityTrustService.js';
 import { IAgentHostSystemWakeService } from './agentHostSystemWakeService.js';
@@ -392,5 +393,13 @@ export class AgentHostManagementService implements IAgentHostManagementService {
 
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined> {
 		return this._connectionTrackerService.getInspectInfo(tryEnable);
+	}
+
+	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void> {
+		return this._connectionTrackerService.setRemoteAccessHost(config);
+	}
+
+	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
+		return this._connectionTrackerService.getRemoteAccessHostStatus();
 	}
 }

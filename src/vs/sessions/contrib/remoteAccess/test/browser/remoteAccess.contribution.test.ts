@@ -14,7 +14,7 @@ import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contex
 import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { IsAuxiliaryWindowContext, IsSessionsWindowContext } from '../../../../../workbench/common/contextkeys.js';
 import { RemoteAccessEnabledContext } from '../../../../../workbench/contrib/chat/common/remoteAccess/remoteAccess.js';
-import { Menus } from '../../../../../workbench/contrib/sessions/browser/menus.js';
+import { AgentsWindowMenus } from '../../../../browser/agentsWindowMenus.js';
 import { ISession, SessionStatus } from '../../../../../workbench/services/sessions/common/session.js';
 import { describeHostStatus, MANAGE_VIEWERS_ID, PAIR_VIEWER_ID, TOGGLE_REMOTE_ACCESS_ID } from '../../browser/remoteAccess.contribution.js';
 import { RemoteAccessKeepAwakeController } from '../../browser/remoteAccessKeepAwake.js';
@@ -23,7 +23,7 @@ suite('Sessions - RemoteAccess title bar', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('registers the Remote Access toggle in the Agents Window title bar', () => {
-		const item = MenuRegistry.getMenuItems(Menus.TitleBarRightLayout)
+		const item = MenuRegistry.getMenuItems(AgentsWindowMenus.TitleBarRightLayout)
 			.filter(isIMenuItem)
 			.find(candidate => candidate.command.id === TOGGLE_REMOTE_ACCESS_ID);
 		assert.ok(item, 'toggle is in the title bar');

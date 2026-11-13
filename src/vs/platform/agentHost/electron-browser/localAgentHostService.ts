@@ -31,6 +31,7 @@ import { AgentHostIpcChannelTransport } from '../browser/agentHostIpcChannelTran
 import { AgentHostClientState, AgentHostProtocolClient } from '../browser/agentHostProtocolClient.js';
 import { AhpJsonlLogger } from '../common/ahpJsonlLogger.js';
 import { getSessionLogContent } from '../common/sessionLogContent.js';
+import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from '../common/remoteAccessHost.js';
 import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AgentHostClientByokLmChannel, NullAgentHostClientByokLmChannel } from '../common/agentHostClientByokLmChannel.js';
 import { getAgentHostClientType } from '../common/agentHostClientInfo.js';
 import { AGENT_HOST_CLIENT_PROXY_CHANNEL, AgentHostClientProxyChannel } from '../common/agentHostClientProxyChannel.js';
@@ -867,6 +868,14 @@ export class LocalAgentHostServiceClient extends Disposable implements IAgentHos
 
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined> {
 		return this._getManagementService().getInspectInfo(tryEnable);
+	}
+
+	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void> {
+		return this._getManagementService().setRemoteAccessHost(config);
+	}
+
+	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
+		return this._getManagementService().getRemoteAccessHostStatus();
 	}
 
 	private _getManagementService(): IAgentHostManagementService {
