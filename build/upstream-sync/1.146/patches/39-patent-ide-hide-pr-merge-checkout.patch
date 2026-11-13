@@ -1,0 +1,216 @@
+diff --git a/src/vs/sessions/contrib/changes/browser/changesActions.ts b/src/vs/sessions/contrib/changes/browser/changesActions.ts
+index d0c586abfc0..60134cd1a87 100644
+--- a/src/vs/sessions/contrib/changes/browser/changesActions.ts
++++ b/src/vs/sessions/contrib/changes/browser/changesActions.ts
+@@ -8,7 +8,7 @@ import * as dom from '../../../../base/browser/dom.js';
+ import { renderIcon } from '../../../../base/browser/ui/iconLabel/iconLabels.js';
+ import { Codicon } from '../../../../base/common/codicons.js';
+ import { Disposable, IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+-import { autorun, IReader } from '../../../../base/common/observable.js';
++import { autorun, IReader, observableFromEvent } from '../../../../base/common/observable.js';
+ import { isEqual } from '../../../../base/common/resources.js';
+ import { ThemeIcon } from '../../../../base/common/themables.js';
+ import { URI } from '../../../../base/common/uri.js';
+@@ -29,6 +29,8 @@ import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/d
+ import { ISessionsHostLayoutService } from '../../../../workbench/services/sessions/browser/sessionsHostLayoutService.js';
+ import { Menus } from '../../../../workbench/contrib/sessions/browser/menus.js';
+ import { AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID, AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, AGENT_HOST_SYNC_CHANGESET_OPERATION_ID } from '../../../../platform/agentHost/common/agentHostChangesetOperationService.js';
++import { PatentIdeContextKeys } from '../../../../workbench/common/patent/patentIdeContextKeys.js';
++import { isPatentHiddenChangesetOperation } from '../../../../workbench/contrib/sessionChanges/common/patentChangesetOperations.js';
+ import { ISessionsService } from '../../../../workbench/contrib/sessions/browser/sessionsService.js';
+ import { resolveSessionCommandTarget } from '../../../../workbench/contrib/sessions/browser/sessionCommandTarget.js';
+ import { IChat, ISessionChangeset, ISessionChangesetOperation, ISessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus, SessionStatus, UNCOMMITTED_CHANGES_CHANGESET_ID, ISession } from '../../../../workbench/services/sessions/common/session.js';
+@@ -343,8 +345,9 @@ function isChangesetOperationBusy(operation: ISessionChangesetOperation): boolea
+  * changeset. Those in the title of its Changes editor are, for a new (untitled) session, the changeset-scoped operations
+  * of its uncommitted changes (except Sync and Checkout), and for an existing session the Commit operation of the
+  * changeset selected in its Changes view; the title bar's button bar omits Commit, so that it always lives here.
++ * FlowLeap Patent IDE (#471): with `patentIdeMode`, the pull request, merge and checkout operations are not shown.
+  */
+-export function getChangesetOperations(session: ISession | undefined, chat: IChat | undefined, changes: Pick<IChangesSessionObservables, 'changesetObs' | 'changesetOperationsObs'>, reader: IReader | undefined): IChangesetOperations {
++export function getChangesetOperations(session: ISession | undefined, chat: IChat | undefined, changes: Pick<IChangesSessionObservables, 'changesetObs' | 'changesetOperationsObs'>, reader: IReader | undefined, patentIdeMode = false): IChangesetOperations {
+ 	const entries: IChangesetOperationEntry[] = [];
+ 	const changeset = changes.changesetObs.read(reader);
+ 	for (const operation of changeset?.operations.read(reader) ?? []) {
+@@ -365,6 +368,7 @@ export function getChangesetOperations(session: ISession | undefined, chat: ICha
+ 		operations = titleChangeset?.operations.read(reader)
+ 			.filter(operation => operation.id !== AGENT_HOST_SYNC_CHANGESET_OPERATION_ID)
+ 			.filter(operation => operation.id !== AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID)
++			.filter(operation => !patentIdeMode || !isPatentHiddenChangesetOperation(operation.id))
+ 			.filter(operation => operation.scopes.includes(SessionChangesetOperationScope.Changeset)) ?? [];
+ 		hasUncommittedChanges = (session.workspace.read(reader)?.folders[0]?.gitRepository?.uncommittedChanges ?? 0) > 0;
+ 	} else {
+@@ -518,8 +522,9 @@ const changesetOperationActions = new class {
+ export function bindChangesetOperations(source: Pick<ISessionActionContextKeysSource, 'session'> & { readonly chat?: ISessionActionContextKeysSource['chat']; readonly changes: Pick<IChangesSessionObservables, 'changesetObs' | 'changesetOperationsObs'> }, contextKeyService: IContextKeyService): IDisposable {
+ 	const shown = SessionChangesetOperationsContext.bindTo(contextKeyService);
+ 	const enabled = SessionEnabledChangesetOperationsContext.bindTo(contextKeyService);
++	const patentIdeModeObs = observableFromEvent(contextKeyService.onDidChangeContext, () => PatentIdeContextKeys.Mode.getValue(contextKeyService) === true);
+ 	return autorun(reader => {
+-		const { entries } = getChangesetOperations(source.session.read(reader), source.chat?.read(reader), source.changes, reader);
++		const { entries } = getChangesetOperations(source.session.read(reader), source.chat?.read(reader), source.changes, reader, patentIdeModeObs.read(reader));
+ 		contextKeyService.bufferChangeEvents(() => {
+ 			shown.set(entries.map(entry => entry.key));
+ 			enabled.set(entries.filter(entry => entry.enabled).map(entry => entry.key));
+diff --git a/src/vs/sessions/contrib/changes/browser/changesViewActions.ts b/src/vs/sessions/contrib/changes/browser/changesViewActions.ts
+index 84d1114238d..34525e88506 100644
+--- a/src/vs/sessions/contrib/changes/browser/changesViewActions.ts
++++ b/src/vs/sessions/contrib/changes/browser/changesViewActions.ts
+@@ -16,6 +16,7 @@ import { Action2, IAction2Options, MenuId, MenuRegistry, registerAction2 } from
+ import { ICommandService } from '../../../../platform/commands/common/commands.js';
+ import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+ import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
++import { PatentIdeContextKeys } from '../../../../workbench/common/patent/patentIdeContextKeys.js';
+ import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+ import { bindContextKey } from '../../../../platform/observable/common/platformObservableUtils.js';
+ import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
+@@ -116,7 +117,8 @@ class OpenPullRequestAction extends Action2 {
+ 				order: 9,
+ 				when: ContextKeyExpr.and(
+ 					IsSessionsWindowContext,
+-					ActiveSessionContextKeys.HasPullRequest)
++					ActiveSessionContextKeys.HasPullRequest,
++					PatentIdeContextKeys.Mode.toNegated()) // FlowLeap Patent IDE: no pull requests in Patent IDE mode (#471)
+ 			}
+ 		});
+ 	}
+diff --git a/src/vs/sessions/contrib/changes/browser/checksActions.ts b/src/vs/sessions/contrib/changes/browser/checksActions.ts
+index 60c3dbbe527..44b15b8f70e 100644
+--- a/src/vs/sessions/contrib/changes/browser/checksActions.ts
++++ b/src/vs/sessions/contrib/changes/browser/checksActions.ts
+@@ -7,6 +7,7 @@ import { Codicon } from '../../../../base/common/codicons.js';
+ import { localize2 } from '../../../../nls.js';
+ import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
++import { PatentIdeContextKeys } from '../../../../workbench/common/patent/patentIdeContextKeys.js';
+ import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+ import { ILogService } from '../../../../platform/log/common/log.js';
+ import { constObservable } from '../../../../base/common/observable.js';
+@@ -38,7 +39,7 @@ class FixCIChecksAction extends Action2 {
+ 				id: MenuId.AgentsChangesPrimaryActionSubMenu,
+ 				group: '5_checks',
+ 				order: 4,
+-				when: ContextKeyExpr.and(IsSessionsWindowContext, hasActiveSessionFailedCIChecks, activeSessionCIFixRequested.negate()),
++				when: ContextKeyExpr.and(IsSessionsWindowContext, hasActiveSessionFailedCIChecks, activeSessionCIFixRequested.negate(), PatentIdeContextKeys.Mode.toNegated()), // FlowLeap Patent IDE: no CI checks in Patent IDE mode (#471)
+ 			}],
+ 		});
+ 	}
+diff --git a/src/vs/sessions/contrib/changes/test/browser/changesActions.test.ts b/src/vs/sessions/contrib/changes/test/browser/changesActions.test.ts
+index 6472db5c72c..6aaff3e7a22 100644
+--- a/src/vs/sessions/contrib/changes/test/browser/changesActions.test.ts
++++ b/src/vs/sessions/contrib/changes/test/browser/changesActions.test.ts
+@@ -17,7 +17,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
+ import { IActionViewItemService, NullActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
+ import { createActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
+ import { isIMenuItem, MenuId, MenuItemAction, MenuRegistry } from '../../../../../platform/actions/common/actions.js';
+-import { AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID, AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, AGENT_HOST_SYNC_CHANGESET_OPERATION_ID } from '../../../../../platform/agentHost/common/agentHostChangesetOperationService.js';
++import { AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID, AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, AGENT_HOST_MERGE_CHANGESET_OPERATION_ID, AGENT_HOST_SYNC_CHANGESET_OPERATION_ID } from '../../../../../platform/agentHost/common/agentHostChangesetOperationService.js';
+ import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
+ import { ContextKeyExpr, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+ import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
+@@ -29,8 +29,8 @@ import { Menus } from '../../../../../workbench/contrib/sessions/browser/menus.j
+ import { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
+ import { ISessionsHostLayoutService } from '../../../../../workbench/services/sessions/browser/sessionsHostLayoutService.js';
+ import { ISessionsService } from '../../../../../workbench/contrib/sessions/browser/sessionsService.js';
+-import { IChat, ISessionChangeset, ISessionChangesetOperation, ISessionFolder, ISessionGitRepository, ISessionWorkspace, SessionChangesetOperationScope, SessionChangesetOperationStatus, SessionStatus, UNCOMMITTED_CHANGES_CHANGESET_ID } from '../../../../../workbench/services/sessions/common/session.js';
+-import { bindChangesetOperations, ChangesHeaderChangesetOperationsActionContribution } from '../../browser/changesActions.js';
++import { IChat, ISession, ISessionChangeset, ISessionChangesetOperation, ISessionFolder, ISessionGitRepository, ISessionWorkspace, SessionChangesetOperationScope, SessionChangesetOperationStatus, SessionStatus, UNCOMMITTED_CHANGES_CHANGESET_ID } from '../../../../../workbench/services/sessions/common/session.js';
++import { bindChangesetOperations, ChangesHeaderChangesetOperationsActionContribution, getChangesetOperations } from '../../browser/changesActions.js';
+ import { SessionChangesEditor } from '../../../../../workbench/contrib/sessionChanges/browser/sessionChangesEditor.js';
+ import { ISessionChangesService } from '../../../../../workbench/contrib/sessionChanges/browser/sessionChangesService.js';
+ import { IChangesSessionObservables, IChangesSessionScope, IChangesViewService } from '../../../../../workbench/contrib/sessions/common/changesViewService.js';
+@@ -461,4 +461,38 @@ suite('Changes Actions', () => {
+ 			commitCommandRegistered: false,
+ 		});
+ 	});
++
++	test('Patent IDE mode drops pull request and merge operations from the draft Changes title (#471)', () => {
++		const operation = (id: string, label: string): ISessionChangesetOperation => ({
++			id,
++			label,
++			scopes: [SessionChangesetOperationScope.Changeset],
++			status: SessionChangesetOperationStatus.Idle,
++		});
++		const changeset = upcastPartial<ISessionChangeset>({
++			id: UNCOMMITTED_CHANGES_CHANGESET_ID,
++			isEnabled: constObservable(true),
++			operations: constObservable([
++				operation(AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, 'Commit'),
++				operation('create-pr', 'Create PR'),
++				operation(AGENT_HOST_MERGE_CHANGESET_OPERATION_ID, 'Merge Changes'),
++			]),
++		});
++		const chat = upcastPartial<IChat>({ changesets: constObservable([changeset]) });
++		const session = upcastPartial<ISession>({
++			status: constObservable(SessionStatus.Untitled),
++			workspace: constObservable(undefined),
++			mainChat: constObservable(chat),
++		});
++		const changes = { changesetObs: constObservable(undefined), changesetOperationsObs: constObservable([]) };
++		const keys = (patentIdeMode: boolean) => getChangesetOperations(session, chat, changes, undefined, patentIdeMode).entries.map(entry => entry.key);
++
++		assert.deepStrictEqual({
++			developer: keys(false),
++			patent: keys(true),
++		}, {
++			developer: [`changeset:${AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID}`, 'changeset:create-pr', `changeset:${AGENT_HOST_MERGE_CHANGESET_OPERATION_ID}`],
++			patent: [`changeset:${AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID}`],
++		});
++	});
+ });
+diff --git a/src/vs/sessions/contrib/providers/agentHost/browser/agentMergeActions.ts b/src/vs/sessions/contrib/providers/agentHost/browser/agentMergeActions.ts
+index d74ac236a0b..6b417aa439b 100644
+--- a/src/vs/sessions/contrib/providers/agentHost/browser/agentMergeActions.ts
++++ b/src/vs/sessions/contrib/providers/agentHost/browser/agentMergeActions.ts
+@@ -15,6 +15,7 @@ import { AgentHostPullRequestOperationId } from '../../../../../platform/agentHo
+ import { ArtifactIntegrationsSettingId } from '../../../../../platform/artifactIntegrations/common/artifactIntegration.js';
+ import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+ import { ContextKeyExpr, IContextKeyService, RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
++import { PatentIdeContextKeys } from '../../../../../workbench/common/patent/patentIdeContextKeys.js';
+ import { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+ import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+ import { IQuickInputService, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+@@ -228,7 +229,7 @@ MenuRegistry.appendMenuItem(Menus.ChangesOperationsDropdown, {
+ 	icon: Codicon.gitMerge,
+ 	group: CHANGES_OPERATIONS_DROPDOWN_PRIMARY_GROUP,
+ 	order: 1,
+-	when: ContextKeyExpr.and(agentMergeMenuPrecondition, agentMergeOwnsPrimaryButton),
++	when: ContextKeyExpr.and(agentMergeMenuPrecondition, agentMergeOwnsPrimaryButton, PatentIdeContextKeys.Mode.toNegated()), // FlowLeap Patent IDE: no Agent Merge in Patent IDE mode (#471)
+ });
+ 
+ /** Menus the top-level Agent Merge entries appear on: the operations dropdown, and their own context menu. */
+diff --git a/src/vs/workbench/contrib/sessionChanges/browser/changesView.ts b/src/vs/workbench/contrib/sessionChanges/browser/changesView.ts
+index 947bcbcb912..28d4e5dc70c 100644
+--- a/src/vs/workbench/contrib/sessionChanges/browser/changesView.ts
++++ b/src/vs/workbench/contrib/sessionChanges/browser/changesView.ts
+@@ -86,6 +86,8 @@ import { REVEAL_CI_CHECKS_COMMAND_ID } from '../../sessions/browser/fixCIChecks.
+ // eslint-disable-next-line local/code-import-patterns -- TODO: move skill button constants out of providers
+ import { AGENT_HOST_SKILL_BUTTON_UPDATE_PR_ID, isAgentHostSkillButtonId } from '../../sessions/providers/agentHost/browser/agentHostSkillButtons.js';
+ import { AGENT_HOST_AUTO_MERGE_OPERATION_IDS, AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID } from '../../../../platform/agentHost/common/agentHostChangesetOperationService.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
++import { isPatentHiddenChangesetOperation } from '../common/patentChangesetOperations.js';
+ import { ActiveSessionContextKeys, CHANGES_VIEW_CONTAINER_ID, CHANGES_VIEW_ID, ChangesContextKeys, ChangesViewMode, IsolationMode, SESSIONS_CHANGES_OPEN_SINGLE_FILE_DIFF_SETTING } from '../../sessions/common/changes.js';
+ import { buildTreeChildren, ChangesTreeElement, ChangesTreeRenderer, IChangesFileItem, IChangesTreeRootInfo, isChangesFileItem, isChangesFileResource, toIChangesFileItem } from './changesViewRenderer.js';
+ import { ResourceTree } from '../../../../base/common/resourceTree.js';
+@@ -429,6 +431,9 @@ class ChangesWorkbenchButtonBarWidget extends Disposable implements IChangesButt
+ 			DesktopChangesEditorTransitionContext.getValue(contextKeyService) === true);
+ 		const workspaceFoldersObs = observableFromEvent(workspaceContextService.onDidChangeWorkspaceFolders, () =>
+ 			workspaceContextService.getWorkspace().folders);
++		// FlowLeap Patent IDE (#471): no pull request, merge or checkout operations in Patent IDE mode.
++		const patentIdeModeObs = observableFromEvent(contextKeyService.onDidChangeContext, () =>
++			PatentIdeContextKeys.Mode.getValue(contextKeyService) === true);
+ 
+ 		// Client-side entries that belong *inside* the operations dropdown rather
+ 		// than beside it. The `primary` group is special: an action contributed
+@@ -479,7 +484,8 @@ class ChangesWorkbenchButtonBarWidget extends Disposable implements IChangesButt
+ 			const changesetOperations = operations
+ 				.filter(op => op.scopes.includes(SessionChangesetOperationScope.Changeset))
+ 				.filter(op => !AGENT_HOST_AUTO_MERGE_OPERATION_IDS.has(op.id))
+-				.filter(op => !excludedOperationIds.has(op.id));
++				.filter(op => !excludedOperationIds.has(op.id))
++				.filter(op => !patentIdeModeObs.read(reader) || !isPatentHiddenChangesetOperation(op.id));
+ 
+ 			const toOperationAction = (op: ISessionChangesetOperation) => toAction({
+ 				id: op.id,
+diff --git a/src/vs/sessions/contrib/changes/common/patentChangesetOperations.ts b/src/vs/workbench/contrib/sessionChanges/common/patentChangesetOperations.ts
+similarity index 100%
+rename from src/vs/sessions/contrib/changes/common/patentChangesetOperations.ts
+rename to src/vs/workbench/contrib/sessionChanges/common/patentChangesetOperations.ts
