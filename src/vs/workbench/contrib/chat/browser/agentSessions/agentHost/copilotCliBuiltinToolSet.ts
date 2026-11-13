@@ -58,8 +58,8 @@ export function getCopilotCliBuiltinToolSet(): IToolSet {
 			referenceName: 'copilotCli',
 			icon: Codicon.copilot,
 			source: ToolDataSource.Internal,
-			description: localize('clientToolSet.copilotCli.description', "Copilot"),
-			detail: localize('clientToolSet.copilotCli.detail', "Built-in tools the Copilot agent runs inside its own runtime."),
+			description: localize('clientToolSet.copilotCli.description', "CLI Agent"),
+			detail: localize('clientToolSet.copilotCli.detail', "Built-in tools the CLI Agent runs inside its own runtime."),
 			getTools: () => tools,
 		};
 	}

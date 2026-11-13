@@ -181,16 +181,16 @@ export function getQuotaMessageForPlan(copilotPlan: string | undefined, isUsageB
 		switch (copilotPlan) {
 			case 'free':
 				return resetDateString
-					? localize('chatError.quota.ubb.freeDate', "You've reached your monthly credit limit. Upgrade to Copilot Pro or wait until your credits reset on {0}.", resetDateString)
-					: localize('chatError.quota.ubb.free', "You've reached your monthly credit limit. Upgrade to Copilot Pro or wait for your credits to reset.");
+					? localize('chatError.quota.ubb.freeDate', "You've reached your monthly credit limit. Upgrade to FlowLeap Pro or wait until your credits reset on {0}.", resetDateString)
+					: localize('chatError.quota.ubb.free', "You've reached your monthly credit limit. Upgrade to FlowLeap Pro or wait for your credits to reset.");
 			case 'individual':
 				return resetDateString
-					? localize('chatError.quota.ubb.individualDate', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro+, or wait until your credits reset on {0}.", resetDateString)
-					: localize('chatError.quota.ubb.individual', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro+, or wait for your credits to reset.");
+					? localize('chatError.quota.ubb.individualDate', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro+, or wait until your credits reset on {0}.", resetDateString)
+					: localize('chatError.quota.ubb.individual', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro+, or wait for your credits to reset.");
 			case 'edu':
 				return resetDateString
-					? localize('chatError.quota.ubb.eduDate', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro, or wait until your credits reset on {0}.", resetDateString)
-					: localize('chatError.quota.ubb.edu', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro, or wait for your credits to reset.");
+					? localize('chatError.quota.ubb.eduDate', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro, or wait until your credits reset on {0}.", resetDateString)
+					: localize('chatError.quota.ubb.edu', "You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro, or wait for your credits to reset.");
 			case 'individual_pro':
 			case 'individual_max':
 				return resetDateString
@@ -199,30 +199,30 @@ export function getQuotaMessageForPlan(copilotPlan: string | undefined, isUsageB
 			case 'business':
 			case 'enterprise':
 				return resetDateString
-					? localize('chatError.quota.ubb.businessDate', "You've reached your credit limit. To continue working, please contact your organization's Copilot admin or wait until your credits reset on {0}.", resetDateString)
-					: localize('chatError.quota.ubb.business', "You've reached your credit limit. To continue working, please contact your organization's Copilot admin or wait for your credits to reset.");
+					? localize('chatError.quota.ubb.businessDate', "You've reached your credit limit. To continue working, please contact your organization's FlowLeap admin or wait until your credits reset on {0}.", resetDateString)
+					: localize('chatError.quota.ubb.business', "You've reached your credit limit. To continue working, please contact your organization's FlowLeap admin or wait for your credits to reset.");
 			default:
 				return resetDateString
-					? localize('chatError.quota.ubb.defaultDate', "You've reached your credit limit. For additional paid credits, please reach out to your organization's Copilot admin or wait until your credits reset on {0}.", resetDateString)
-					: localize('chatError.quota.ubb.default', "You've reached your credit limit. For additional paid credits, please reach out to your organization's Copilot admin or wait for your credits to reset.");
+					? localize('chatError.quota.ubb.defaultDate', "You've reached your credit limit. For additional paid credits, please reach out to your organization's FlowLeap admin or wait until your credits reset on {0}.", resetDateString)
+					: localize('chatError.quota.ubb.default', "You've reached your credit limit. For additional paid credits, please reach out to your organization's FlowLeap admin or wait for your credits to reset.");
 		}
 	}
 
 	switch (copilotPlan) {
 		case 'free':
-			return localize('chatError.quota.free', "You've reached your monthly chat messages quota. Upgrade to Copilot Pro or wait for your allowance to renew.");
+			return localize('chatError.quota.free', "You've reached your monthly chat messages quota. Upgrade to FlowLeap Pro or wait for your allowance to renew.");
 		case 'individual':
-			return localize('chatError.quota.individual', "You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to Copilot Pro+, or wait for your allowance to renew.");
+			return localize('chatError.quota.individual', "You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to FlowLeap Pro+, or wait for your allowance to renew.");
 		case 'edu':
-			return localize('chatError.quota.edu', "You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to Copilot Pro, or wait for your allowance to renew.");
+			return localize('chatError.quota.edu', "You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to FlowLeap Pro, or wait for your allowance to renew.");
 		case 'individual_pro':
 		case 'individual_max':
 			return localize('chatError.quota.pro', "You've exhausted your premium model quota. Please enable additional paid premium requests or wait for your allowance to renew.");
 		case 'business':
 		case 'enterprise':
-			return localize('chatError.quota.business', "You've exhausted your credits. To continue working, please contact your organization's Copilot admin or wait for your allowance to renew.");
+			return localize('chatError.quota.business', "You've exhausted your credits. To continue working, please contact your organization's FlowLeap admin or wait for your allowance to renew.");
 		default:
-			return localize('chatError.quota.default', "You've exhausted your premium model quota. For additional paid premium requests, please reach out to your organization's Copilot admin or wait for your allowance to renew.");
+			return localize('chatError.quota.default', "You've exhausted your premium model quota. For additional paid premium requests, please reach out to your organization's FlowLeap admin or wait for your allowance to renew.");
 	}
 }
 

@@ -101,7 +101,7 @@ export function buildModelPickerDestinations(
 	const builtInVendor = languageModelsService.getVendors().find(vendor => vendor.isDefault);
 	const builtInGroup = {
 		vendor: builtInVendor?.vendor ?? COPILOT_VENDOR_ID,
-		groupName: builtInVendor?.displayName ?? localize('chat.modelPicker.builtInProvider', "GitHub Copilot"),
+		groupName: builtInVendor?.displayName ?? localize('chat.modelPicker.builtInProvider', "FlowLeap"),
 		icon: builtInVendor?.icon,
 	};
 	const modelToGroup = buildModelToProviderGroupMap(languageModelsService);
