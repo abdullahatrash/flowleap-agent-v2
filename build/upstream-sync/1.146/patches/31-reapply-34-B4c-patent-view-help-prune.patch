@@ -28,18 +28,6 @@ index 72f44dea7de..958d0dd0607 100644
  };
  
  /**
-diff --git a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
-index 2336dad45f0..c5320ee1c66 100644
---- a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
-+++ b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
-@@ -120,6 +120,7 @@ export const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainer
- 			id: VIEWLET_ID,
- 			mnemonicTitle: localize({ key: 'miViewExtensions', comment: ['&& denotes a mnemonic'] }, "E&&xtensions"),
- 			keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyX, when: PatentIdeContextKeys.Mode.toNegated() },
-+			when: PatentIdeContextKeys.Mode.toNegated(), // FlowLeap Patent IDE: hide the View menu entry
- 			order: 4,
- 		},
- 		ctorDescriptor: new SyncDescriptor(ExtensionsViewPaneContainer),
 diff --git a/src/vs/workbench/contrib/issue/common/issue.contribution.ts b/src/vs/workbench/contrib/issue/common/issue.contribution.ts
 index 0c1effb4b15..33aa93ddd68 100644
 --- a/src/vs/workbench/contrib/issue/common/issue.contribution.ts
