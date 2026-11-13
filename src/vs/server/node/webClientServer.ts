@@ -113,6 +113,9 @@ const APP_ROOT = dirname(FileAccess.asFileUri('').fsPath);
 const STATIC_PATH = `/static`;
 const CALLBACK_PATH = `/callback`;
 const WEB_EXTENSION_PATH = `/web-extension-resource`;
+/** Hosted Workspace (#547): answers a POST with the server part of the secrets key. */
+export const HOSTED_SECRET_KEY_PATH = `/hosted-secret-key`;
+const HOSTED_SECRET_KEY_LENGTH = 32;
 const webWorkerExtensionHostIframeScriptSHA = 'sha256-daEgfo2VIXpx2Np71KqCCbkeQwv+68vPrx54XRcbdcs=';
 
 /**
@@ -160,6 +163,7 @@ export function createWorkbenchContentSecurityPolicy(scriptNonce: string, nlsBas
 export class WebClientServer {
 
 	private readonly _webExtensionResourceUrlTemplate: URI | undefined;
+	private _hostedSecretKey: Promise<Buffer> | undefined;
 
 	constructor(
 		private readonly _connectionToken: ServerConnectionToken,
@@ -193,6 +197,9 @@ export class WebClientServer {
 				// callback support
 				return this._handleCallback(res);
 			}
+			if (pathname === HOSTED_SECRET_KEY_PATH && this._environmentService.args['hosted-user-data']) {
+				return this._handleHostedSecretKey(req, res);
+			}
 			if (pathname.startsWith(WEB_EXTENSION_PATH) && pathname.charCodeAt(WEB_EXTENSION_PATH.length) === CharCode.Slash) {
 				// extension resource support
 				return this._handleWebExtensionResource(req, res, pathname.substring(WEB_EXTENSION_PATH.length));
@@ -206,6 +213,52 @@ export class WebClientServer {
 			return serveError(req, res, 500, 'Internal Server Error.');
 		}
 	}
+	/**
+	 * Hosted Workspace (#547): the server part of the key that encrypts the web client's
+	 * secrets file (`ServerKeyedAESCrypto`). One random key per server, kept in a file that is
+	 * not in the user data folder, so the secrets file alone cannot be opened.
+	 */
+	private async _handleHostedSecretKey(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+		if (req.method !== 'POST') {
+			return serveError(req, res, 405, 'Method Not Allowed');
+		}
+		const origin = req.headers.origin;
+		const host = req.headers['x-forwarded-host'] ?? req.headers.host;
+		if (origin && (!host || URI.parse(origin).authority !== (Array.isArray(host) ? host[0] : host))) {
+			return serveError(req, res, 403, 'Forbidden');
+		}
+
+		this._hostedSecretKey ??= this._readOrCreateHostedSecretKey();
+		let key: Buffer;
+		try {
+			key = await this._hostedSecretKey;
+		} catch (error) {
+			this._hostedSecretKey = undefined;
+			throw error;
+		}
+
+		res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store' });
+		return void res.end(key);
+	}
+
+	private async _readOrCreateHostedSecretKey(): Promise<Buffer> {
+		const keyFile = process.env['FLOWLEAP_HOSTED_SECRET_KEY_FILE'] || join(this._environmentService.userDataPath, 'hosted-secret.key');
+		try {
+			await promises.mkdir(dirname(keyFile), { recursive: true });
+			await promises.writeFile(keyFile, crypto.randomBytes(HOSTED_SECRET_KEY_LENGTH), { flag: 'wx', mode: 0o600 });
+			this._logService.info(`[WebClientServer] created the hosted secret key ${keyFile}`);
+		} catch (error) {
+			if (error?.code !== 'EEXIST') {
+				throw error;
+			}
+		}
+		const key = await promises.readFile(keyFile);
+		if (key.byteLength !== HOSTED_SECRET_KEY_LENGTH) {
+			throw new Error(`${keyFile} must hold ${HOSTED_SECRET_KEY_LENGTH} bytes`);
+		}
+		return key;
+	}
+
 	/**
 	 * Handle HTTP requests for /static/*
 	 * @param resourcePath The path after /static/
@@ -424,7 +477,11 @@ export class WebClientServer {
 			folderUri: resolveWorkspaceURI(this._environmentService.args['default-folder']),
 			workspaceUri: resolveWorkspaceURI(this._environmentService.args['default-workspace']),
 			productConfiguration,
-			callbackRoute: callbackRoute
+			callbackRoute: callbackRoute,
+			hostedUserData: this._environmentService.args['hosted-user-data'] ? {
+				userDataPath: this._environmentService.userDataPath,
+				secretKeyPath: posix.join(basePath, this._productPath, HOSTED_SECRET_KEY_PATH)
+			} : undefined
 		};
 
 		const cookies = cookie.parse(req.headers.cookie || '');

@@ -78,6 +78,7 @@ import { debugConsoleClearAll, debugConsoleEvaluationPrompt } from './debugIcons
 import './media/repl.css';
 import { ReplFilter } from './replFilter.js';
 import { ReplAccessibilityProvider, ReplDataSource, ReplDelegate, ReplEvaluationInputsRenderer, ReplEvaluationResultsRenderer, ReplGroupRenderer, ReplOutputElementRenderer, ReplRawObjectsRenderer, ReplVariablesRenderer } from './replViewer.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 const $ = dom.$;
 
@@ -1067,6 +1068,7 @@ registerAction2(class extends ViewAction<Repl> {
 	constructor() {
 		super({
 			id: 'workbench.debug.panel.action.clearReplAction',
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			viewId: REPL_VIEW_ID,
 			title: localize2('clearRepl', 'Clear Console'),
 			metadata: {

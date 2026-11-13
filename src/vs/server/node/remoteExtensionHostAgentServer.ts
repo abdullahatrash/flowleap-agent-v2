@@ -39,7 +39,7 @@ import { IServerEnvironmentService, ServerParsedArgs } from './serverEnvironment
 import { IServerLifetimeService } from './serverLifetimeService.js';
 import { getRemoteResourceResponseHeaders } from './remoteResourceResponse.js';
 import { setupServerServices, SocketServer } from './serverServices.js';
-import { CacheControl, serveError, serveFile, WebClientServer } from './webClientServer.js';
+import { CacheControl, HOSTED_SECRET_KEY_PATH, serveError, serveFile, WebClientServer } from './webClientServer.js';
 const require = createRequire(import.meta.url);
 
 function parseRequestUrl(requestUrl: string): URL | undefined {
@@ -112,9 +112,13 @@ class RemoteExtensionHostAgentServer extends Disposable implements IServerAPI {
 		this._reconnectionGraceTime = this._environmentService.reconnectionGraceTime;
 	}
 
+	private _isHostedSecretKeyRequest(req: http.IncomingMessage): boolean {
+		return req.method === 'POST' && !!this._environmentService.args['hosted-user-data'] && !!req.url && !!parseRequestUrl(req.url)?.pathname.endsWith(HOSTED_SECRET_KEY_PATH);
+	}
+
 	public async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-		// Only serve GET requests
-		if (req.method !== 'GET') {
+		// Only serve GET requests (and the POST of the Hosted Workspace secret key, #547)
+		if (req.method !== 'GET' && !this._isHostedSecretKeyRequest(req)) {
 			return serveError(req, res, 405, `Unsupported method ${req.method}`);
 		}
 

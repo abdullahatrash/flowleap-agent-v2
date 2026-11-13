@@ -82,6 +82,23 @@ suite('GlobalCompositeBar', () => {
 
 		assert.deepStrictEqual({ heights, height: bar.getHeight(28, 0), actions: bar.globalActivityActionBar.length() }, { heights: [], height: 28, actions: 1 });
 	});
+
+	test('toggles Accounts below a leading Command Palette item', () => {
+		const bar = createGlobalBar(true);
+		bar.globalActivityActionBar.push(store.add(new Action('workbench.actions.activityBarCommandPalette')), { index: 0 });
+		const ids = () => bar.globalActivityActionBar.viewItems.map(item => item.action.id);
+
+		bar.accountsVisibilityPreference = false;
+		bar.toggleAccountsActivity();
+		const hidden = ids();
+		bar.accountsVisibilityPreference = true;
+		bar.toggleAccountsActivity();
+
+		assert.deepStrictEqual({ hidden, shown: ids() }, {
+			hidden: ['workbench.actions.activityBarCommandPalette', GLOBAL_ACTIVITY_ID],
+			shown: ['workbench.actions.activityBarCommandPalette', ACCOUNTS_ACTIVITY_ID, GLOBAL_ACTIVITY_ID],
+		});
+	});
 });
 
 interface IUpdateAvatarTestHarness {
@@ -170,6 +187,23 @@ suite('AccountsActivityActionViewItem - updateAvatar', () => {
 		assert.deepStrictEqual(
 			{ src: harness.avatarImg.src, hasAvatarClass: harness.label.classList.contains('has-avatar') },
 			{ src: firstIcon.toString(true), hasAvatarClass: true }
+		);
+	});
+
+	test('prefers the FlowLeap account avatar when there is no default account, and clears it on sign-out', () => {
+		const flowLeapIcon = URI.parse('https://img.clerk.com/flowleap.png');
+		const groupedAccounts = createGroupedAccounts();
+		groupedAccounts.set('flowleap', [{ id: 'user_123', label: 'jane@flowleap.co', icon: flowLeapIcon, canSignOut: true }]);
+		const harness = createHarness(groupedAccounts, null);
+
+		updateAvatar.call(harness);
+		const signedIn = harness.avatarImg.src;
+		groupedAccounts.clear();
+		updateAvatar.call(harness);
+
+		assert.deepStrictEqual(
+			{ signedIn, signedOut: harness.avatarImg.getAttribute('src'), hasAvatarClass: harness.label.classList.contains('has-avatar') },
+			{ signedIn: flowLeapIcon.toString(true), signedOut: null, hasAvatarClass: false }
 		);
 	});
 });

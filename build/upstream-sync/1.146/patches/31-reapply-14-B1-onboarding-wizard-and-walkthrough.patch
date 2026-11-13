@@ -1,5 +1,5 @@
 diff --git a/src/vs/workbench/contrib/welcomeOnboarding/browser/media/variationA.css b/src/vs/workbench/contrib/welcomeOnboarding/browser/media/variationA.css
-index 4875126d4bb..5ce3a68d16f 100644
+index e3b521c840e..5ce3a68d16f 100644
 --- a/src/vs/workbench/contrib/welcomeOnboarding/browser/media/variationA.css
 +++ b/src/vs/workbench/contrib/welcomeOnboarding/browser/media/variationA.css
 @@ -286,12 +286,17 @@
@@ -41,7 +41,23 @@ index 4875126d4bb..5ce3a68d16f 100644
  .onboarding-a-provider-mark {
  	display: flex;
  	width: 18px;
-@@ -557,6 +571,10 @@
+@@ -545,15 +559,6 @@
+ 	background-image: url('../../../chat/browser/chatSetup/media/apple-dark.svg');
+ }
+ 
+-.monaco-workbench.hc-light .onboarding-a-provider-mark.microsoft,
+-.monaco-workbench.vs .onboarding-a-provider-mark.microsoft {
+-	background-image: url('../../../chat/browser/chatSetup/media/microsoft-light.svg');
+-}
+-
+-.onboarding-a-provider-mark.microsoft {
+-	background-image: url('../../../chat/browser/chatSetup/media/microsoft-dark.svg');
+-}
+-
+ /* Personalize step */
+ .onboarding-a-personalize {
+ 	display: flex;
+@@ -566,6 +571,10 @@
  	padding: 0;
  }
  
@@ -52,7 +68,7 @@ index 4875126d4bb..5ce3a68d16f 100644
  .onboarding-a-personalize-section {
  	display: flex;
  	flex-direction: column;
-@@ -774,6 +792,94 @@
+@@ -783,6 +792,94 @@
  	text-align: center;
  }
  
@@ -147,7 +163,7 @@ index 4875126d4bb..5ce3a68d16f 100644
  .onboarding-a-kbd {
  	display: inline-block;
  	padding: 1px 6px;
-@@ -788,6 +894,33 @@
+@@ -797,6 +894,33 @@
  	vertical-align: middle;
  }
  
@@ -181,7 +197,7 @@ index 4875126d4bb..5ce3a68d16f 100644
  /* Sign-in nudge */
  .onboarding-a-signin-nudge {
  	display: flex;
-@@ -817,6 +950,29 @@
+@@ -826,6 +950,29 @@
  	outline-offset: -2px;
  }
  
@@ -211,7 +227,7 @@ index 4875126d4bb..5ce3a68d16f 100644
  /* Sign-in icon row */
  .onboarding-a-signin-icon-row {
  	display: flex;
-@@ -902,7 +1058,8 @@
+@@ -911,7 +1058,8 @@
  	}
  
  	.onboarding-a-signin-brand-icon {
@@ -221,7 +237,7 @@ index 4875126d4bb..5ce3a68d16f 100644
  	}
  
  	.onboarding-a-signin-content {
-@@ -930,11 +1087,16 @@
+@@ -939,11 +1087,16 @@
  		grid-template-columns: repeat(2, minmax(0, 1fr));
  	}
  
@@ -239,7 +255,7 @@ index 4875126d4bb..5ce3a68d16f 100644
  		justify-content: flex-start;
  	}
  }
-@@ -945,6 +1107,373 @@
+@@ -954,6 +1107,373 @@
  	opacity: 0.7;
  }
  
@@ -614,10 +630,10 @@ index 4875126d4bb..5ce3a68d16f 100644
  	.onboarding-a-overlay,
  	.onboarding-a-card,
 diff --git a/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts b/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts
-index 0588c751c2d..8b9ce23eeb0 100644
+index 125bc26bc9e..8b9ce23eeb0 100644
 --- a/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts
 +++ b/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts
-@@ -6,46 +6,46 @@
+@@ -6,49 +6,48 @@
  import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
  import { Emitter, Event } from '../../../../base/common/event.js';
  import { $, append, addDisposableListener, EventType, clearNode, getActiveWindow } from '../../../../base/browser/dom.js';
@@ -649,6 +665,8 @@ index 0588c751c2d..8b9ce23eeb0 100644
  import { IPathService } from '../../../services/path/common/pathService.js';
  import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 -import { InstallChatEvent, InstallChatClassification, ChatSetupStrategy } from '../../chat/browser/chatSetup/chatSetup.js';
+-import { IChatMicrosoftSignInProbeService } from '../../chat/browser/chatSetup/chatSetupMicrosoftProbe.js';
+-import { autorun } from '../../../../base/common/observable.js';
  import { ICommandService } from '../../../../platform/commands/common/commands.js';
  import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 +import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -669,14 +687,15 @@ index 0588c751c2d..8b9ce23eeb0 100644
 +	roleToFirstInvestigation,
  	getOnboardingStepTitle,
  	getOnboardingStepSubtitle,
--	GHE_FULL_URI_REGEX,
--	GheParseResultKind,
--	parseGheInstanceInput,
 +	TRIAL_POLL_INTERVAL_MS,
  } from '../common/onboardingTypes.js';
  import { IOnboardingService } from '../common/onboardingService.js';
+-import { addGitHubEnterpriseUri, getConfiguredGitHubEnterpriseUris, GheParseResultKind, isValidGitHubEnterpriseUri, parseGheInstanceInput } from '../../../services/accounts/common/githubEnterprise.js';
+-import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
  
-@@ -75,10 +75,24 @@ type OnboardingActionEvent = {
+ type OnboardingStepViewClassification = {
+ 	owner: 'cwebster-99';
+@@ -76,21 +75,46 @@ type OnboardingActionEvent = {
  	argument: string | undefined;
  };
  
@@ -704,12 +723,15 @@ index 0588c751c2d..8b9ce23eeb0 100644
  
  /**
   * Variation A — Classic Wizard Modal
-@@ -87,9 +101,20 @@ const defaultChat = product.defaultChatAgent;
-  * and polished navigation. Sits on top of the agent sessions welcome
-  * tab. When dismissed, the welcome tab is revealed underneath.
+  *
+  * A centered modal overlay with progress dots, clean step transitions,
+- * and polished navigation.
++ * and polished navigation. Sits on top of the agent sessions welcome
++ * tab. When dismissed, the welcome tab is revealed underneath.
   *
 - * Steps:
-- * 1. Sign In — sessions-style sign-in hero with GitHub Copilot, Google, and Apple options
+- * 1. Sign In — sessions-style sign-in hero with GitHub Copilot, Google, and Apple options, plus
+- *    Microsoft when {@link IChatMicrosoftSignInProbeService} offers it
 - * 2. Personalize — Theme selection grid + keymap pills
 + * Steps (patent-persona funnel, issue #79): Role → See it work → Sign in → Trial → Model.
 + * 1. Role — "What brings you to FlowLeap?" persona picker (patent attorney / IP analyst /
@@ -728,7 +750,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
   */
  export class OnboardingVariationA extends Disposable implements IOnboardingService {
  
-@@ -116,7 +141,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -117,7 +141,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  	private _footerSignInBtn: HTMLButtonElement | undefined;
  
  	private currentStepIndex = 0;
@@ -737,7 +759,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  	private readonly disposables = this._register(new DisposableStore());
  	private readonly stepDisposables = this._register(new DisposableStore());
  	private previouslyFocusedElement: HTMLElement | undefined;
-@@ -128,15 +153,37 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -129,15 +153,37 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  	private selectedKeymapId = 'vscode';
  	private _detectedEditorIds: Set<string> | undefined;
  	private _userSignedIn = false;
@@ -779,10 +801,12 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		@IExtensionGalleryService private readonly extensionGalleryService: IExtensionGalleryService,
  		@IExtensionManagementService private readonly extensionManagementService: IExtensionManagementService,
  		@IConfigurationService private readonly configurationService: IConfigurationService,
-@@ -146,6 +193,10 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -147,8 +193,10 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  		@ITelemetryService private readonly telemetryService: ITelemetryService,
  		@ICommandService private readonly commandService: ICommandService,
  		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
+-		@IChatMicrosoftSignInProbeService private readonly microsoftSignInProbeService: IChatMicrosoftSignInProbeService,
+-		@IWorkspaceTrustManagementService private readonly workspaceTrustManagementService: IWorkspaceTrustManagementService,
 +		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 +		@IStorageService private readonly storageService: IStorageService,
 +		@IEditorService private readonly editorService: IEditorService,
@@ -790,7 +814,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  	) {
  		super();
  
-@@ -157,7 +208,13 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -160,7 +208,13 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  			this.selectedThemeId = matchingTheme.id;
  		}
  
@@ -805,7 +829,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		this._detectInstalledEditors().then(ids => { this._detectedEditorIds = ids; });
  	}
  
-@@ -171,6 +228,11 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -174,6 +228,11 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  		}
  
  		this._isShowing = true;
@@ -817,7 +841,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		this.previouslyFocusedElement = getActiveWindow().document.activeElement as HTMLElement | undefined;
  
  		const container = this.layoutService.activeContainer;
-@@ -227,28 +289,19 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -230,28 +289,19 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  			this._dismiss('skip');
  		}));
  		this.disposables.add(addDisposableListener(this.backButton, EventType.CLICK, () => {
@@ -852,7 +876,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		}));
  
  		this.disposables.add(addDisposableListener(this.overlay, EventType.MOUSE_DOWN, (e: MouseEvent) => {
-@@ -274,6 +327,21 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -277,6 +327,21 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  			}
  		}));
  
@@ -874,7 +898,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		// Entrance animation
  		this.overlay.classList.add('entering');
  		getActiveWindow().requestAnimationFrame(() => {
-@@ -314,12 +382,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -317,12 +382,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  	private _nextStep(): void {
  		if (this.currentStepIndex < this.steps.length - 1) {
  			const leavingStep = this.steps[this.currentStepIndex];
@@ -889,7 +913,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  			this.currentStepIndex++;
  			this._renderStep();
  			this._renderProgress();
-@@ -330,12 +395,108 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -333,12 +395,108 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  	}
  
  	/**
@@ -897,7 +921,10 @@ index 0588c751c2d..8b9ce23eeb0 100644
 -	 * by continuing to the next step or by completing the onboarding.
 +	 * Recompute the visible steps from the current sign-in state, preserving the step the user is on.
 +	 * Called at {@link show} and after a successful sign-in (which unlocks the Trial step).
-+	 */
+ 	 */
+-	private _applyStepSelections(stepId: OnboardingStepId): void {
+-		if (stepId === OnboardingStepId.Personalize) {
+-			this._applyKeymap(this.selectedKeymapId);
 +	private _recomputeSteps(): void {
 +		const currentStepId = this.steps[this.currentStepIndex];
 +		this.steps = computeVisibleSteps({ signedIn: this._userSignedIn, hasAccess: this._hasAccess });
@@ -972,10 +999,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
 +	/**
 +	 * Log the first-class skip/advance telemetry for leaving a step via the footer primary button.
 +	 * The role/theme captures and demo completion are the P1 funnel signals (issue #79).
- 	 */
--	private _applyStepSelections(stepId: OnboardingStepId): void {
--		if (stepId === OnboardingStepId.Personalize) {
--			this._applyKeymap(this.selectedKeymapId);
++	 */
 +	private _logFooterAdvance(stepId: OnboardingStepId): void {
 +		switch (stepId) {
 +			case OnboardingStepId.Role:
@@ -1003,7 +1027,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		}
  	}
  
-@@ -392,7 +553,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -395,7 +553,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  		this.titleEl.style.display = useSignInHero ? 'none' : '';
  		this.subtitleEl.style.display = useSignInHero ? 'none' : '';
  		this.titleEl.textContent = getOnboardingStepTitle(stepId);
@@ -1014,7 +1038,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  			this._renderPersonalizeSubtitle(this.subtitleEl);
  		} else {
  			this.subtitleEl.textContent = getOnboardingStepSubtitle(stepId);
-@@ -401,6 +564,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -404,6 +564,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  		clearNode(this.contentEl);
  
  		switch (stepId) {
@@ -1024,7 +1048,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  			case OnboardingStepId.SignIn:
  				this._renderSignInStep(this.contentEl);
  				break;
-@@ -410,6 +576,18 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -413,6 +576,18 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  			case OnboardingStepId.AiPreference:
  				this._renderAiPreferenceStep(this.contentEl);
  				break;
@@ -1043,7 +1067,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		}
  
  		this.bodyEl?.setAttribute('aria-label', localize(
-@@ -423,26 +601,12 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -426,26 +601,12 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  
  	private _updateButtonStates(): void {
  		if (this.backButton) {
@@ -1074,7 +1098,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		}
  		if (this.footerLeft) {
  			if (this._isLastStep()) {
-@@ -450,7 +614,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -453,7 +614,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  				if (!this._footerSignInBtn && !this._userSignedIn) {
  					this._footerSignInBtn = append(this.footerLeft, $<HTMLButtonElement>('button.onboarding-a-signin-nudge-btn'));
  					this._footerSignInBtn.type = 'button';
@@ -1083,7 +1107,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  					this.stepDisposables.add(addDisposableListener(this._footerSignInBtn, EventType.CLICK, async () => {
  						this._logAction('signInNudge');
  						await this._handleSignIn();
-@@ -468,6 +632,99 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -471,6 +632,99 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  		}
  	}
  
@@ -1183,7 +1207,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  	// =====================================================================
  	// Step: Sign In
  	// =====================================================================
-@@ -482,10 +739,10 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -485,10 +739,10 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  		const content = append(wrapper, $('.onboarding-a-signin-content'));
  		const contentMain = append(content, $('.onboarding-a-signin-content-main'));
  		const title = append(contentMain, $('h2.onboarding-a-signin-title'));
@@ -1196,7 +1220,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  
  		const actions = append(contentMain, $('.onboarding-a-signin-actions'));
  
-@@ -496,311 +753,111 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -499,333 +753,111 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  			icon.setAttribute('aria-hidden', 'true');
  			const text = append(signedIn, $('span'));
  			text.textContent = localize('onboarding.signIn.signedIn', "You're signed in. You can continue to the next step.");
@@ -1251,13 +1275,8 @@ index 0588c751c2d..8b9ce23eeb0 100644
 -		this.stepDisposables.add(addDisposableListener(googleBtn, EventType.CLICK, () => {
 -			this._logAction('signIn', undefined, 'google');
 -			this._handleSignIn('google');
-+		const signInBtn = this._registerStepFocusable(this._createSignInButton(actions));
-+		signInBtn.disabled = this._signInInFlight;
-+		this.stepDisposables.add(addDisposableListener(signInBtn, EventType.CLICK, () => {
-+			this._logAction('signIn', undefined, 'flowleap');
-+			void this._handleSignIn();
- 		}));
- 
+-		}));
+-
 -		const appleBtn = this._registerStepFocusable(this._createSignInButton(actions, 'apple', localize('onboarding.signIn.apple', "Continue with Apple"), {
 -			iconOnly: true,
 -			label: localize('onboarding.signIn.apple', "Continue with Apple")
@@ -1265,6 +1284,25 @@ index 0588c751c2d..8b9ce23eeb0 100644
 -		this.stepDisposables.add(addDisposableListener(appleBtn, EventType.CLICK, () => {
 -			this._logAction('signIn', undefined, 'apple');
 -			this._handleSignIn('apple');
++		const signInBtn = this._registerStepFocusable(this._createSignInButton(actions));
++		signInBtn.disabled = this._signInInFlight;
++		this.stepDisposables.add(addDisposableListener(signInBtn, EventType.CLICK, () => {
++			this._logAction('signIn', undefined, 'flowleap');
++			void this._handleSignIn();
+ 		}));
+ 
+-		const microsoftBtn = this._registerStepFocusable(this._createSignInButton(actions, 'microsoft', localize('onboarding.signIn.microsoft', "Continue with Microsoft"), {
+-			iconOnly: true,
+-			label: localize('onboarding.signIn.microsoft', "Continue with Microsoft")
+-		}));
+-		this.stepDisposables.add(addDisposableListener(microsoftBtn, EventType.CLICK, () => {
+-			this._logAction('signIn', undefined, 'microsoft');
+-			this._handleSignIn(defaultChat.provider.microsoft.id);
+-		}));
+-		// Only offered once a linked Microsoft account is found, which can happen while this step shows.
+-		this.microsoftSignInProbeService.notifySignInShown();
+-		this.stepDisposables.add(autorun(reader => {
+-			microsoftBtn.style.display = this.microsoftSignInProbeService.offerMicrosoftSignIn.read(reader) ? '' : 'none';
 -		}));
 -
 -		const gheBtn = this._registerStepFocusable(this._createSignInButton(actions, 'github-enterprise', localize('onboarding.signIn.ghe', "GHE"), {
@@ -1281,6 +1319,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
 -
 -	private _renderEnterpriseInstanceForm(actions: HTMLElement): void {
 -		const enterprisePromptLabel = this._getEnterpriseInstancePromptLabel();
+-		const replacedUri = getConfiguredGitHubEnterpriseUris(this.configurationService, this.workspaceTrustManagementService.isWorkspaceTrusted(), defaultChat.providerUriSetting).find(uri => !isValidGitHubEnterpriseUri(uri));
 -
 -		const container = append(actions, $('.onboarding-a-signin-ghe-input'));
 -
@@ -1307,7 +1346,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
 -				validate();
 -				return;
 -			}
--			await this._submitEnterpriseInstance(result.resolvedUri);
+-			await this._submitEnterpriseInstance(result.resolvedUri, replacedUri);
 -		};
 -		submitAction.run = submit;
 -
@@ -1336,7 +1375,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
 -				case GheParseResultKind.Invalid:
 -					inputBox.element.classList.add('error');
 -					message.classList.add('error');
--					message.textContent = localize('onboarding.signIn.enterprise.invalid', 'You must enter a valid {0} instance (i.e. "octocat" or "https://octocat.ghe.com")', defaultChat.provider.enterprise.name);
+-					message.textContent = localize('onboarding.signIn.enterprise.invalid2', "Enter a GHE.com instance name or HTTPS URL.");
 -					submitAction.enabled = false;
 -					return false;
 -			}
@@ -1397,7 +1436,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		}
  	}
  
--	private _createSignInButton(parent: HTMLElement, providerClass: 'github' | 'github-enterprise' | 'google' | 'apple', label: string, options?: { emphasized?: boolean; iconOnly?: boolean; textOnly?: boolean; label?: string }): HTMLButtonElement {
+-	private _createSignInButton(parent: HTMLElement, providerClass: 'github' | 'github-enterprise' | 'google' | 'apple' | 'microsoft', label: string, options?: { emphasized?: boolean; iconOnly?: boolean; textOnly?: boolean; label?: string }): HTMLButtonElement {
 -		const isCompact = options?.iconOnly || options?.textOnly;
 -		const btn = append(parent, $<HTMLButtonElement>(isCompact ? 'button.onboarding-a-signin-icon-btn' : 'button.onboarding-a-signin-btn'));
 +	/**
@@ -1480,11 +1519,11 @@ index 0588c751c2d..8b9ce23eeb0 100644
 -	}
 -
 -	private async _handleEnterpriseSignIn(): Promise<void> {
--		const existingUri = this.configurationService.getValue<string>(defaultChat.providerUriSetting);
--		if (typeof existingUri !== 'string' || !GHE_FULL_URI_REGEX.test(existingUri)) {
--			this.enterpriseInstanceValue = existingUri ?? '';
--			this.enterpriseSignInWatch = StopWatch.create();
--			this._setEnterpriseSignInUiState('instance');
+-		let uris: readonly string[];
+-		try {
+-			uris = getConfiguredGitHubEnterpriseUris(this.configurationService, this.workspaceTrustManagementService.isWorkspaceTrusted(), defaultChat.providerUriSetting);
+-		} catch {
+-			this._notifyEnterpriseSignInError();
 +	/**
 +	 * Drive the native FlowLeap sign-in (PRD 0002 #5) through the `flowleap.signIn` command with
 +	 * `silent:true` — a blocking overlay dims toasts, so the step renders its own inline status. On
@@ -1494,24 +1533,30 @@ index 0588c751c2d..8b9ce23eeb0 100644
 +		if (this._signInInFlight) {
  			return;
  		}
+-		const invalidUri = uris.find(uri => !isValidGitHubEnterpriseUri(uri));
+-		const hasCloudInstance = uris.some(uri => parseGheInstanceInput(uri).kind === GheParseResultKind.FullUri);
+-		if (!hasCloudInstance || invalidUri !== undefined) {
+-			this.enterpriseInstanceValue = invalidUri ?? '';
+-			this.enterpriseSignInWatch ??= StopWatch.create();
+-			this._setEnterpriseSignInUiState('instance');
+-			return;
 +		const onSignInStep = this.steps[this.currentStepIndex] === OnboardingStepId.SignIn;
 +		this._signInInFlight = true;
 +		this._signInError = undefined;
 +		if (onSignInStep) {
 +			this._renderStep();
 +			this._updateButtonStates();
-+		}
+ 		}
  
--		this.enterpriseInstanceValue = existingUri;
 -		await this._runEnterpriseSignInSetup();
 -	}
 -
--	private async _submitEnterpriseInstance(resolvedUri: string): Promise<void> {
+-	private async _submitEnterpriseInstance(resolvedUri: string, replacedUri?: string): Promise<void> {
 +		let signedIn = false;
  		try {
--			await this.configurationService.updateValue(defaultChat.providerUriSetting, resolvedUri, ConfigurationTarget.USER);
+-			await addGitHubEnterpriseUri(this.configurationService, resolvedUri, this.workspaceTrustManagementService.isWorkspaceTrusted(), defaultChat.providerUriSetting, replacedUri);
 -			this.enterpriseInstanceValue = resolvedUri;
--			await this._runEnterpriseSignInSetup();
+-			await this._handleEnterpriseSignIn();
 +			signedIn = await this.commandService.executeCommand<boolean>('flowleap.signIn', { silent: true }) === true;
  		} catch {
 -			this.enterpriseSignInWatch = undefined;
@@ -1527,13 +1572,13 @@ index 0588c751c2d..8b9ce23eeb0 100644
 -		const watch = this.enterpriseSignInWatch ?? StopWatch.create();
 -		const provider = defaultChat.provider.enterprise.id;
 -		this._setEnterpriseSignInUiState('progress');
- 
+-
 -		try {
 -			const success = await this.commandService.executeCommand<boolean>('workbench.action.chat.triggerSetup', undefined, {
 -				disableChatViewReveal: true,
 -				setupStrategy: ChatSetupStrategy.SetupWithEnterpriseProvider,
 -			});
--
+ 
 -			if (success) {
 -				this._userSignedIn = true;
 -				this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'installed', installDuration: watch.elapsed(), signUpErrorCode: undefined, provider });
@@ -1587,7 +1632,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  	}
  
  	// =====================================================================
-@@ -1109,23 +1166,467 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -1134,23 +1166,467 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  		}
  	}
  
@@ -1729,8 +1774,8 @@ index 0588c751c2d..8b9ce23eeb0 100644
 +			// The command lives in the copilot extension; if it isn't registered yet, surface an
 +			// inline hint rather than a hidden toast (the modal dims toasts).
 +			status.textContent = localize('onboarding.trial.openError', "Couldn't open checkout. Please try again.");
- 			return;
- 		}
++			return;
++		}
 +		status.textContent = localize('onboarding.trial.waiting', "Waiting for checkout to complete in your browser…");
 +		this._startTrialPoll(status);
 +	}
@@ -1771,12 +1816,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
 +				this._trialPollHandle = win.setTimeout(tick, TRIAL_POLL_INTERVAL_MS);
 +			}
 +		};
- 
--		const link = this._registerStepFocusable(append(parent, $<HTMLAnchorElement>('a.onboarding-a-inline-link')));
--		link.textContent = label;
--		link.href = href;
--		link.target = '_blank';
--		link.rel = 'noopener';
++
 +		this._trialPollHandle = win.setTimeout(tick, TRIAL_POLL_INTERVAL_MS);
 +	}
 +
@@ -1802,8 +1842,8 @@ index 0588c751c2d..8b9ce23eeb0 100644
 +	 */
 +	private _minimize(options: { restoreWhen?: () => Promise<boolean> } = {}): void {
 +		if (this._minimized || !this.overlay) {
-+			return;
-+		}
+ 			return;
+ 		}
 +		this._minimized = true;
 +		this.overlay.classList.add('minimized');
 +
@@ -1813,7 +1853,12 @@ index 0588c751c2d..8b9ce23eeb0 100644
 +				this._restore();
 +			}
 +		}));
-+
+ 
+-		const link = this._registerStepFocusable(append(parent, $<HTMLAnchorElement>('a.onboarding-a-inline-link')));
+-		link.textContent = label;
+-		link.href = href;
+-		link.target = '_blank';
+-		link.rel = 'noopener';
 +		// Optionally restore early once the action completes (e.g. a model gets connected).
 +		if (options.restoreWhen) {
 +			this._startMinimizePoll(options.restoreWhen);
@@ -2063,7 +2108,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  	}
  
  	// =====================================================================
-@@ -1247,6 +1748,19 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -1272,6 +1748,19 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  	// =====================================================================
  
  	private _removeFromDOM(): void {
@@ -2083,7 +2128,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		if (this.overlay) {
  			this.overlay.remove();
  			this.overlay = undefined;
-@@ -1266,9 +1780,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+@@ -1291,9 +1780,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
  		this._footerSignInBtn = undefined;
  		this.footerFocusableElements.length = 0;
  		this.stepFocusableElements.length = 0;
@@ -2095,7 +2140,7 @@ index 0588c751c2d..8b9ce23eeb0 100644
  		this.disposables.clear();
  		this.stepDisposables.clear();
 diff --git a/src/vs/workbench/contrib/welcomeOnboarding/common/onboardingTypes.ts b/src/vs/workbench/contrib/welcomeOnboarding/common/onboardingTypes.ts
-index abb4923ce64..c9f8ee07eeb 100644
+index 2b06b29bebf..c9f8ee07eeb 100644
 --- a/src/vs/workbench/contrib/welcomeOnboarding/common/onboardingTypes.ts
 +++ b/src/vs/workbench/contrib/welcomeOnboarding/common/onboardingTypes.ts
 @@ -4,15 +4,21 @@
@@ -2311,62 +2356,131 @@ index abb4923ce64..c9f8ee07eeb 100644
  /**
   * Theme option for the onboarding personalization step.
   * Sourced from product.json via `onboardingThemes`.
-@@ -105,6 +263,12 @@ export const ONBOARDING_AI_PREFERENCE_OPTIONS: readonly IAiPreferenceOption[] =
+@@ -104,3 +262,54 @@ export const ONBOARDING_AI_PREFERENCE_OPTIONS: readonly IAiPreferenceOption[] =
+  * Storage key for persisting onboarding completion state.
   */
  export const ONBOARDING_STORAGE_KEY = 'welcomeOnboarding.state';
- 
++
 +/**
 + * Storage key for the persisted role selection ({@link OnboardingRole}). APPLICATION scope, so the
 + * choice survives across windows and a wizard re-trigger pre-selects it.
 + */
 +export const ONBOARDING_ROLE_STORAGE_KEY = 'welcomeOnboarding.role';
 +
- /**
-  * Regex matching a single-word GHE instance slug (e.g. "octocat").
-  * Only allows characters valid in DNS hostnames (letters, digits, hyphens).
++/**
++ * Regex matching a single-word GHE instance slug (e.g. "octocat").
++ * Only allows characters valid in DNS hostnames (letters, digits, hyphens).
++ */
++export const GHE_DOMAIN_REGEX = /^[a-zA-Z0-9-]+$/;
++
++/**
++ * Regex matching a full GHE instance URI (e.g. "https://octocat.ghe.com").
++ */
++export const GHE_FULL_URI_REGEX = /^(https:\/\/)?([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.ghe\.com\/?$/;
++
++export const enum GheParseResultKind {
++	Empty = 'empty',
++	SingleWord = 'singleWord',
++	FullUri = 'fullUri',
++	Invalid = 'invalid',
++}
++
++export type GheParseResult =
++	| { readonly kind: GheParseResultKind.Empty }
++	| { readonly kind: GheParseResultKind.SingleWord; readonly resolvedUri: string }
++	| { readonly kind: GheParseResultKind.FullUri; readonly resolvedUri: string }
++	| { readonly kind: GheParseResultKind.Invalid };
++
++/**
++ * Parses a GHE instance input value and returns the result kind and resolved URI.
++ */
++export function parseGheInstanceInput(value: string): GheParseResult {
++	const trimmed = value.trim();
++	if (!trimmed) {
++		return { kind: GheParseResultKind.Empty };
++	}
++
++	if (GHE_DOMAIN_REGEX.test(trimmed)) {
++		return { kind: GheParseResultKind.SingleWord, resolvedUri: `https://${trimmed}.ghe.com` };
++	}
++
++	if (GHE_FULL_URI_REGEX.test(trimmed)) {
++		const resolvedUri = trimmed.toLowerCase().startsWith('https://') ? trimmed : `https://${trimmed}`;
++		return { kind: GheParseResultKind.FullUri, resolvedUri };
++	}
++
++	return { kind: GheParseResultKind.Invalid };
++}
 diff --git a/src/vs/workbench/contrib/welcomeOnboarding/test/browser/onboardingVariationA.test.ts b/src/vs/workbench/contrib/welcomeOnboarding/test/browser/onboardingVariationA.test.ts
-index 69cf08548e2..71a65daf331 100644
+index 00dd7c1cfc1..71a65daf331 100644
 --- a/src/vs/workbench/contrib/welcomeOnboarding/test/browser/onboardingVariationA.test.ts
 +++ b/src/vs/workbench/contrib/welcomeOnboarding/test/browser/onboardingVariationA.test.ts
-@@ -8,44 +8,35 @@ import { $ } from '../../../../../base/browser/dom.js';
+@@ -4,306 +4,39 @@
+  *--------------------------------------------------------------------------------------------*/
+ 
+ import assert from 'assert';
+-import sinon from 'sinon';
+ import { $ } from '../../../../../base/browser/dom.js';
  import { mainWindow } from '../../../../../base/browser/window.js';
+-import { DeferredPromise } from '../../../../../base/common/async.js';
  import { toDisposable } from '../../../../../base/common/lifecycle.js';
+-import { constObservable, observableValue } from '../../../../../base/common/observable.js';
  import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+-import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+-import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+-import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
 -import { IDefaultAccountService } from '../../../../../platform/defaultAccount/common/defaultAccount.js';
  import { IExtensionGalleryService, IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagement.js';
  import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+-import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
  import { ColorThemeData } from '../../../../services/themes/common/colorThemeData.js';
  import { IWorkbenchThemeService } from '../../../../services/themes/common/workbenchThemeService.js';
  import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
  import { OnboardingVariationA } from '../../browser/onboardingVariationA.js';
+-import { IChatMicrosoftSignInProbeService } from '../../../chat/browser/chatSetup/chatSetupMicrosoftProbe.js';
+-import { ChatSetupStrategy } from '../../../chat/browser/chatSetup/chatSetup.js';
+-import { gitHubEnterpriseUrisSetting } from '../../../../services/accounts/common/githubEnterprise.js';
 +import { ONBOARDING_ROLE_OPTIONS } from '../../common/onboardingTypes.js';
  
  suite('OnboardingVariationA', () => {
  	const store = ensureNoDisposablesAreLeakedInTestSuite();
+-	teardown(() => sinon.restore());
  
+-	function createOnboarding(configuration = new TestConfigurationService(), settingsUrl?: string, trusted = true, microsoftSignIn: IChatMicrosoftSignInProbeService = { _serviceBrand: undefined, offerMicrosoftSignIn: constObservable(false), notifySignInShown() { } }) {
++	test('opens on the FlowLeap Role step with no GitHub sign-in disclaimer', () => {
+ 		const container = mainWindow.document.body.appendChild($('div'));
+ 		store.add(toDisposable(() => container.remove()));
+-		store.add(configuration.onDidChangeConfigurationEmitter);
+ 		const instantiationService = workbenchInstantiationService(undefined, store);
+ 		instantiationService.stub(ILayoutService, { activeContainer: container });
+ 		instantiationService.stub(IWorkbenchThemeService, { getColorTheme: () => ColorThemeData.createLoadedEmptyTheme('test', '') });
+ 		instantiationService.stub(IExtensionGalleryService, {});
+ 		instantiationService.stub(IExtensionManagementService, {});
+-		instantiationService.stub(IDefaultAccountService, { resolveGitHubUrl: () => settingsUrl });
+-		instantiationService.stub(IConfigurationService, configuration);
+-		instantiationService.stub(IWorkspaceTrustManagementService, { isWorkspaceTrusted: () => trusted });
+-		instantiationService.stub(IChatMicrosoftSignInProbeService, microsoftSignIn);
+-		const commandInvoked = new DeferredPromise<void>();
+-		const executeCommand = sinon.stub().callsFake(async () => {
+-			await commandInvoked.complete();
+-			return false;
+-		});
+-		instantiationService.stub(ICommandService, { executeCommand });
+ 		const onboarding = store.add(instantiationService.createInstance(OnboardingVariationA));
+ 		onboarding.show();
+-		return { container, executeCommand, commandInvoked: commandInvoked.p };
+-	}
+-
+-	function clickEnterpriseSignIn(container: HTMLElement): void {
+-		const button = container.querySelector<HTMLElement>('[aria-label="Continue with GitHub Enterprise"]');
+-		assert.ok(button);
+-		button.click();
+-	}
+-
 -	for (const settingsUrl of [undefined, 'https://tenant.ghe.com/settings/copilot/features']) {
 -		test(`settings disclaimer ${settingsUrl ? 'links to the selected server' : 'has no link or focus stop when the URL is unavailable'}`, () => {
--			const container = mainWindow.document.body.appendChild($('div'));
--			store.add(toDisposable(() => container.remove()));
--			const instantiationService = workbenchInstantiationService(undefined, store);
--			instantiationService.stub(ILayoutService, { activeContainer: container });
--			instantiationService.stub(IWorkbenchThemeService, { getColorTheme: () => ColorThemeData.createLoadedEmptyTheme('test', '') });
--			instantiationService.stub(IExtensionGalleryService, {});
--			instantiationService.stub(IExtensionManagementService, {});
--			instantiationService.stub(IDefaultAccountService, { resolveGitHubUrl: () => settingsUrl });
--			const onboarding = store.add(instantiationService.createInstance(OnboardingVariationA));
--			onboarding.show();
-+	test('opens on the FlowLeap Role step with no GitHub sign-in disclaimer', () => {
-+		const container = mainWindow.document.body.appendChild($('div'));
-+		store.add(toDisposable(() => container.remove()));
-+		const instantiationService = workbenchInstantiationService(undefined, store);
-+		instantiationService.stub(ILayoutService, { activeContainer: container });
-+		instantiationService.stub(IWorkbenchThemeService, { getColorTheme: () => ColorThemeData.createLoadedEmptyTheme('test', '') });
-+		instantiationService.stub(IExtensionGalleryService, {});
-+		instantiationService.stub(IExtensionManagementService, {});
-+		const onboarding = store.add(instantiationService.createInstance(OnboardingVariationA));
-+		onboarding.show();
- 
+-			const { container } = createOnboarding(undefined, settingsUrl);
+-
 -			const disclaimer = container.querySelector('.onboarding-a-signin-disclaimer');
 -			assert.ok(disclaimer);
 -			const settingsLinks = Array.from(disclaimer.querySelectorAll('a, [tabindex]'))
@@ -2381,26 +2495,253 @@ index 69cf08548e2..71a65daf331 100644
 -				coherentText: true,
 -				settingsLinks: settingsUrl ? [{ tag: 'A', href: settingsUrl }] : [],
 -			});
+-		});
+-	}
+-
+-	test('offers Microsoft sign-in as soon as the probe service does, even while the step is showing', () => {
+-		const offered = observableValue('offerMicrosoftSignIn', false);
+-		let shown = 0;
+-		const { container } = createOnboarding(undefined, undefined, true, {
+-			_serviceBrand: undefined,
+-			offerMicrosoftSignIn: offered,
+-			notifySignInShown: () => { shown++; },
+-		});
+-		const microsoftButton = () => container.querySelector<HTMLElement>('.onboarding-a-signin-actions button[aria-label="Continue with Microsoft"]');
+-		const visibleBefore = microsoftButton()?.style.display !== 'none';
+-		offered.set(true, undefined);
+-
+-		assert.deepStrictEqual({ shown, exists: !!microsoftButton(), visibleBefore, visibleOnceOffered: microsoftButton()?.style.display !== 'none' }, {
+-			shown: 1,
+-			exists: true,
+-			visibleBefore: false,
+-			visibleOnceOffered: true,
+-		});
+-	});
+-
+-	for (const uris of [['https://a.ghe.com', 'https://b.ghe.com'], ['https://b.ghe.com', 'https://a.ghe.com']]) {
+-		test(`enterprise setup leaves host selection to authentication (${uris.join(', ')})`, async () => {
+-			const configuration = new TestConfigurationService({ [gitHubEnterpriseUrisSetting]: uris, 'github-enterprise.uri': 'https://legacy.ghe.com' });
+-			const { container, executeCommand, commandInvoked } = createOnboarding(configuration);
+-			clickEnterpriseSignIn(container);
+-			await commandInvoked;
+-			await executeCommand.firstCall.returnValue;
+-			assert.deepStrictEqual({
+-				commands: executeCommand.getCalls().map(call => call.args),
+-				hosts: configuration.getValue(gitHubEnterpriseUrisSetting),
+-				hasInstanceInput: !!container.querySelector('.onboarding-a-signin-ghe-input')
+-			}, {
+-				commands: [['workbench.action.chat.triggerSetup', undefined, { disableChatViewReveal: true, setupStrategy: ChatSetupStrategy.SetupWithEnterpriseProvider }]],
+-				hosts: uris,
+-				hasInstanceInput: false
+-			});
+-		});
+-	}
+ 
+-	test('explicit empty configuration prompts for enrollment without preselecting the deprecated host', () => {
+-		const configuration = new TestConfigurationService({ [gitHubEnterpriseUrisSetting]: [], 'github-enterprise.uri': 'https://legacy.ghe.com' });
+-		const { container, executeCommand } = createOnboarding(configuration);
+-		clickEnterpriseSignIn(container);
 +		const roleCards = Array.from(container.querySelectorAll<HTMLElement>('.onboarding-a-role-card'));
-+		assert.deepStrictEqual({
+ 		assert.deepStrictEqual({
+-			value: container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input')?.value,
+-			commands: executeCommand.getCalls()
+-		}, { value: '', commands: [] });
+-	});
+-
+-	for (const values of [
+-		{ 'github-enterprise.uri': 'not-a-url' },
+-		{ [gitHubEnterpriseUrisSetting]: ['not-a-url'] },
+-		{ [gitHubEnterpriseUrisSetting]: ['https://valid.ghe.com', 'not-a-url'] },
+-	]) {
+-		test(`corrects invalid enterprise URLs without discarding other hosts (${JSON.stringify(values)})`, async () => {
+-			const configuration = new TestConfigurationService({ ...values });
+-			sinon.stub(configuration, 'updateValue').callsFake((key, value) => configuration.setUserConfiguration(key, value));
+-			const { container, executeCommand, commandInvoked } = createOnboarding(configuration);
+-			clickEnterpriseSignIn(container);
+-			const input = container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input');
+-			assert.strictEqual(input?.value, 'not-a-url');
+-			assert.ok(input);
+-			input.value = 'https://corrected.ghe.com';
+-			input.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+-			input.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+-			await commandInvoked;
+-			await executeCommand.firstCall.returnValue;
+-			assert.deepStrictEqual({
+-				hosts: configuration.getValue(gitHubEnterpriseUrisSetting),
+-				setupCalls: executeCommand.callCount
+-			}, {
+-				hosts: [...(values[gitHubEnterpriseUrisSetting] ?? []).filter(uri => uri !== 'not-a-url'), 'https://corrected.ghe.com'],
+-				setupCalls: 1
+-			});
+-		});
+-	}
+-
+-	test('cancelling enterprise URL correction does not change the host list', () => {
+-		const hosts = ['https://valid.ghe.com', 'not-a-url'];
+-		const configuration = new TestConfigurationService({ [gitHubEnterpriseUrisSetting]: hosts });
+-		const write = sinon.stub(configuration, 'updateValue').resolves();
+-		const { container, executeCommand } = createOnboarding(configuration);
+-		clickEnterpriseSignIn(container);
+-		const input = container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input');
+-		assert.ok(input);
+-		input.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+-		assert.deepStrictEqual({
+-			hosts: configuration.getValue(gitHubEnterpriseUrisSetting),
+-			writes: write.callCount,
+-			setupCalls: executeCommand.callCount
+-		}, { hosts, writes: 0, setupCalls: 0 });
+-	});
+-
+-	test('Copilot enrollment rejects a GHES URL without changing general enterprise configuration', () => {
+-		const hosts = ['https://github.example.com', 'not-a-url'];
+-		const configuration = new TestConfigurationService({ [gitHubEnterpriseUrisSetting]: hosts });
+-		const write = sinon.stub(configuration, 'updateValue').resolves();
+-		const { container, executeCommand } = createOnboarding(configuration);
+-		clickEnterpriseSignIn(container);
+-		const input = container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input');
+-		assert.ok(input);
+-		input.value = 'https://another-server.example.com';
+-		input.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+-		input.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+-		assert.deepStrictEqual({
+-			hosts: configuration.getValue(gitHubEnterpriseUrisSetting),
+-			writes: write.callCount,
+-			setupCalls: executeCommand.callCount,
+-			message: container.querySelector('.onboarding-a-signin-ghe-message')?.textContent
+-		}, { hosts, writes: 0, setupCalls: 0, message: 'Enter a GHE.com instance name or HTTPS URL.' });
+-	});
+-
+-	test('a GHES-only configuration prompts for a cloud instance and preserves the server', async () => {
+-		const configuration = new TestConfigurationService({ [gitHubEnterpriseUrisSetting]: ['https://github.example.com/Team'] });
+-		sinon.stub(configuration, 'updateValue').callsFake((key, value) => configuration.setUserConfiguration(key, value));
+-		const { container, executeCommand, commandInvoked } = createOnboarding(configuration);
+-		clickEnterpriseSignIn(container);
+-		const input = container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input');
+-		assert.ok(input);
+-		assert.deepStrictEqual({ value: input.value, setupCalls: executeCommand.callCount }, { value: '', setupCalls: 0 });
+-		input.value = 'https://cloud.ghe.com';
+-		input.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+-		input.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+-		await commandInvoked;
+-		await executeCommand.firstCall.returnValue;
+-		assert.deepStrictEqual(configuration.getValue(gitHubEnterpriseUrisSetting), ['https://github.example.com/Team', 'https://cloud.ghe.com']);
+-	});
+-
+-	test('correction preserves hosts added while the invalid URI is being edited', async () => {
+-		const configuration = new TestConfigurationService({ [gitHubEnterpriseUrisSetting]: ['https://valid.ghe.com', 'not-a-url'] });
+-		sinon.stub(configuration, 'updateValue').callsFake((key, value) => configuration.setUserConfiguration(key, value));
+-		const { container, executeCommand, commandInvoked } = createOnboarding(configuration);
+-		clickEnterpriseSignIn(container);
+-		await configuration.setUserConfiguration(gitHubEnterpriseUrisSetting, ['https://valid.ghe.com', 'not-a-url', 'https://added.ghe.com']);
+-		const input = container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input');
+-		assert.ok(input);
+-		input.value = 'https://corrected.ghe.com';
+-		input.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+-		input.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+-		await commandInvoked;
+-		await executeCommand.firstCall.returnValue;
+-		assert.deepStrictEqual(configuration.getValue(gitHubEnterpriseUrisSetting), ['https://valid.ghe.com', 'https://added.ghe.com', 'https://corrected.ghe.com']);
+-	});
+-
+-	test('repairs each invalid URI before starting setup and focuses the next correction', async () => {
+-		const configuration = new TestConfigurationService({ [gitHubEnterpriseUrisSetting]: ['first invalid', 'second invalid'] });
+-		sinon.stub(configuration, 'updateValue').callsFake((key, value) => configuration.setUserConfiguration(key, value));
+-		const { container, executeCommand, commandInvoked } = createOnboarding(configuration);
+-		clickEnterpriseSignIn(container);
+-		const first = container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input');
+-		assert.ok(first);
+-		const nextPrompt = new DeferredPromise<void>();
+-		const observer = new mainWindow.MutationObserver(() => {
+-			if (container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input')?.value === 'second invalid') {
+-				nextPrompt.complete();
+-			}
+-		});
+-		store.add(toDisposable(() => observer.disconnect()));
+-		observer.observe(container, { childList: true, subtree: true });
+-		first.value = 'https://first.ghe.com';
+-		first.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+-		first.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+-		await nextPrompt.p;
+-		observer.disconnect();
+-		const second = container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input');
+-		assert.ok(second);
+-		assert.deepStrictEqual({ setupCalls: executeCommand.callCount, focused: mainWindow.document.activeElement === second }, { setupCalls: 0, focused: true });
+-		second.value = 'https://second.ghe.com';
+-		second.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+-		second.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+-		await commandInvoked;
+-		await executeCommand.firstCall.returnValue;
+-		assert.deepStrictEqual(configuration.getValue(gitHubEnterpriseUrisSetting), ['https://first.ghe.com', 'https://second.ghe.com']);
+-	});
+-
+-	test('enrollment preserves hosts added while the instance prompt is open', async () => {
+-		const configuration = new TestConfigurationService({ [gitHubEnterpriseUrisSetting]: [] });
+-		const update = sinon.stub(configuration, 'updateValue').callsFake((key, value) => configuration.setUserConfiguration(key, value));
+-		const { container, executeCommand, commandInvoked } = createOnboarding(configuration);
+-		clickEnterpriseSignIn(container);
+-		await configuration.setUserConfiguration(gitHubEnterpriseUrisSetting, ['https://other.ghe.com']);
+-		const input = container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input');
+-		assert.ok(input);
+-		input.value = 'chosen';
+-		input.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+-		input.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+-		await commandInvoked;
+-		await executeCommand.firstCall.returnValue;
+-		assert.deepStrictEqual({
+-			writes: update.getCalls().map(call => call.args),
+-			setupCalls: executeCommand.callCount
 +			roleCards: roleCards.map(card => card.dataset.id),
 +			githubDisclaimer: container.querySelector('.onboarding-a-signin-disclaimer') !== null,
-+		}, {
+ 		}, {
+-			writes: [[gitHubEnterpriseUrisSetting, ['https://other.ghe.com', 'https://chosen.ghe.com'], ConfigurationTarget.USER]],
+-			setupCalls: 1
 +			roleCards: ONBOARDING_ROLE_OPTIONS.map(option => option.id),
 +			githubDisclaimer: false,
  		});
--	}
-+	});
+ 	});
+-
+-	test('untrusted workspace configuration does not prompt over a legacy user host', async () => {
+-		const configuration = new TestConfigurationService({ [gitHubEnterpriseUrisSetting]: [], 'github-enterprise.uri': 'https://legacy.ghe.com' });
+-		sinon.stub(configuration, 'inspect').returns({ defaultValue: [], workspaceValue: [], value: [] });
+-		const { container, executeCommand, commandInvoked } = createOnboarding(configuration, undefined, false);
+-		clickEnterpriseSignIn(container);
+-		await commandInvoked;
+-		await executeCommand.firstCall.returnValue;
+-		assert.deepStrictEqual({
+-			setupCalls: executeCommand.callCount,
+-			hasInstanceInput: !!container.querySelector('.onboarding-a-signin-ghe-input')
+-		}, { setupCalls: 1, hasInstanceInput: false });
+-	});
+-
+-	test('untrusted enrollment writes a user host rather than the ignored workspace setting', async () => {
+-		const configuration = new TestConfigurationService({ [gitHubEnterpriseUrisSetting]: [] });
+-		sinon.stub(configuration, 'inspect').callsFake(key => ({ defaultValue: [], userValue: configuration.getValue(key), workspaceValue: [], value: configuration.getValue(key) }));
+-		const update = sinon.stub(configuration, 'updateValue').callsFake((key, value) => configuration.setUserConfiguration(key, value));
+-		const { container, executeCommand, commandInvoked } = createOnboarding(configuration, undefined, false);
+-		clickEnterpriseSignIn(container);
+-		const input = container.querySelector<HTMLInputElement>('.onboarding-a-signin-ghe-input input');
+-		assert.ok(input);
+-		input.value = 'chosen';
+-		input.dispatchEvent(new mainWindow.Event('input', { bubbles: true }));
+-		input.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+-		await commandInvoked;
+-		await executeCommand.firstCall.returnValue;
+-		assert.deepStrictEqual(update.firstCall.args, [gitHubEnterpriseUrisSetting, ['https://chosen.ghe.com'], ConfigurationTarget.USER]);
+-	});
  });
 diff --git a/src/vs/workbench/contrib/welcomeOnboarding/test/common/onboardingTypes.test.ts b/src/vs/workbench/contrib/welcomeOnboarding/test/common/onboardingTypes.test.ts
-index 94a8fdfa800..28a196474d3 100644
---- a/src/vs/workbench/contrib/welcomeOnboarding/test/common/onboardingTypes.test.ts
+new file mode 100644
+index 00000000000..28a196474d3
+--- /dev/null
 +++ b/src/vs/workbench/contrib/welcomeOnboarding/test/common/onboardingTypes.test.ts
-@@ -5,7 +5,142 @@
- 
- import assert from 'assert';
- import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
--import { GheParseResultKind, parseGheInstanceInput } from '../../common/onboardingTypes.js';
+@@ -0,0 +1,207 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import assert from 'assert';
++import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 +import {
 +	GheParseResultKind,
 +	parseGheInstanceInput,
@@ -2537,28 +2878,67 @@ index 94a8fdfa800..28a196474d3 100644
 +		assert.strictEqual(decideTrialPoll('unknown', TRIAL_POLL_TIMEOUT_MS), 'timeout');
 +	});
 +});
- 
- suite('parseGheInstanceInput', () => {
- 	ensureNoDisposablesAreLeakedInTestSuite();
-diff --git a/src/vs/workbench/workbench.common.main.ts b/src/vs/workbench/workbench.common.main.ts
-index c7f182b41f6..dbcb15ce299 100644
---- a/src/vs/workbench/workbench.common.main.ts
-+++ b/src/vs/workbench/workbench.common.main.ts
-@@ -243,6 +243,7 @@ import './contrib/imageCarousel/browser/imageCarousel.contribution.js';
- 
- // FlowLeap (Patent)
- import './contrib/patent/browser/patentAuth.contribution.js';
-+import './contrib/patent/browser/patentWalkthrough.contribution.js';
- 
- // Interactive
- import './contrib/interactive/browser/interactive.contribution.js';
-@@ -403,7 +404,8 @@ import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
- 
- // Onboarding (scenario engine)
- import './contrib/onboarding/browser/onboarding.contribution.js';
--import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
-+// FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
-+// import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
- import './contrib/codeEditor/browser/diffEditorTryout.contribution.js';
- 
- // Call Hierarchy
++
++suite('parseGheInstanceInput', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('empty input returns Empty', () => {
++		assert.deepStrictEqual(parseGheInstanceInput(''), { kind: GheParseResultKind.Empty });
++		assert.deepStrictEqual(parseGheInstanceInput('   '), { kind: GheParseResultKind.Empty });
++	});
++
++	test('single word returns SingleWord with resolved URI', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('octocat'), { kind: GheParseResultKind.SingleWord, resolvedUri: 'https://octocat.ghe.com' });
++		assert.deepStrictEqual(parseGheInstanceInput('my-org'), { kind: GheParseResultKind.SingleWord, resolvedUri: 'https://my-org.ghe.com' });
++	});
++
++	test('single word with surrounding whitespace is trimmed', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('  octocat  '), { kind: GheParseResultKind.SingleWord, resolvedUri: 'https://octocat.ghe.com' });
++	});
++
++	test('single word with numbers returns SingleWord', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('org123'), { kind: GheParseResultKind.SingleWord, resolvedUri: 'https://org123.ghe.com' });
++	});
++
++	test('single word with underscores is invalid (not valid DNS)', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('my_org'), { kind: GheParseResultKind.Invalid });
++	});
++
++	test('full URI with https prefix returns FullUri', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('https://octocat.ghe.com'), { kind: GheParseResultKind.FullUri, resolvedUri: 'https://octocat.ghe.com' });
++		assert.deepStrictEqual(parseGheInstanceInput('https://octocat.ghe.com/'), { kind: GheParseResultKind.FullUri, resolvedUri: 'https://octocat.ghe.com/' });
++	});
++
++	test('full URI without https prefix gets it prepended', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('octocat.ghe.com'), { kind: GheParseResultKind.FullUri, resolvedUri: 'https://octocat.ghe.com' });
++		assert.deepStrictEqual(parseGheInstanceInput('sub.octocat.ghe.com'), { kind: GheParseResultKind.FullUri, resolvedUri: 'https://sub.octocat.ghe.com' });
++	});
++
++	test('full URI with subdomain returns FullUri', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('https://sub.domain.ghe.com'), { kind: GheParseResultKind.FullUri, resolvedUri: 'https://sub.domain.ghe.com' });
++	});
++
++	test('invalid input returns Invalid', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('not a valid url'), { kind: GheParseResultKind.Invalid });
++		assert.deepStrictEqual(parseGheInstanceInput('https://github.com'), { kind: GheParseResultKind.Invalid });
++		assert.deepStrictEqual(parseGheInstanceInput('https://octocat.example.com'), { kind: GheParseResultKind.Invalid });
++		assert.deepStrictEqual(parseGheInstanceInput('http://octocat.ghe.com'), { kind: GheParseResultKind.Invalid });
++		assert.deepStrictEqual(parseGheInstanceInput('ftp://octocat.ghe.com'), { kind: GheParseResultKind.Invalid });
++	});
++
++	test('input with numbers in domain is valid', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('https://org123.ghe.com'), { kind: GheParseResultKind.FullUri, resolvedUri: 'https://org123.ghe.com' });
++	});
++
++	test('single word with only hyphens returns SingleWord', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('my-long-org-name'), { kind: GheParseResultKind.SingleWord, resolvedUri: 'https://my-long-org-name.ghe.com' });
++	});
++
++	test('URI with trailing slash is valid', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('https://octocat.ghe.com/'), { kind: GheParseResultKind.FullUri, resolvedUri: 'https://octocat.ghe.com/' });
++	});
++
++	test('URI with path segments is invalid', () => {
++		assert.deepStrictEqual(parseGheInstanceInput('https://octocat.ghe.com/api/v3'), { kind: GheParseResultKind.Invalid });
++	});
++});

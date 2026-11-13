@@ -1,0 +1,962 @@
+[
+ {
+  "key": "manageChat",
+  "old": "\"Manage Copilot Settings\"",
+  "new": "\"Manage FlowLeap Settings\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatActions.ts"
+ },
+ {
+  "key": "showCopilotUsageExtensions",
+  "old": "\"Show Extensions using Copilot\"",
+  "new": "\"Show Extensions using FlowLeap\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatActions.ts"
+ },
+ {
+  "key": "upgradeChat",
+  "old": "\"Upgrade GitHub Copilot Plan\"",
+  "new": "\"Upgrade FlowLeap Plan\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatActions.ts"
+ },
+ {
+  "key": "upgradeToPro",
+  "old": "\"Upgrade to GitHub Copilot Pro for:\\n- Unlimited inline suggestions\\n- Unlimited chat messages\\n- Access to premium models\"",
+  "new": "\"Upgrade to FlowLeap Pro for:\\n- Unlimited inline suggestions\\n- Unlimited chat messages\\n- Access to premium models\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatActions.ts"
+ },
+ {
+  "key": "copilotQuotaReached",
+  "old": "\"GitHub Copilot Quota Reached\"",
+  "new": "\"FlowLeap Quota Reached\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatActions.ts"
+ },
+ {
+  "key": "upgradePro",
+  "old": "\"Upgrade to GitHub Copilot Pro\"",
+  "new": "\"Upgrade to FlowLeap Pro\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatActions.ts"
+ },
+ {
+  "key": "upgradePlan",
+  "old": "\"Upgrade GitHub Copilot Plan\"",
+  "new": "\"Upgrade FlowLeap Plan\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatActions.ts"
+ },
+ {
+  "key": "chat.session.providerLabel.background",
+  "old": "\"Copilot CLI\"",
+  "new": "\"CLI Agent\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessions/agentSessions.ts"
+ },
+ {
+  "key": "chat.session.providerDescription.background",
+  "old": "\"Delegate tasks to a background agent running locally on your machine. The agent iterates via chat and works asynchronously in a Git worktree to implement changes isolated from your main workspace using the GitHub Copilot CLI.\"",
+  "new": "\"Delegate tasks to a background agent running locally on your machine. The agent iterates via chat and works asynchronously in a Git worktree to implement changes isolated from your main workspace using the CLI Agent.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessions/agentSessions.ts"
+ },
+ {
+  "key": "chat.session.providerDescription.cloud",
+  "old": "\"Delegate tasks to the GitHub Copilot coding agent. The agent iterates via chat and works asynchronously in the cloud to implement changes and pull requests as needed.\"",
+  "new": "\"Delegate tasks to the cloud coding agent. The agent iterates via chat and works asynchronously in the cloud to implement changes and pull requests as needed.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessions/agentSessions.ts"
+ },
+ {
+  "key": "chat.session.providerDescription.claude",
+  "old": "\"Delegate tasks to the Claude Agent SDK using the Claude models included in your GitHub Copilot subscription. The agent iterates via chat and works interactively to implement changes on your main workspace.\"",
+  "new": "\"Delegate tasks to the Claude Agent SDK using your configured Claude models. The agent iterates via chat and works interactively to implement changes on your main workspace.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessions/agentSessions.ts"
+ },
+ {
+  "key": "chat.session.providerDescription.growth",
+  "old": "\"Learn about Copilot features.\"",
+  "new": "\"Learn about FlowLeap features.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessions/agentSessions.ts"
+ },
+ {
+  "key": "chat.sessionType.signInHover",
+  "old": "\"[Sign in to GitHub Copilot](command:workbench.action.chat.triggerSetup) to use this agent.\"",
+  "new": "\"[Sign in to FlowLeap](command:workbench.action.chat.triggerSetup) to use this agent.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessions/sessionTypeAvailability.ts"
+ },
+ {
+  "key": "chat.sessionType.upgradeHover",
+  "old": "\"[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan) to use this agent.\"",
+  "new": "\"[Upgrade to FlowLeap Pro](command:workbench.action.chat.upgradePlan) to use this agent.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessions/sessionTypeAvailability.ts"
+ },
+ {
+  "key": "chat.sessionType.upgradeMobile",
+  "old": "\"Requires GitHub Copilot Pro\"",
+  "new": "\"Requires FlowLeap Pro\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessions/sessionTypeAvailability.ts"
+ },
+ {
+  "key": "skillsDescription",
+  "old": "\"Folders of instructions, scripts, and resources that Copilot loads when relevant to perform specialized tasks.\"",
+  "new": "\"Folders of instructions, scripts, and resources that FlowLeap loads when relevant to perform specialized tasks.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationListWidget.ts"
+ },
+ {
+  "key": "createFirstInstructions",
+  "old": "\"Add instructions to teach Copilot about your codebase\"",
+  "new": "\"Add instructions to teach FlowLeap about your codebase\"",
+  "file": "src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationListWidget.ts"
+ },
+ {
+  "key": "toolsListSubtitle",
+  "old": "\"Enable or disable the tools available to chat. Disabled tools are not advertised to the agent. Tools other than Copilot's built-in tools run on the client and require it to be connected.\"",
+  "new": "\"Enable or disable the tools available to chat. Disabled tools are not advertised to the agent. Tools other than the CLI Agent's built-in tools run on the client and require it to be connected.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/aiCustomization/toolsListWidget.ts"
+ },
+ {
+  "key": "clientToolSet.copilotCli.description",
+  "old": "\"Copilot\"",
+  "new": "\"CLI Agent\"",
+  "file": "src/vs/workbench/contrib/chat/browser/aiCustomization/toolsListWidget.ts"
+ },
+ {
+  "key": "clientToolSet.copilotCli.detail",
+  "old": "\"Built-in tools the Copilot agent runs inside its own runtime.\"",
+  "new": "\"Built-in tools the CLI Agent runs inside its own runtime.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/aiCustomization/toolsListWidget.ts"
+ },
+ {
+  "key": "chat.defaultConfiguration.settingDescription",
+  "old": "\"Controls the default configuration for new agent sessions (such as Copilot). You can still change the mode and approval behavior per session, and each session remembers what was used.\"",
+  "new": "\"Controls the default configuration for new agent sessions (such as the CLI Agent). You can still change the mode and approval behavior per session, and each session remembers what was used.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.defaultModel.description",
+  "old": "\"The default model for new chat conversations. Use \\\"auto\\\" to let Copilot pick a model, a model family name (such as \\\"opus\\\" or \\\"gemini\\\") to use the latest available model in that family, or a full model id. You can still switch the model within a conversation; each new conversation starts at this model.\"",
+  "new": "\"The default model for new chat conversations. Use \\\"auto\\\" to let FlowLeap pick a model, a model family name (such as \\\"opus\\\" or \\\"gemini\\\") to use the latest available model in that family, or a full model id. You can still switch the model within a conversation; each new conversation starts at this model.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.sessionSync.enabled",
+  "old": "\"Enable session sync to GitHub.com. When enabled, Copilot session data is synced to your GitHub account for cross-device access and richer insights. Requires `#github.copilot.chat.localIndex.enabled#` to also be enabled.\"",
+  "new": "\"Enable session sync. When enabled, FlowLeap session data is synced to your FlowLeap account for cross-device access and richer insights. Requires `#github.copilot.chat.localIndex.enabled#` to also be enabled.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.sessionSync.enabled.policy",
+  "old": "\"Enable session sync to GitHub.com for cross-device Copilot session history. When disabled by organization policy, session data is kept local only.\"",
+  "new": "\"Enable session sync for cross-device FlowLeap session history. When disabled by organization policy, session data is kept local only.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.customTerminalTool.enabled",
+  "old": "\"When enabled, Copilot SDK sessions use the Agent Host terminal tool override instead of the SDK's default terminal behavior.\"",
+  "new": "\"When enabled, agent SDK sessions use the Agent Host terminal tool override instead of the SDK's default terminal behavior.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.opus48Prompt.enabled",
+  "old": "\"When enabled, Copilot SDK sessions running a Claude Opus 4.8 model apply Opus 4.8-tuned system-prompt section overrides on top of the default system message.\"",
+  "new": "\"When enabled, agent SDK sessions running a Claude Opus 4.8 model apply Opus 4.8-tuned system-prompt section overrides on top of the default system message.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.useClaudeHooks.description",
+  "old": "\"Controls whether hooks from Claude configuration files can execute. When disabled, only Copilot-format hooks are used. Hooks are loaded from the files configured in `#chat.hookFilesLocations#`. This setting is only used by the Local agent harness.\"",
+  "new": "\"Controls whether hooks from Claude configuration files can execute. When disabled, only FlowLeap-format hooks are used. Hooks are loaded from the files configured in `#chat.hookFilesLocations#`. This setting is only used by the Local agent harness.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.disableAIFeatures",
+  "old": "\"Disable and hide built-in AI features provided by GitHub Copilot, including chat and inline suggestions.\"",
+  "new": "\"Disable and hide built-in AI features provided by FlowLeap, including chat and inline suggestions.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.titleBar.signIn.enabled",
+  "old": "\"Controls whether the Copilot Sign In button is shown in the title bar when signed out. When disabled, the Sign In affordance falls back to the status bar.\"",
+  "new": "\"Controls whether the FlowLeap Sign In button is shown in the title bar when signed out. When disabled, the Sign In affordance falls back to the status bar.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.approvedAccountOrganizations",
+  "old": "\"List of GitHub organization logins whose members are permitted to use AI features. When set to a non-empty list, AI features are disabled until the user signs into a GitHub account that belongs to one of the specified organizations and account-level policy data has been resolved. Set to '*' to allow any authenticated GitHub or GitHub Enterprise account.\"",
+  "new": "\"List of organization logins whose members are permitted to use AI features. When set to a non-empty list, AI features are disabled until the user signs into an account that belongs to one of the specified organizations and account-level policy data has been resolved. Set to '*' to allow any authenticated account.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.approvedAccountOrganizations.policy.description",
+  "old": "\"Setting this policy to a non-empty list activates the Approved Account gate: all AI features are disabled until the user signs into a GitHub account whose organizations intersect this list AND the account-side policy data has resolved. Comparison is case-insensitive. Use '*' as a wildcard to accept any signed-in GitHub or GHE account (use this for GHE deployments where the organization list is not surfaced).\"",
+  "new": "\"Setting this policy to a non-empty list activates the Approved Account gate: all AI features are disabled until the user signs into an account whose organizations intersect this list AND the account-side policy data has resolved. Comparison is case-insensitive. Use '*' as a wildcard to accept any signed-in account (use this for deployments where the organization list is not surfaced).\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.growthNotification",
+  "old": "\"Controls whether to show a growth notification in the agent sessions view to encourage new users to try Copilot.\"",
+  "new": "\"Controls whether to show a growth notification in the agent sessions view to encourage new users to try FlowLeap.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.extensionUnification.enabled",
+  "old": "\"Enables the unification of GitHub Copilot extensions. When enabled, all GitHub Copilot functionality is served from the GitHub Copilot Chat extension. When disabled, the GitHub Copilot and GitHub Copilot Chat extensions operate independently.\"",
+  "new": "\"Enables the unification of FlowLeap extensions. When enabled, all FlowLeap functionality is served from the FlowLeap Chat extension. When disabled, the FlowLeap and FlowLeap Chat extensions operate independently.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.experimental.collectInstructionsInExtension",
+  "old": "\"When enabled, automatic instruction collection (.instructions.md, agent instructions, customizations index) is performed by the GitHub Copilot Chat extension instead of the core workbench.\"",
+  "new": "\"When enabled, automatic instruction collection (.instructions.md, agent instructions, customizations index) is performed by the FlowLeap Chat extension instead of the core workbench.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chatDebug.copilotCliSessionWithId",
+  "old": "\"Copilot CLI: {0}\"",
+  "new": "\"CLI Agent: {0}\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatDebug/chatDebugHomeView.ts"
+ },
+ {
+  "key": "chatDebug.metric.copilotUsage",
+  "old": "\"Copilot Usage (AIC)\"",
+  "new": "\"FlowLeap Usage (AIC)\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatDebug/chatDebugOverviewView.ts"
+ },
+ {
+  "key": "chatFailErrorMessage",
+  "old": "\"Chat failed to load because the installed version of the Copilot Chat extension is not compatible with this version of {0}. Please ensure that the Copilot Chat extension is up to date.\"",
+  "new": "\"Chat failed to load because the installed version of the FlowLeap Chat extension is not compatible with this version of {0}. Please ensure that the FlowLeap Chat extension is up to date.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatParticipant.contribution.ts"
+ },
+ {
+  "key": "quota.blocked.managed",
+  "old": "\"Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.\"",
+  "new": "\"Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatQuotaNotification.ts"
+ },
+ {
+  "key": "enableAuthExtension",
+  "old": "\"Enabling GitHub Authentication\"",
+  "new": "\"Enabling FlowLeap Authentication\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetup.ts"
+ },
+ {
+  "key": "triggerChatSetup",
+  "old": "\"Use AI Features with Copilot for free...\"",
+  "new": "\"Use AI Features with FlowLeap for free...\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts"
+ },
+ {
+  "key": "forceSignIn",
+  "old": "\"Sign in to use GitHub Copilot\"",
+  "new": "\"Sign in to use FlowLeap\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts"
+ },
+ {
+  "key": "triggerChatSetupFromAccounts",
+  "old": "\"Sign in to use GitHub Copilot...\"",
+  "new": "\"Sign in to use FlowLeap...\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts"
+ },
+ {
+  "key": "managePlan",
+  "old": "\"Upgrade to GitHub Copilot Pro\"",
+  "new": "\"Upgrade to FlowLeap Pro\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts"
+ },
+ {
+  "key": "manageAdditionalSpend",
+  "old": "\"Manage GitHub Copilot Budget\"",
+  "new": "\"Manage FlowLeap Budget\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts"
+ },
+ {
+  "key": "growthSession.label",
+  "old": "\"Try Copilot\"",
+  "new": "\"Try FlowLeap\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupGrowthSession.ts"
+ },
+ {
+  "key": "growthSession.description",
+  "old": "\"GitHub Copilot is available. Try it for free.\"",
+  "new": "\"FlowLeap is available. Try it for free.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupGrowthSession.ts"
+ },
+ {
+  "key": "growthSession.previousRequest",
+  "old": "\"Tell me about GitHub Copilot!\"",
+  "new": "\"Tell me about FlowLeap!\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupGrowthSession.ts"
+ },
+ {
+  "key": "growthSession.previousResponse",
+  "old": "\"Welcome to GitHub Copilot, your AI coding assistant! Here are some things you can try:\\n\\n- 🐛 *\\\"Help me debug this error\\\"* — paste an error message and get a fix\\n- 🧪 *\\\"Write tests for my function\\\"* — select code and ask for unit tests\\n- 💡 *\\\"Explain this code\\\"* — highlight something unfamiliar and ask what it does\\n- 🚀 *\\\"Scaffold a REST API\\\"* — describe what you want and let Agent mode build it\\n- 🎨 *\\\"Refactor this to be more readable\\\"* — select messy code and clean it up\\n\\nType anything below to get started!\"",
+  "new": "\"Welcome to FlowLeap, your AI patent assistant! Here are some things you can try:\\n\\n- 🔍 *\\\"Run a prior-art search for my invention\\\"* — describe the invention and get relevant references\\n- 📋 *\\\"Assess the patentability of an idea\\\"* — get a novelty and non-obviousness read with citations\\n- ⚖️ *\\\"Analyze this claim against a reference\\\"* — paste a claim and a document for an element-by-element comparison\\n- 🗺️ *\\\"Map the patent landscape for a technology\\\"* — see who is filing what in your field\\n- ✍️ *\\\"Draft claims from my disclosure\\\"* — turn an invention disclosure into a first claim set\\n\\nType anything below to get started!\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupGrowthSession.ts"
+ },
+ {
+  "key": "settingUpCopilotNeeded",
+  "old": "\"You need to set up GitHub Copilot and be signed in to use Chat.\"",
+  "new": "\"You need to set up FlowLeap and be signed in to use Chat.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupProviders.ts"
+ },
+ {
+  "key": "signIn",
+  "old": "\"Sign in to use GitHub Copilot\"",
+  "new": "\"Sign in to use FlowLeap\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupRunner.ts"
+ },
+ {
+  "key": "quotaLabel",
+  "old": "\"Manage Copilot Settings\"",
+  "new": "\"Manage FlowLeap Settings\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "quotaTooltip",
+  "old": "\"Manage Copilot Settings\"",
+  "new": "\"Manage FlowLeap Settings\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "activateDescription",
+  "old": "\"Set up Copilot to use AI features.\"",
+  "new": "\"Set up FlowLeap to use AI features.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "enableMoreDescription",
+  "old": "\"Sign in to enable more Copilot AI features.\"",
+  "new": "\"Sign in to enable more FlowLeap AI features.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "enableDescription",
+  "old": "\"Enable Copilot to use AI features.\"",
+  "new": "\"Enable FlowLeap to use AI features.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "signInDescription",
+  "old": "\"Sign in to use GitHub Copilot AI features.\"",
+  "new": "\"Sign in to use FlowLeap AI features.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "signInToUseAIFeatures",
+  "old": "\"Sign in to use GitHub Copilot\"",
+  "new": "\"Sign in to use FlowLeap\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "quotaBudgetExceededEnterprise",
+  "old": "\"Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.\"",
+  "new": "\"Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "quotaAdditionalUsageActiveEnterprise",
+  "old": "\"Copilot has paused because your limits are reached. Please contact your admin to increase your limits.\"",
+  "new": "\"FlowLeap has paused because your limits are reached. Please contact your admin to increase your limits.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "quotaAdditionalUsageApproachingEnterprise",
+  "old": "\"Copilot will pause when your limits are reached. Please contact your admin to increase your limits.\"",
+  "new": "\"FlowLeap will pause when your limits are reached. Please contact your admin to increase your limits.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "quotaPausedEnterprise",
+  "old": "\"Copilot is paused until the limit resets. Contact your administrator for more information.\"",
+  "new": "\"FlowLeap is paused until the limit resets. Contact your administrator for more information.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "quotaPaused",
+  "old": "\"Copilot is paused until the limit resets.\"",
+  "new": "\"FlowLeap is paused until the limit resets.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "quotaWarningEnterprise",
+  "old": "\"Copilot will pause when the limit is reached. Contact your administrator for more information.\"",
+  "new": "\"FlowLeap will pause when the limit is reached. Contact your administrator for more information.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "quotaWarning",
+  "old": "\"Copilot will pause when the limit is reached.\"",
+  "new": "\"FlowLeap will pause when the limit is reached.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusDashboard.ts"
+ },
+ {
+  "key": "chatStatusAria",
+  "old": "\"Copilot status\"",
+  "new": "\"FlowLeap status\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts"
+ },
+ {
+  "key": "copilotDisabledStatus",
+  "old": "\"Copilot disabled\"",
+  "new": "\"FlowLeap disabled\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts"
+ },
+ {
+  "key": "chatResumedStatus",
+  "old": "\"Copilot Resumed\"",
+  "new": "\"FlowLeap Resumed\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts"
+ },
+ {
+  "key": "chatStatus",
+  "old": "\"Copilot Status\"",
+  "new": "\"FlowLeap Status\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts"
+ },
+ {
+  "key": "hookSection.default",
+  "old": "\"Local/Copilot Agents\"",
+  "new": "\"Local/CLI Agents\"",
+  "file": "src/vs/workbench/contrib/chat/browser/promptSyntax/hookActions.ts"
+ },
+ {
+  "key": "hookSection.copilotCliOnly",
+  "old": "\"Copilot Agents\"",
+  "new": "\"CLI Agents\"",
+  "file": "src/vs/workbench/contrib/chat/browser/promptSyntax/hookActions.ts"
+ },
+ {
+  "key": "runWithCodingAgent.label",
+  "old": "\"{0} Delegate to Copilot coding agent\"",
+  "new": "\"{0} Delegate to coding agent\"",
+  "file": "src/vs/workbench/contrib/chat/browser/promptSyntax/promptCodingAgentActionOverlay.ts"
+ },
+ {
+  "key": "upgradeToCopilotPro",
+  "old": "\"Upgrade to GitHub Copilot Pro\"",
+  "new": "\"Upgrade to FlowLeap Pro\"",
+  "file": "src/vs/workbench/contrib/chat/browser/widget/chatContentParts/chatQuotaExceededPart.ts"
+ },
+ {
+  "key": "chat.modelPicker.setupRequiredHover",
+  "old": "\"{0} • Sign in to GitHub Copilot to choose a model.\"",
+  "new": "\"{0} • Sign in to FlowLeap to choose a model.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem.ts"
+ },
+ {
+  "key": "chat.modelPicker.upgradeHoverProPlus",
+  "old": "\"[Upgrade to GitHub Copilot Pro+](command:workbench.action.chat.upgradePlan \\\" \\\") to use the best models.\"",
+  "new": "\"[Upgrade to FlowLeap Pro+](command:workbench.action.chat.upgradePlan \\\" \\\") to use the best models.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemPrimitives.ts"
+ },
+ {
+  "key": "chat.modelPicker.upgradeHover",
+  "old": "\"[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \\\" \\\") to use the best models.\"",
+  "new": "\"[Upgrade to FlowLeap Pro](command:workbench.action.chat.upgradePlan \\\" \\\") to use the best models.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemPrimitives.ts"
+ },
+ {
+  "key": "chat.modelPicker.setupRequired",
+  "old": "\"Sign in to use Copilot\"",
+  "new": "\"Sign in to use FlowLeap\"",
+  "file": "src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts"
+ },
+ {
+  "key": "chat.modelPicker.setupRequired.signInTooltip",
+  "old": "\"Sign in to GitHub Copilot to choose a model.\"",
+  "new": "\"Sign in to FlowLeap to choose a model.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts"
+ },
+ {
+  "key": "chat.modelPicker.setupRequired.signIn",
+  "old": "\"Sign in to use Copilot...\"",
+  "new": "\"Sign in to use FlowLeap...\"",
+  "file": "src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts"
+ },
+ {
+  "key": "chat.modelPicker.upgradeHover",
+  "old": "\"[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \\\" \\\") to use the best models.\"",
+  "new": "\"[Upgrade to FlowLeap Pro](command:workbench.action.chat.upgradePlan \\\" \\\") to use the best models.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItemSections.ts"
+ },
+ {
+  "key": "chat.modelPicker.builtInProvider",
+  "old": "\"GitHub Copilot\"",
+  "new": "\"FlowLeap\"",
+  "file": "src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerTabs.ts"
+ },
+ {
+  "key": "chat.modelPicker.ariaLabelSetupRequired",
+  "old": "\"Models, sign in to use Copilot\"",
+  "new": "\"Models, sign in to use FlowLeap\"",
+  "file": "src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts"
+ },
+ {
+  "key": "chatNonCopilotModelsAreUserSelectable",
+  "old": "\"True when a user-selectable chat model from a non-Copilot vendor is available.\"",
+  "new": "\"True when a user-selectable chat model from a non-FlowLeap vendor is available.\"",
+  "file": "src/vs/workbench/contrib/chat/common/actions/chatContextKeys.ts"
+ },
+ {
+  "key": "chatError.quota.ubb.freeDate",
+  "old": "\"You've reached your monthly credit limit. Upgrade to Copilot Pro or wait until your credits reset on {0}.\"",
+  "new": "\"You've reached your monthly credit limit. Upgrade to FlowLeap Pro or wait until your credits reset on {0}.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.ubb.free",
+  "old": "\"You've reached your monthly credit limit. Upgrade to Copilot Pro or wait for your credits to reset.\"",
+  "new": "\"You've reached your monthly credit limit. Upgrade to FlowLeap Pro or wait for your credits to reset.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.ubb.individualDate",
+  "old": "\"You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro+, or wait until your credits reset on {0}.\"",
+  "new": "\"You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro+, or wait until your credits reset on {0}.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.ubb.individual",
+  "old": "\"You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro+, or wait for your credits to reset.\"",
+  "new": "\"You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro+, or wait for your credits to reset.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.ubb.eduDate",
+  "old": "\"You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro, or wait until your credits reset on {0}.\"",
+  "new": "\"You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro, or wait until your credits reset on {0}.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.ubb.edu",
+  "old": "\"You've reached your monthly credit limit. Please enable additional paid credits, upgrade to Copilot Pro, or wait for your credits to reset.\"",
+  "new": "\"You've reached your monthly credit limit. Please enable additional paid credits, upgrade to FlowLeap Pro, or wait for your credits to reset.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.ubb.businessDate",
+  "old": "\"You've reached your credit limit. To continue working, please contact your organization's Copilot admin or wait until your credits reset on {0}.\"",
+  "new": "\"You've reached your credit limit. To continue working, please contact your organization's FlowLeap admin or wait until your credits reset on {0}.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.ubb.business",
+  "old": "\"You've reached your credit limit. To continue working, please contact your organization's Copilot admin or wait for your credits to reset.\"",
+  "new": "\"You've reached your credit limit. To continue working, please contact your organization's FlowLeap admin or wait for your credits to reset.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.ubb.defaultDate",
+  "old": "\"You've reached your credit limit. For additional paid credits, please reach out to your organization's Copilot admin or wait until your credits reset on {0}.\"",
+  "new": "\"You've reached your credit limit. For additional paid credits, please reach out to your organization's FlowLeap admin or wait until your credits reset on {0}.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.ubb.default",
+  "old": "\"You've reached your credit limit. For additional paid credits, please reach out to your organization's Copilot admin or wait for your credits to reset.\"",
+  "new": "\"You've reached your credit limit. For additional paid credits, please reach out to your organization's FlowLeap admin or wait for your credits to reset.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.free",
+  "old": "\"You've reached your monthly chat messages quota. Upgrade to Copilot Pro or wait for your allowance to renew.\"",
+  "new": "\"You've reached your monthly chat messages quota. Upgrade to FlowLeap Pro or wait for your allowance to renew.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.individual",
+  "old": "\"You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to Copilot Pro+, or wait for your allowance to renew.\"",
+  "new": "\"You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to FlowLeap Pro+, or wait for your allowance to renew.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.edu",
+  "old": "\"You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to Copilot Pro, or wait for your allowance to renew.\"",
+  "new": "\"You've exhausted your premium model quota. Please enable additional paid premium requests, upgrade to FlowLeap Pro, or wait for your allowance to renew.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.business",
+  "old": "\"You've exhausted your credits. To continue working, please contact your organization's Copilot admin or wait for your allowance to renew.\"",
+  "new": "\"You've exhausted your credits. To continue working, please contact your organization's FlowLeap admin or wait for your allowance to renew.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "chatError.quota.default",
+  "old": "\"You've exhausted your premium model quota. For additional paid premium requests, please reach out to your organization's Copilot admin or wait for your allowance to renew.\"",
+  "new": "\"You've exhausted your premium model quota. For additional paid premium requests, please reach out to your organization's FlowLeap admin or wait for your allowance to renew.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatErrorMessages.ts"
+ },
+ {
+  "key": "Language Models",
+  "old": "\"Copilot\"",
+  "new": "\"Language Models\"",
+  "file": "src/vs/workbench/contrib/chat/common/languageModelStats.ts"
+ },
+ {
+  "key": "chat.languageModelProvider.copilot",
+  "old": "\"Copilot\"",
+  "new": "\"CLI Agent\"",
+  "file": "src/vs/workbench/contrib/chat/common/languageModels.ts"
+ },
+ {
+  "key": "vscode.extension.contributes.languageModels.managementCommand",
+  "old": "\"A command to manage the language model chat provider, e.g. 'Manage Copilot models'. This is used in the chat model picker. If not provided, a gear icon is not rendered during vendor selection.\"",
+  "new": "\"A command to manage the language model chat provider, e.g. 'Manage FlowLeap models'. This is used in the chat model picker. If not provided, a gear icon is not rendered during vendor selection.\"",
+  "file": "src/vs/workbench/contrib/chat/common/languageModels.ts"
+ },
+ {
+  "key": "promptValidator.unknownAttribute.github-agent",
+  "old": "\"Attribute '{0}' is not supported in custom GitHub Copilot agent files. Supported: {1}.\"",
+  "new": "\"Attribute '{0}' is not supported in custom FlowLeap agent files. Supported: {1}.\"",
+  "file": "src/vs/workbench/contrib/chat/common/promptSyntax/languageProviders/promptValidator.ts"
+ },
+ {
+  "key": "source.githubWorkspace",
+  "old": "\"Workspace (only used by Copilot agents)\"",
+  "new": "\"Workspace (only used by FlowLeap agents)\"",
+  "file": "src/vs/workbench/contrib/chat/common/promptSyntax/promptTypes.ts"
+ },
+ {
+  "key": "source.copilotPersonal",
+  "old": "\"Global (only used by Copilot agents)\"",
+  "new": "\"Global (only used by FlowLeap agents)\"",
+  "file": "src/vs/workbench/contrib/chat/common/promptSyntax/promptTypes.ts"
+ },
+ {
+  "key": "chat.agentsHandoff.tip.emptyWorkspace.message",
+  "old": "\"Copilot isn't available without an open folder\"",
+  "new": "\"CLI Agent isn't available without an open folder\"",
+  "file": "src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts"
+ },
+ {
+  "key": "chat.agentsHandoff.tip.emptyWorkspace.description",
+  "old": "\"Open the Agents Window to start a Copilot session.\"",
+  "new": "\"Open the Agents Window to start a CLI Agent session.\"",
+  "file": "src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts"
+ },
+ {
+  "key": "chat.agentsHandoff.tip.description.copilot",
+  "old": "\"Free with your Copilot plan — get a dedicated, multi-pane view alongside your workspace.\"",
+  "new": "\"Free with your FlowLeap plan — get a dedicated, multi-pane view alongside your workspace.\"",
+  "file": "src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts"
+ },
+ {
+  "key": "models.signInGitHubCopilot",
+  "old": "\"GitHub Copilot\"",
+  "new": "\"FlowLeap\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chatManagement/chatModelsWidget.ts"
+ },
+ {
+  "key": "permissions.assisted.warning.detail",
+  "old": "\"{0} uses model recommendations to approve tool calls. Copilot will still ask when the model requires approval, excludes the request from automatic approval, or cannot make a recommendation.\\n\\nTo make this the starting permission level for new sessions, change the [{1}](command:workbench.action.openSettings?%5B%22{1}%22%5D) setting.\"",
+  "new": "\"{0} uses model recommendations to approve tool calls. FlowLeap will still ask when the model requires approval, excludes the request from automatic approval, or cannot make a recommendation.\\n\\nTo make this the starting permission level for new sessions, change the [{1}](command:workbench.action.openSettings?%5B%22{1}%22%5D) setting.\"",
+  "file": "src/vs/workbench/contrib/chat/common/chatPermissionWarnings.ts"
+ },
+ {
+  "key": "chat.editor.preferCopilotHarness",
+  "old": "\"When enabled, uses the Agent Host Copilot SDK whenever the local harness would otherwise be selected for a new editor chat session. Claude and Codex selections are unaffected.\"",
+  "new": "\"When enabled, uses the Agent Host SDK whenever the local harness would otherwise be selected for a new editor chat session. Claude and Codex selections are unaffected.\"",
+  "file": "src/vs/platform/agentHost/common/agentHostEnablementService.ts"
+ },
+ {
+  "key": "chat.editor.preferCopilotHarness.policy",
+  "old": "\"Configure whether VS Code uses the Agent Host Copilot SDK instead of the local harness for new editor chat sessions.\"",
+  "new": "\"Configure whether VS Code uses the Agent Host SDK instead of the local harness for new editor chat sessions.\"",
+  "file": "src/vs/platform/agentHost/common/agentHostEnablementService.ts"
+ },
+ {
+  "key": "chat.defaultToCopilotHarness",
+  "old": "\"When enabled, new editor and panel chat sessions default to the Agent Host Copilot SDK instead of the local harness.\"",
+  "new": "\"When enabled, new editor and panel chat sessions default to the Agent Host SDK instead of the local harness.\"",
+  "file": "src/vs/platform/agentHost/common/agentHostEnablementService.ts"
+ },
+ {
+  "key": "chat.agentHost.systemProxy.enabled",
+  "old": "\"When enabled, Copilot sessions automatically discover and use the operating system's proxy configuration when no proxy environment variable is set.\"",
+  "new": "\"When enabled, Agent Host sessions automatically discover and use the operating system's proxy configuration when no proxy environment variable is set.\"",
+  "file": "src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.copilotAgent.multiRootEnabled",
+  "old": "\"When enabled, Copilot agent-host sessions advertise support for multiple working directories, so a session created in a multi-root workspace can span every workspace folder. Experimental; newly created sessions pick up a change without restarting the agent host.\"",
+  "new": "\"When enabled, agent-host sessions advertise support for multiple working directories, so a session created in a multi-root workspace can span every workspace folder. Experimental; newly created sessions pick up a change without restarting the agent host.\"",
+  "file": "src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts"
+ },
+ {
+  "key": "copilotAccountSectionLabel",
+  "old": "\"Copilot account\"",
+  "new": "\"Account\"",
+  "file": "src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts"
+ },
+ {
+  "key": "manageCopilotModels",
+  "old": "\"Manage Copilot Models\"",
+  "new": "\"Manage Models\"",
+  "file": "src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts"
+ },
+ {
+  "key": "openCopilotAgentCustomizations",
+  "old": "\"Agent Customizations for Copilot\"",
+  "new": "\"Agent Customizations\"",
+  "file": "src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts"
+ },
+ {
+  "key": "sessionsChat.harnessSwitchFeedbackSurvey",
+  "old": "\"After you switch from Copilot to Local, a two-step feedback survey may appear above the chat input. Use Shift+Tab to reach it. In the first step, use Up and Down Arrow to choose why you switched, then press Enter or Space. In the second step, enter any optional feedback and use Tab to reach Submit. Dismiss Survey or Escape closes the survey. After submission, the questions are replaced above the input by a message that your feedback was recorded. Use Dismiss Feedback Acknowledgement or Escape to close it.\"",
+  "new": "\"After you switch from the agent host to Local, a two-step feedback survey may appear above the chat input. Use Shift+Tab to reach it. In the first step, use Up and Down Arrow to choose why you switched, then press Enter or Space. In the second step, enter any optional feedback and use Tab to reach Submit. Dismiss Survey or Escape closes the survey. After submission, the questions are replaced above the input by a message that your feedback was recorded. Use Dismiss Feedback Acknowledgement or Escape to close it.\"",
+  "file": "src/vs/sessions/contrib/chat/browser/sessionsChatAccessibilityHelp.ts"
+ },
+ {
+  "key": "chat.copilotHarnessIntroduction",
+  "old": "\"Depending on the active experiment, a new Copilot harness chat may show an introduction to the new Copilot experience when the session starts or after the first request is submitted. Once shown, sending messages does not dismiss it. Use Tab to reach let us know, Learn More, Got it!, or Not Helpful. Learn More opens documentation without hiding the introduction. Got it! and Not Helpful turn off future introductions.\"",
+  "new": "\"Depending on the active experiment, a new agent harness chat may show an introduction to the new agent experience when the session starts or after the first request is submitted. Once shown, sending messages does not dismiss it. Use Tab to reach let us know, Learn More, Got it!, or Not Helpful. Learn More opens documentation without hiding the introduction. Got it! and Not Helpful turn off future introductions.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatAccessibilityHelp.ts"
+ },
+ {
+  "key": "chat.harnessSwitchFeedbackSurvey",
+  "old": "\"After you switch from Copilot to Local, a two-step feedback survey may appear above the chat input. Use Shift+Tab to reach it. In the first step, use Up and Down Arrow to choose why you switched, then press Enter or Space. In the second step, enter any optional feedback and use Tab to reach Submit. Dismiss Survey or Escape closes the survey. After submission, the questions are replaced above the input by a message that your feedback was recorded. Use Dismiss Feedback Acknowledgement or Escape to close it.\"",
+  "new": "\"After you switch from the agent host to Local, a two-step feedback survey may appear above the chat input. Use Shift+Tab to reach it. In the first step, use Up and Down Arrow to choose why you switched, then press Enter or Space. In the second step, enter any optional feedback and use Tab to reach Submit. Dismiss Survey or Escape closes the survey. After submission, the questions are replaced above the input by a message that your feedback was recorded. Use Dismiss Feedback Acknowledgement or Escape to close it.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatAccessibilityHelp.ts"
+ },
+ {
+  "key": "chat.modelPicker.autoMode",
+  "old": "\"In the tabbed model picker, the active Copilot tab has an Auto switch beside the provider name. The provider button and switch are separate keyboard targets. Turning Auto on replaces Copilot's individual models with automatic routing choices; provider tabs and search remain available. Turn Auto off to restore the previous manual Copilot model. The switch is disabled when no individual Copilot model is available. Browsing another provider does not change the selected model.\"",
+  "new": "\"In the tabbed model picker, the active provider tab has an Auto switch beside the provider name. The provider button and switch are separate keyboard targets. Turning Auto on replaces Copilot's individual models with automatic routing choices; provider tabs and search remain available. Turn Auto off to restore the previous manual Copilot model. The switch is disabled when no individual Copilot model is available. Browsing another provider does not change the selected model.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatAccessibilityHelp.ts"
+ },
+ {
+  "key": "chat.agentHostSandboxPolicy",
+  "old": "\"In Copilot agent-host sessions, use /sandbox-policy to view the effective sandbox policy. In the response, use Tab to focus Open Sandbox Policy and Enter to open the formatted report.\"",
+  "new": "\"In agent-host sessions, use /sandbox-policy to view the effective sandbox policy. In the response, use Tab to focus Open Sandbox Policy and Enter to open the formatted report.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/actions/chatAccessibilityHelp.ts"
+ },
+ {
+  "key": "chat.copilotHarnessIntroduction.off",
+  "old": "\"Do not show the Copilot harness introduction.\"",
+  "new": "\"Do not show the agent harness introduction.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessionsConfiguration.ts"
+ },
+ {
+  "key": "chat.copilotHarnessIntroduction.newSession",
+  "old": "\"Show the introduction when a new Copilot harness session starts.\"",
+  "new": "\"Show the introduction when a new agent harness session starts.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessionsConfiguration.ts"
+ },
+ {
+  "key": "chat.copilotHarnessIntroduction.afterRequest",
+  "old": "\"Show the introduction after the first request is submitted in a new Copilot harness session.\"",
+  "new": "\"Show the introduction after the first request is submitted in a new agent harness session.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessionsConfiguration.ts"
+ },
+ {
+  "key": "chat.copilotHarnessIntroduction.mode",
+  "old": "\"Controls when the introduction to the new Copilot experience is shown.\"",
+  "new": "\"Controls when the introduction to the new agent experience is shown.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessionsConfiguration.ts"
+ },
+ {
+  "key": "chat.harnessSwitchFeedbackSurvey.enabled",
+  "old": "\"Show a one-time feedback survey after switching from Copilot to Local.\"",
+  "new": "\"Show a one-time feedback survey after switching from the agent host to Local.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/agentSessionsConfiguration.ts"
+ },
+ {
+  "key": "chat.experimentalModePermissionsPicker",
+  "old": "\"Shows mode and permissions in a combined picker with expandable permission choices for Copilot Agent Host sessions.\"",
+  "new": "\"Shows mode and permissions in a combined picker with expandable permission choices for Agent Host sessions.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "dictation.experimental.llmCleanup",
+  "old": "\"Experimental: when dictation ends, the final transcript is passed through a small language model to restore punctuation, capitalization, paragraphs, and lists. Requires Copilot to be enabled; the transcript is sent to the language model for cleanup. Falls back to the raw transcript when no model is available. Use [dictation instructions](command:{0}) to customize terminology and formatting.\"",
+  "new": "\"Experimental: when dictation ends, the final transcript is passed through a small language model to restore punctuation, capitalization, paragraphs, and lists. Requires AI features to be enabled; the transcript is sent to the language model for cleanup. Falls back to the raw transcript when no model is available. Use [dictation instructions](command:{0}) to customize terminology and formatting.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentSessions.migrateLegacyCopilotCli",
+  "old": "\"Controls whether legacy extension host Copilot CLI chat sessions are migrated in place to the Agent host when opened, so their history becomes editable. When disabled, legacy sessions open as before.\\n\\nChanging this setting requires a restart to take effect.\"",
+  "new": "\"Controls whether legacy extension host CLI Agent chat sessions are migrated in place to the Agent host when opened, so their history becomes editable. When disabled, legacy sessions open as before.\\n\\nChanging this setting requires a restart to take effect.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.implicitContext.includeActiveEditor",
+  "old": "\"When enabled, the active editor is automatically forwarded as context, even when it would otherwise only be suggested. Selections and explicitly attached files are always included regardless of this setting.\\n\\nNote: this setting currently only applies to Agent Host sessions (such as Copilot).\"",
+  "new": "\"When enabled, the active editor is automatically forwarded as context, even when it would otherwise only be suggested. Selections and explicitly attached files are always included regardless of this setting.\\n\\nNote: this setting currently only applies to Agent Host sessions.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.experimental.permissionsSandboxToggle.enabled",
+  "old": "\"Controls whether the permissions picker shows a \\\"Sandboxing for terminal\\\" toggle. Local sessions show it on the Default permissions option. Local and remote Copilot Agent Host sessions show it as a session-specific setting that applies to every permission mode; changing it saves the choice only for that session. New Copilot Agent Host sessions initially follow `#chat.agent.sandbox.enabled#` or `#chat.agent.sandbox.enabledWindows#` based on the host's operating system, for both the SDK's built-in shell tool and the Agent Host terminal tool.\"",
+  "new": "\"Controls whether the permissions picker shows a \\\"Sandboxing for terminal\\\" toggle. Local sessions show it on the Default permissions option. Local and remote Agent Host sessions show it as a session-specific setting that applies to every permission mode; changing it saves the choice only for that session. New Agent Host sessions initially follow `#chat.agent.sandbox.enabled#` or `#chat.agent.sandbox.enabledWindows#` based on the host's operating system, for both the SDK's built-in shell tool and the Agent Host terminal tool.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.customTerminalTool.enabled.policy",
+  "old": "\"Enable the Agent Host custom terminal tool override for Copilot SDK sessions.\"",
+  "new": "\"Enable the Agent Host custom terminal tool override for agent SDK sessions.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.shellTool.initScript.enabled",
+  "old": "\"When enabled, Copilot SDK sessions load your shell profile (`~/.bashrc` on macOS and Linux, PowerShell profiles on Windows) and activate the Python environment selected for the workspace before each shell command. Python activation requires the Python Environments extension with `#python-envs.terminal.autoActivationType#` set to `shellStartup`. Local windows only.\"",
+  "new": "\"When enabled, agent SDK sessions load your shell profile (`~/.bashrc` on macOS and Linux, PowerShell profiles on Windows) and activate the Python environment selected for the workspace before each shell command. Python activation requires the Python Environments extension with `#python-envs.terminal.autoActivationType#` set to `shellStartup`. Local windows only.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.copilotSdk.logLevel.info",
+  "old": "\"Log informational messages. Running VS Code with trace logging still enables all Copilot SDK runtime diagnostics.\"",
+  "new": "\"Log informational messages. Running VS Code with trace logging still enables all agent SDK runtime diagnostics.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.copilotSdk.logLevel.trace",
+  "old": "\"Log all Copilot SDK runtime diagnostics.\"",
+  "new": "\"Log all agent SDK runtime diagnostics.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.copilotSdk.logLevel",
+  "old": "\"Controls the log level for the Copilot SDK runtime used by the local agent host. Changing this setting restarts the Copilot SDK client; active sessions are reloaded when next used.\"",
+  "new": "\"Controls the log level for the agent SDK runtime used by the local agent host. Changing this setting restarts the agent SDK client; active sessions are reloaded when next used.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.copilot.runtimePath",
+  "old": "\"Absolute path to a local `copilot-runtime` executable. The bundled Copilot SDK wrapper remains in use. Empty uses the bundled runtime. Changing this setting restarts the Copilot SDK client after active turns finish.\"",
+  "new": "\"Absolute path to a local `copilot-runtime` executable. The bundled agent SDK wrapper remains in use. Empty uses the bundled runtime. Changing this setting restarts the agent SDK client after active turns finish.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.copilot.claudeAdvisor.enabled",
+  "old": "\"When enabled, Copilot Agent Host sessions using a supported Claude model can call the provider-native Advisor tool. Changing this setting restarts the Copilot SDK client after active turns finish.\"",
+  "new": "\"When enabled, Agent Host sessions using a supported Claude model can call the provider-native Advisor tool. Changing this setting restarts the agent SDK client after active turns finish.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.copilot.tgrep.enabled",
+  "old": "\"When enabled, local Copilot Agent Host sessions force-enable tgrep indexed search, bypassing the repository-size threshold. Requires a local Git repository on a non-virtual filesystem. Changing this setting restarts the Copilot SDK client after active turns finish.\"",
+  "new": "\"When enabled, local Agent Host sessions force-enable tgrep indexed search, bypassing the repository-size threshold. Requires a local Git repository on a non-virtual filesystem. Changing this setting restarts the agent SDK client after active turns finish.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.copilot.mapLegacySettingsToManagedSettings",
+  "old": "\"When enabled, maps supported legacy VS Code settings to equivalent Copilot SDK managed settings for local Agent Host sessions. Only restrictions are mapped, and only from globally-scoped values — workspace and folder values are ignored. Applies to local sessions using the Copilot agent; remote hosts and other agents are unaffected. This compatibility bridge is temporary and is not used for new settings.\"",
+  "new": "\"When enabled, maps supported legacy VS Code settings to equivalent agent SDK managed settings for local Agent Host sessions. Only restrictions are mapped, and only from globally-scoped values — workspace and folder values are ignored. Applies to local Agent Host sessions; remote hosts and other agents are unaffected. This compatibility bridge is temporary and is not used for new settings.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.copilot.toolSearch.enabled",
+  "old": "\"When enabled, Copilot SDK sessions defer MCP and non-core VS Code tools behind a tool-search tool so the model discovers them on demand instead of loading every tool definition up front.\"",
+  "new": "\"When enabled, agent SDK sessions defer MCP and non-core VS Code tools behind a tool-search tool so the model discovers them on demand instead of loading every tool definition up front.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.copilot.skillCharBudget",
+  "old": "\"Maximum number of characters available for skill descriptions in the Copilot SDK system message.\"",
+  "new": "\"Maximum number of characters available for skill descriptions in the agent SDK system message.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.copilot.semanticSearch.enabled",
+  "old": "\"Controls whether Copilot Agent Host sessions can use VS Code's semantic workspace search. When disabled, semantic search is unavailable.\"",
+  "new": "\"Controls whether Agent Host sessions can use VS Code's semantic workspace search. When disabled, semantic search is unavailable.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.copilot.hydraFusion.enabled",
+  "old": "\"When enabled, makes the experimental HydraFusion model available to local Copilot Agent Host sessions. Changing this setting restarts the local Copilot runtime.\"",
+  "new": "\"When enabled, makes the experimental HydraFusion model available to local Agent Host sessions. Changing this setting restarts the local agent runtime.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.copilot.autoModeTierOverride",
+  "old": "\"Override Auto's \\\"Optimize for\\\" preference for evals and debugging. Accepts `efficiency`, `balance`, or `intelligence` in both Copilot Chat and Copilot SDK sessions; `fast` is extension-only. Set to `null` to clear.\"",
+  "new": "\"Override Auto's \\\"Optimize for\\\" preference for evals and debugging. Accepts `efficiency`, `balance`, or `intelligence` in both Copilot Chat and agent SDK sessions; `fast` is extension-only. Set to `null` to clear.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.copilot.modelCapabilityOverrides",
+  "old": "\"Per-model overrides for Copilot Agent Host sessions. Use `*` to match every model. Supports model family, reasoning effort, tool filters, model capabilities, and YAML prompt overrides.\"",
+  "new": "\"Per-model overrides for Agent Host sessions. Use `*` to match every model. Supports model family, reasoning effort, tool filters, model capabilities, and YAML prompt overrides.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.copilot.modelCapabilityOverrides.availableTools",
+  "old": "\"When set, only matching tools are available to sessions on this model. Patterns: bare tool names, `builtin:*` or `builtin:<name>` (Copilot runtime tools), `mcp:*` or `mcp:<name>` (MCP server tools), and `custom:*` or `custom:<name>` (every tool VS Code registers with the SDK, including the agent host's own terminal tools); a bare `*` expands to all three sources.\"",
+  "new": "\"When set, only matching tools are available to sessions on this model. Patterns: bare tool names, `builtin:*` or `builtin:<name>` (agent runtime tools), `mcp:*` or `mcp:<name>` (MCP server tools), and `custom:*` or `custom:<name>` (every tool VS Code registers with the SDK, including the agent host's own terminal tools); a bare `*` expands to all three sources.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.copilot.modelCapabilityOverrides.modelCapabilities",
+  "old": "\"Per-property model capability overrides passed through to the Copilot SDK's `modelCapabilities` session field (e.g. `{ \\\"supports\\\": { \\\"vision\\\": false }, \\\"limits\\\": { \\\"max_context_window_tokens\\\": 64000 } }`), deep-merged over the runtime's resolved defaults for this model. Applied when the session launches or resumes.\"",
+  "new": "\"Per-property model capability overrides passed through to the agent SDK's `modelCapabilities` session field (e.g. `{ \\\"supports\\\": { \\\"vision\\\": false }, \\\"limits\\\": { \\\"max_context_window_tokens\\\": 64000 } }`), deep-merged over the runtime's resolved defaults for this model. Applied when the session launches or resumes.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.allowSignedOutWhenUsable",
+  "old": "\"When enabled, Agent Host sessions remain available while signed out. The Agents window opens without forcing GitHub sign-in, and editor chat lets you select the Copilot harness. Agents usable without GitHub (for example Codex with ChatGPT authentication or Claude in native mode with your own Anthropic credentials) work while signed out; agents that require GitHub prompt you to add a model or sign in. When disabled (the default), GitHub sign-in is required before the Agents window opens.\"",
+  "new": "\"When enabled, Agent Host sessions remain available while signed out. The Agents window opens without forcing GitHub sign-in, and editor chat lets you select the Agent Host harness. Agents usable without GitHub (for example Codex with ChatGPT authentication or Claude in native mode with your own Anthropic credentials) work while signed out; agents that require GitHub prompt you to add a model or sign in. When disabled (the default), GitHub sign-in is required before the Agents window opens.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.sdkSandbox.enabled.description",
+  "old": "\"Deprecated sandbox mode for the Copilot SDK's built-in shell tool on macOS and Linux.\"",
+  "new": "\"Deprecated sandbox mode for the agent SDK's built-in shell tool on macOS and Linux.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.agentHost.sdkSandbox.enabledWindows.description",
+  "old": "\"Deprecated sandbox mode for the Copilot SDK's built-in shell tool on Windows.\"",
+  "new": "\"Deprecated sandbox mode for the agent SDK's built-in shell tool on Windows.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.byokUtilityModelDefault.copilot.label",
+  "old": "\"GitHub Copilot\"",
+  "new": "\"Default\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.byokUtilityModelDefault.copilot.description",
+  "old": "\"Use the default GitHub Copilot utility models.\"",
+  "new": "\"Use the default utility models.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.closedPromoNotification.copilotIconPopup.label",
+  "old": "\"Copilot Icon Popup\"",
+  "new": "\"FlowLeap Icon Popup\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.closedPromoNotification.none.description",
+  "old": "\"Do not show a promo on the Copilot icon when Chat is closed.\"",
+  "new": "\"Do not show a promo on the FlowLeap icon when Chat is closed.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.closedPromoNotification.copilotIconPopup.description",
+  "old": "\"Show a promo tooltip when hovering or clicking the Copilot status icon while Chat is closed. Viewing the offer clears its indicator; the offer remains available for the current window session. Choosing Try dismisses the offer and its chat banner.\"",
+  "new": "\"Show a promo tooltip when hovering or clicking the FlowLeap status icon while Chat is closed. Viewing the offer clears its indicator; the offer remains available for the current window session. Choosing Try dismisses the offer and its chat banner.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.closedPromoNotification",
+  "old": "\"Controls whether a live model promo is shown on the Copilot icon when Chat is closed. When explicitly set, this overrides the experiment without an experiment lookup. Otherwise, eligible promos use the experiment treatment.\"",
+  "new": "\"Controls whether a live model promo is shown on the FlowLeap icon when Chat is closed. When explicitly set, this overrides the experiment without an experiment lookup. Otherwise, eligible promos use the experiment treatment.\"",
+  "file": "src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts"
+ },
+ {
+  "key": "chat.resetCopilotHarnessIntroduction",
+  "old": "\"Reset Copilot Harness Introduction\"",
+  "new": "\"Reset Agent Harness Introduction\"",
+  "file": "src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts"
+ },
+ {
+  "key": "inlineChatReadonly",
+  "old": "\"Editor is read-only while Copilot is editing this file.\"",
+  "new": "\"Editor is read-only while FlowLeap is editing this file.\"",
+  "file": "src/vs/workbench/contrib/inlineChat/browser/inlineChatEditReviewSession.ts"
+ },
+ {
+  "key": "mcp.generation.formatMismatch",
+  "old": "\"The MCP setup extension returned an unexpected configuration format. Update the Copilot extension and try again.\"",
+  "new": "\"The MCP setup extension returned an unexpected configuration format. Update the FlowLeap extension and try again.\"",
+  "file": "src/vs/workbench/contrib/mcp/common/mcpConfigurationGeneration.ts"
+ }
+]

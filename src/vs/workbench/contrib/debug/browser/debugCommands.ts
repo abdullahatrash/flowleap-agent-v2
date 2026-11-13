@@ -42,6 +42,7 @@ import { saveAllBeforeDebugStart, resolveChildSession } from '../common/debugUti
 import { showLoadedScriptMenu } from '../common/loadedScriptsPicker.js';
 import { openBreakpointSource } from './breakpointsView.js';
 import { showDebugSessionMenu } from './debugSessionPicker.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 export const ADD_CONFIGURATION_ID = 'debug.addConfiguration';
 export const COPY_ADDRESS_ID = 'editor.debug.action.copyAddress';
@@ -988,6 +989,7 @@ registerAction2(class AddConfigurationAction extends Action2 {
 	constructor() {
 		super({
 			id: ADD_CONFIGURATION_ID,
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: nls.localize2('addConfiguration', "Add Configuration..."),
 			category: DEBUG_COMMAND_CATEGORY,
 			f1: true,
@@ -1084,7 +1086,7 @@ registerAction2(class ToggleExceptionBreakpointsAction extends Action2 {
 			title: nls.localize2('toggleExceptionBreakpoints', "Toggle Exception Breakpoints"),
 			category: DEBUG_COMMAND_CATEGORY,
 			f1: true,
-			precondition: CONTEXT_DEBUGGERS_AVAILABLE
+			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated())
 		});
 	}
 

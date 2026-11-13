@@ -21,7 +21,6 @@ packages:
   - markdown-language-features/test-workspace/checkbox-count-extension
   - markdown-math
   - markdown-pdf
-  - media-preview
   - merge-conflict
   - mermaid-markdown-features
   - notebook-renderers

@@ -9,7 +9,7 @@ import { BaseActionViewItem } from '../../../../base/browser/ui/actionbar/action
 import { renderIcon } from '../../../../base/browser/ui/iconLabel/iconLabels.js';
 import { KeybindingLabel } from '../../../../base/browser/ui/keybindingLabel/keybindingLabel.js';
 import { Action, IAction } from '../../../../base/common/actions.js';
-import { coalesce, shuffle } from '../../../../base/common/arrays.js';
+import { shuffle } from '../../../../base/common/arrays.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ResolvedKeybinding } from '../../../../base/common/keybindings.js';
@@ -41,19 +41,21 @@ interface WatermarkEntry {
 	};
 }
 
-const showChatContextKey = ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false));
-
+// FlowLeap Patent IDE: AI-first watermark entries (Open Chat is always offered)
 const openChat: WatermarkEntry = {
 	text: localize('watermark.openChat', "Open Chat"), id: 'workbench.action.chat.open',
-	icon: registerIcon('watermark-chat', Codicon.chatSparkle, localize('watermark.chatIcon', "Icon for opening chat in the editor watermark.")),
-	when: { native: showChatContextKey, web: showChatContextKey }
+	icon: registerIcon('watermark-chat', Codicon.chatSparkle, localize('watermark.chatIcon', "Icon for opening chat in the editor watermark."))
+};
+const showExplorer: WatermarkEntry = {
+	text: localize('watermark.showFiles', "Show Files"), id: 'workbench.view.explorer',
+	icon: registerIcon('watermark-explorer', Codicon.files, localize('watermark.explorerIcon', "Icon for showing the Explorer in the editor watermark."))
 };
 const showCommands: WatermarkEntry = {
 	text: localize('watermark.showCommands', "Show All Commands"), id: 'workbench.action.showCommands',
 	icon: registerIcon('watermark-commands', Codicon.listSelection, localize('watermark.commandsIcon', "Icon for showing all commands in the editor watermark."))
 };
 const gotoFile: WatermarkEntry = {
-	text: localize('watermark.quickAccess', "Go to File"), id: 'workbench.action.quickOpen',
+	text: localize('watermark.searchFiles', "Search Files"), id: 'workbench.action.quickOpen',
 	icon: registerIcon('watermark-quick-open', Codicon.goToFile, localize('watermark.quickOpenIcon', "Icon for going to a file in the editor watermark."))
 };
 const openFile: WatermarkEntry = {
@@ -95,25 +97,24 @@ const openSettings: WatermarkEntry = {
 	icon: registerIcon('watermark-settings', Codicon.settings, localize('watermark.settingsIcon', "Icon for opening settings in the editor watermark."))
 };
 
-const baseEntries: WatermarkEntry[] = [
+const emptyWindowEntries: WatermarkEntry[] = [
 	openChat,
+	openRecent,
+	showExplorer,
+	gotoFile,
+];
+
+const workspaceEntries: WatermarkEntry[] = [
+	openChat,
+	showExplorer,
+	gotoFile,
+	findInFiles,
 	showCommands,
 ];
 
-const emptyWindowEntries: WatermarkEntry[] = coalesce([
-	...baseEntries,
-	openRecent,
-	...(isMacintosh && !isWeb ? [openFileOrFolder] : [openFile, openFolder]),
-	isMacintosh && !isWeb ? newUntitledFile : undefined, // fill in one more on macOS to get to 5 entries
-]);
-
-const workspaceEntries: WatermarkEntry[] = [
-	...baseEntries,
-];
-
 const otherEntries: WatermarkEntry[] = [
-	gotoFile,
-	findInFiles,
+	...(isMacintosh && !isWeb ? [openFileOrFolder] : [openFile, openFolder]),
+	newUntitledFile,
 	startDebugging,
 	toggleTerminal,
 	openSettings,
@@ -264,12 +265,10 @@ export class EditorGroupWatermark extends Disposable {
 			clearNode(box);
 			this.shortcutDisposables.clear();
 
-			const shortcuts = new Map<string, { entry: WatermarkEntry; keybinding: ResolvedKeybinding }>();
+			const shortcuts = new Map<string, { entry: WatermarkEntry; keybinding: ResolvedKeybinding | undefined }>();
 			for (const entry of entries) {
-				const keybinding = this.keybindingService.lookupKeybinding(entry.id);
-				if (keybinding) {
-					shortcuts.set(entry.id, { entry, keybinding });
-				}
+				// FlowLeap: show the entry even when the command has no keybinding
+				shortcuts.set(entry.id, { entry, keybinding: this.keybindingService.lookupKeybinding(entry.id) });
 			}
 
 			const actionBar = this.shortcutDisposables.add(new ActionBar(box, {
@@ -307,8 +306,7 @@ export class EditorGroupWatermark extends Disposable {
 				this.renderedWhenResults.set(entry.id, matches);
 				return matches;
 			})
-			.filter(entry => !!CommandsRegistry.getCommand(entry.id))
-			.filter(entry => !!this.keybindingService.lookupKeybinding(entry.id));
+			.filter(entry => !!CommandsRegistry.getCommand(entry.id)); // no keybinding filter: show commands even without keybindings (FlowLeap)
 
 		return filteredEntries;
 	}
@@ -319,7 +317,7 @@ class WatermarkActionViewItem extends BaseActionViewItem {
 	constructor(
 		action: IAction,
 		private readonly icon: ThemeIcon,
-		private readonly keybinding: ResolvedKeybinding,
+		private readonly keybinding: ResolvedKeybinding | undefined,
 		@IHoverService private readonly hoverService: IHoverService,
 	) {
 		super(undefined, action);
@@ -329,13 +327,15 @@ class WatermarkActionViewItem extends BaseActionViewItem {
 		const row = append(container, $('a.action-label.watermark-entry'));
 		super.render(row);
 		row.setAttribute('role', 'button');
-		row.setAttribute('aria-label', localize('watermark.shortcutAriaLabel', "{0} ({1})", this._action.label, this.keybinding.getAriaLabel()));
+		row.setAttribute('aria-label', this.keybinding ? localize('watermark.shortcutAriaLabel', "{0} ({1})", this._action.label, this.keybinding.getAriaLabel()) : this._action.label);
 
 		const icon = append(row, renderIcon(this.icon));
 		icon.classList.add('watermark-icon');
 		icon.setAttribute('aria-hidden', 'true');
 		append(row, $('span.watermark-label')).textContent = this._action.label;
-		this._register(new KeybindingLabel(append(row, $('span.watermark-keybinding')), OS, defaultKeybindingLabelStyles)).set(this.keybinding);
+		if (this.keybinding) {
+			this._register(new KeybindingLabel(append(row, $('span.watermark-keybinding')), OS, defaultKeybindingLabelStyles)).set(this.keybinding);
+		}
 		this._register(this.hoverService.setupDelayedHover(row, { content: this._action.label }));
 	}
 }

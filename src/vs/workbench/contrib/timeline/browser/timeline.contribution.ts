@@ -19,6 +19,7 @@ import { ResourceContextKey } from '../../../common/contextkeys.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import { ILocalizedString } from '../../../../platform/action/common/action.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IListService } from '../../../../platform/list/browser/listService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
@@ -38,6 +39,7 @@ export class TimelinePaneDescriptor implements IViewDescriptor {
 	readonly canToggleVisibility = true;
 	readonly hideByDefault = false;
 	readonly canMoveView = true;
+	readonly when = PatentIdeContextKeys.Mode.toNegated(); // FlowLeap: no Timeline view in Patent IDE mode
 
 	focusCommand = { id: 'timeline.focus' };
 }

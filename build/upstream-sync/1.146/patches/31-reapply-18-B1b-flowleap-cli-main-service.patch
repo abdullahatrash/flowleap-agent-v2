@@ -1,5 +1,5 @@
 diff --git a/src/vs/code/electron-main/app.ts b/src/vs/code/electron-main/app.ts
-index 984bb578907..a735de288c4 100644
+index 9d266151594..e4169a06f0c 100644
 --- a/src/vs/code/electron-main/app.ts
 +++ b/src/vs/code/electron-main/app.ts
 @@ -51,6 +51,8 @@ import { IExternalTerminalMainService } from '../../platform/externalTerminal/el
@@ -11,7 +11,7 @@ index 984bb578907..a735de288c4 100644
  import { LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../platform/files/common/diskFileSystemProviderClient.js';
  import { IFileService } from '../../platform/files/common/files.js';
  import { DiskFileSystemProviderChannel } from '../../platform/files/electron-main/diskFileSystemProviderServer.js';
-@@ -1303,6 +1305,7 @@ export class CodeApplication extends Disposable {
+@@ -1327,6 +1329,7 @@ export class CodeApplication extends Disposable {
  			services.set(IExternalTerminalMainService, new SyncDescriptor(LinuxExternalTerminalService));
  		}
  		services.set(ISandboxHelperMainService, new SyncDescriptor(SandboxHelperService));
@@ -19,7 +19,7 @@ index 984bb578907..a735de288c4 100644
  
  		// Backups
  		const backupMainService = new BackupMainService(this.environmentMainService, this.configurationService, this.logService, this.stateService);
-@@ -1490,6 +1493,10 @@ export class CodeApplication extends Disposable {
+@@ -1520,6 +1523,10 @@ export class CodeApplication extends Disposable {
  		const sandboxHelperChannel = ProxyChannel.fromService(accessor.get(ISandboxHelperMainService), disposables);
  		mainProcessElectronServer.registerChannel('sandboxHelper', sandboxHelperChannel);
  

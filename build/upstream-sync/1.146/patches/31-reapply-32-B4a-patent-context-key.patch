@@ -84,7 +84,7 @@ index 4c547b3e523..db8fdfd5a4c 100644
  
  		this.registerListeners();
 diff --git a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
-index 50a23aa16fd..c8780cfa59c 100644
+index 71a23a0a1f0..fa1af88fd8d 100644
 --- a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
 +++ b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
 @@ -22,6 +22,7 @@ import { Disposable, DisposableStore, IDisposable, MutableDisposable, thenIfNotD
@@ -93,9 +93,9 @@ index 50a23aa16fd..c8780cfa59c 100644
  import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 +import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
  import { filter } from '../../../../../base/common/objects.js';
- import { autorun, derived, IObservable, observableFromEvent, observableValue } from '../../../../../base/common/observable.js';
+ import { autorun, constObservable, derived, IObservable, IReader, observableFromEvent, observableValue } from '../../../../../base/common/observable.js';
  import { extUri, isEqual } from '../../../../../base/common/resources.js';
-@@ -1829,7 +1830,16 @@ export class ChatWidget extends Disposable implements IChatWidget {
+@@ -1851,7 +1852,16 @@ export class ChatWidget extends Disposable implements IChatWidget {
  		}
  
  		let title: string;
@@ -206,7 +206,7 @@ index d6dec6a1cf0..5b603c97a77 100644
  				id: MenuId.DebugBreakpointsContext,
  				group: 'z_commands',
 diff --git a/src/vs/workbench/contrib/debug/browser/debug.contribution.ts b/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
-index 6a10c81e6be..f06f36f0923 100644
+index 1c4ef9f79c3..ab951f765a4 100644
 --- a/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
 +++ b/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
 @@ -66,6 +66,7 @@ import { DebugChatContextContribution } from './debugChatIntegration.js';
@@ -217,7 +217,7 @@ index 6a10c81e6be..f06f36f0923 100644
  
  const debugCategory = nls.localize('debugCategory', "Debug");
  registerColors();
-@@ -112,7 +113,7 @@ registerEditorContribution(EDITOR_CONTRIBUTION_ID, DebugEditorContribution, Edit
+@@ -113,7 +114,7 @@ registerEditorContribution(EDITOR_CONTRIBUTION_ID, DebugEditorContribution, Edit
  
  const registerDebugCommandPaletteItem = (id: string, title: ICommandActionTitle, when?: ContextKeyExpression, precondition?: ContextKeyExpression) => {
  	MenuRegistry.appendMenuItem(MenuId.CommandPalette, {
@@ -226,7 +226,7 @@ index 6a10c81e6be..f06f36f0923 100644
  		group: debugCategory,
  		command: {
  			id,
-@@ -254,7 +255,7 @@ if (isMacintosh) {
+@@ -255,7 +256,7 @@ if (isMacintosh) {
  
  // Editor Title Menu's "Run/Debug" dropdown item
  
@@ -235,7 +235,7 @@ index 6a10c81e6be..f06f36f0923 100644
  
  // Debug menu
  
-@@ -265,7 +266,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
+@@ -266,7 +267,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
  		mnemonicTitle: nls.localize({ key: 'mRun', comment: ['&& denotes a mnemonic'] }, "&&Run")
  	},
  	order: 6,
@@ -244,7 +244,7 @@ index 6a10c81e6be..f06f36f0923 100644
  });
  
  MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
-@@ -439,7 +440,7 @@ Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([{
+@@ -440,7 +441,7 @@ Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([{
  	containerIcon: icons.debugConsoleViewIcon,
  	canToggleVisibility: true,
  	canMoveView: true,
@@ -253,7 +253,7 @@ index 6a10c81e6be..f06f36f0923 100644
  	ctorDescriptor: new SyncDescriptor(Repl),
  	openCommandActionDescriptor: {
  		id: 'workbench.debug.action.toggleRepl',
-@@ -467,12 +468,13 @@ const viewContainer = Registry.as<IViewContainersRegistry>(ViewExtensions.ViewCo
+@@ -468,12 +469,13 @@ const viewContainer = Registry.as<IViewContainersRegistry>(ViewExtensions.ViewCo
  
  // Register default debug views
  const viewsRegistry = Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry);
@@ -274,7 +274,7 @@ index 6a10c81e6be..f06f36f0923 100644
  // Register disassembly view
  
 diff --git a/src/vs/workbench/contrib/debug/browser/debugCommands.ts b/src/vs/workbench/contrib/debug/browser/debugCommands.ts
-index 18210209161..9022515d0ca 100644
+index d98d14bcdb6..a56605270cd 100644
 --- a/src/vs/workbench/contrib/debug/browser/debugCommands.ts
 +++ b/src/vs/workbench/contrib/debug/browser/debugCommands.ts
 @@ -42,6 +42,7 @@ import { saveAllBeforeDebugStart, resolveChildSession } from '../common/debugUti
@@ -402,27 +402,6 @@ index 71605eddcf4..31d22e31520 100644
  			viewId: REPL_VIEW_ID,
  			title: localize2('clearRepl', 'Clear Console'),
  			metadata: {
-diff --git a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
-index b06c588bd0e..f2dc5c1d358 100644
---- a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
-+++ b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
-@@ -87,6 +87,7 @@ import { BuiltInExtensionsContext, ExtensionMarketplaceStatusUpdater, Extensions
- import { ExtensionsWorkbenchService } from './extensionsWorkbenchService.js';
- import './media/extensionManagement.css';
- import { UnsupportedExtensionsMigrationContrib } from './unsupportedExtensionsMigrationContribution.js';
-+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
- 
- // Singletons
- registerSingleton(IExtensionsWorkbenchService, ExtensionsWorkbenchService, InstantiationType.Eager /* Auto updates extensions */);
-@@ -119,7 +120,7 @@ export const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainer
- 		openCommandActionDescriptor: {
- 			id: VIEWLET_ID,
- 			mnemonicTitle: localize({ key: 'miViewExtensions', comment: ['&& denotes a mnemonic'] }, "E&&xtensions"),
--			keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyX },
-+			keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyX, when: PatentIdeContextKeys.Mode.toNegated() },
- 			order: 4,
- 		},
- 		ctorDescriptor: new SyncDescriptor(ExtensionsViewPaneContainer),
 diff --git a/src/vs/workbench/contrib/outline/browser/outline.contribution.ts b/src/vs/workbench/contrib/outline/browser/outline.contribution.ts
 index bb8dd6560d4..43b34e0b48f 100644
 --- a/src/vs/workbench/contrib/outline/browser/outline.contribution.ts
@@ -446,10 +425,10 @@ index bb8dd6560d4..43b34e0b48f 100644
  
  // --- configurations
 diff --git a/src/vs/workbench/contrib/remote/browser/tunnelView.ts b/src/vs/workbench/contrib/remote/browser/tunnelView.ts
-index 41045b7aca0..536818d3b54 100644
+index 0a58d0d85d9..277881ed7db 100644
 --- a/src/vs/workbench/contrib/remote/browser/tunnelView.ts
 +++ b/src/vs/workbench/contrib/remote/browser/tunnelView.ts
-@@ -57,6 +57,7 @@ import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform
+@@ -55,6 +55,7 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
  import { Attributes, CandidatePort, Tunnel, TunnelCloseReason, TunnelModel, TunnelSource, forwardedPortsViewEnabled, makeAddress, mapHasAddressLocalhostOrAllInterfaces, parseAddress } from '../../../services/remote/common/tunnelModel.js';
  import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
  import { IHoverService } from '../../../../platform/hover/browser/hover.js';
@@ -457,7 +436,7 @@ index 41045b7aca0..536818d3b54 100644
  
  export const openPreviewEnabledContext = new RawContextKey<boolean>('openPreviewEnabled', false);
  
-@@ -1107,6 +1108,7 @@ export class TunnelPanelDescriptor implements IViewDescriptor {
+@@ -1048,6 +1049,7 @@ export class TunnelPanelDescriptor implements IViewDescriptor {
  	readonly remoteAuthority?: string | string[];
  	readonly canMoveView = true;
  	readonly containerIcon = portsViewIcon;
@@ -901,18 +880,18 @@ index 115c37ad91e..3ce55cd68da 100644
  	}
  }
 diff --git a/src/vs/workbench/contrib/testing/browser/testing.contribution.ts b/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
-index d38d7328456..8e1cd448c8e 100644
+index 14f8b1cbd1a..a4d13cf0967 100644
 --- a/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
 +++ b/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
-@@ -49,6 +49,7 @@ import { TestingExplorerView } from './testingExplorerView.js';
- import { CloseTestPeek, CollapsePeekStack, GoToNextMessageAction, GoToPreviousMessageAction, OpenMessageInEditorAction, TestingOutputPeekController, TestingPeekOpener, TestResultsView, ToggleTestingPeekHistory } from './testingOutputPeek.js';
+@@ -50,6 +50,7 @@ import { CloseTestPeek, CollapsePeekStack, GoToNextMessageAction, GoToPreviousMe
  import { TestingProgressTrigger } from './testingProgressUiService.js';
+ import { TestingUnattendedRestartParticipant } from './testingUnattendedRestart.js';
  import { TestingViewPaneContainer } from './testingViewPaneContainer.js';
 +import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
  
  registerSingleton(ITestService, TestService, InstantiationType.Delayed);
  registerSingleton(ITestResultStorage, TestResultStorage, InstantiationType.Delayed);
-@@ -96,7 +97,7 @@ viewsRegistry.registerViews([{
+@@ -97,7 +98,7 @@ viewsRegistry.registerViews([{
  	containerIcon: testingResultsIcon,
  	canToggleVisibility: false,
  	canMoveView: true,
@@ -921,7 +900,7 @@ index d38d7328456..8e1cd448c8e 100644
  	ctorDescriptor: new SyncDescriptor(TestResultsView),
  }], testResultsViewContainer);
  
-@@ -118,7 +119,7 @@ viewsRegistry.registerViews([{
+@@ -119,7 +120,7 @@ viewsRegistry.registerViews([{
  	weight: 80,
  	order: -999,
  	containerIcon: testingViewIcon,
@@ -930,7 +909,7 @@ index d38d7328456..8e1cd448c8e 100644
  }, {
  	id: Testing.CoverageViewId,
  	name: localize2('testCoverage', "Test Coverage"),
-@@ -128,7 +129,7 @@ viewsRegistry.registerViews([{
+@@ -129,7 +130,7 @@ viewsRegistry.registerViews([{
  	weight: 80,
  	order: -998,
  	containerIcon: testingViewIcon,
@@ -940,31 +919,30 @@ index d38d7328456..8e1cd448c8e 100644
  
  allTestActions.forEach(registerAction2);
 diff --git a/src/vs/workbench/contrib/timeline/browser/timeline.contribution.ts b/src/vs/workbench/contrib/timeline/browser/timeline.contribution.ts
-index 64c6b1a52f0..bec540d30c3 100644
+index 63313052d68..e5ca8b64030 100644
 --- a/src/vs/workbench/contrib/timeline/browser/timeline.contribution.ts
 +++ b/src/vs/workbench/contrib/timeline/browser/timeline.contribution.ts
-@@ -21,6 +21,7 @@ import { Codicon } from '../../../../base/common/codicons.js';
+@@ -19,6 +19,7 @@ import { ResourceContextKey } from '../../../common/contextkeys.js';
+ import { Codicon } from '../../../../base/common/codicons.js';
  import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
  import { ILocalizedString } from '../../../../platform/action/common/action.js';
- import { URI } from '../../../../base/common/uri.js';
 +import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
- 
- const timelineViewIcon = registerIcon('timeline-view-icon', Codicon.history, localize('timelineViewIcon', 'View icon of the timeline view.'));
- const timelineOpenIcon = registerIcon('timeline-open', Codicon.history, localize('timelineOpenIcon', 'Icon for the open timeline action.'));
-@@ -36,7 +37,7 @@ export class TimelinePaneDescriptor implements IViewDescriptor {
+ import { IListService } from '../../../../platform/list/browser/listService.js';
+ import { IEditorService } from '../../../services/editor/common/editorService.js';
+ import { IViewsService } from '../../../services/views/common/viewsService.js';
+@@ -38,6 +39,7 @@ export class TimelinePaneDescriptor implements IViewDescriptor {
  	readonly canToggleVisibility = true;
  	readonly hideByDefault = false;
  	readonly canMoveView = true;
--	readonly when = TimelineHasProviderContext;
-+	readonly when = ContextKeyExpr.and(TimelineHasProviderContext, PatentIdeContextKeys.Mode.toNegated());
++	readonly when = PatentIdeContextKeys.Mode.toNegated(); // FlowLeap: no Timeline view in Patent IDE mode
  
  	focusCommand = { id: 'timeline.focus' };
  }
 diff --git a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts
-index 322ec1ab4f6..0c5a8e8efad 100644
+index db913f20c45..6f7b8ec26d4 100644
 --- a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts
 +++ b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts
-@@ -76,6 +76,7 @@ import { AccessibilityVerbositySettingId } from '../../accessibility/browser/acc
+@@ -78,6 +78,7 @@ import { AccessibilityVerbositySettingId } from '../../accessibility/browser/acc
  import { AccessibleViewAction } from '../../accessibility/browser/accessibleViewActions.js';
  import { KeybindingLabel } from '../../../../base/browser/ui/keybindingLabel/keybindingLabel.js';
  import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
@@ -972,7 +950,7 @@ index 322ec1ab4f6..0c5a8e8efad 100644
  
  const SLIDE_TRANSITION_TIME_MS = 250;
  const configurationKey = 'workbench.startupEditor';
-@@ -925,9 +926,14 @@ export class GettingStartedPage extends EditorPane {
+@@ -939,9 +940,14 @@ export class GettingStartedPage extends EditorPane {
  			onShowOnStartupChanged();
  		}));
  
@@ -989,7 +967,7 @@ index 322ec1ab4f6..0c5a8e8efad 100644
  
  		const leftColumn = $('.categories-column.categories-column-left', {},);
 diff --git a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStartedService.ts b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStartedService.ts
-index ac89ae8e931..52eaeb73b55 100644
+index 10bfe6ea33f..521acda1303 100644
 --- a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStartedService.ts
 +++ b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStartedService.ts
 @@ -38,6 +38,7 @@ import { IWorkbenchLayoutService, Parts } from '../../../services/layout/browser
@@ -1014,7 +992,7 @@ index ac89ae8e931..52eaeb73b55 100644
  				this.sessionInstalledExtensions.delete(extension.identifier.value.toLowerCase());
  				if (index < sectionToOpenIndex && isNewlyInstalled) {
 diff --git a/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts b/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts
-index 168a3d01b40..a7c9ec4c904 100644
+index 7a870e4010d..0918e5ded0a 100644
 --- a/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts
 +++ b/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts
 @@ -170,7 +170,7 @@ export const startEntries: GettingStartedStartEntryContent = [
@@ -1044,7 +1022,7 @@ index 168a3d01b40..a7c9ec4c904 100644
  		icon: Codicon.remote,
  		content: {
  			type: 'startEntry',
-@@ -203,7 +203,7 @@ export const startEntries: GettingStartedStartEntryContent = [
+@@ -203,13 +203,25 @@ export const startEntries: GettingStartedStartEntryContent = [
  		id: 'topLevelOpenTunnel',
  		title: localize('gettingStarted.topLevelOpenTunnel.title', "Open Tunnel..."),
  		description: localize('gettingStarted.topLevelOpenTunnel.description', "Connect to a remote machine through a Tunnel"),
@@ -1053,15 +1031,7 @@ index 168a3d01b40..a7c9ec4c904 100644
  		icon: Codicon.remote,
  		content: {
  			type: 'startEntry',
-@@ -215,12 +215,24 @@ export const startEntries: GettingStartedStartEntryContent = [
- 		title: localize('gettingStarted.newWorkspaceChat.title', "Generate New Workspace..."),
- 		description: localize('gettingStarted.newWorkspaceChat.description', "Chat to create a new workspace"),
- 		icon: Codicon.chatSparkle,
--		when: '!isWeb && !chatSetupHidden && !chatSetupDisabledInWorkspace',
-+		when: '!isWeb && !chatSetupHidden && !chatSetupDisabledInWorkspace && !patentIdeMode',
- 		content: {
- 			type: 'startEntry',
- 			command: 'command:welcome.newWorkspaceChat',
+ 			command: 'command:workbench.action.remote.showWebStartEntryActions',
  		}
  	},
 +	// Patent IDE start entries
@@ -1079,7 +1049,7 @@ index 168a3d01b40..a7c9ec4c904 100644
  ];
  
  const Button = (title: string, href: string) => `[${title}](${href})`;
-@@ -242,7 +254,7 @@ function createCopilotSetupStep(id: string, button: string, when: string, includ
+@@ -231,7 +243,7 @@ function createCopilotSetupStep(id: string, button: string, when: string, includ
  		id,
  		title: CopilotStepTitle,
  		description,
@@ -1088,7 +1058,7 @@ index 168a3d01b40..a7c9ec4c904 100644
  		media: {
  			type: 'svg', altText: 'VS Code Copilot multi file edits', path: 'multi-file-edits.svg'
  		},
-@@ -256,7 +268,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
+@@ -245,7 +257,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
  		description: localize('gettingStarted.setup.description', "Customize your editor, learn the basics, and start coding"),
  		isFeatured: true,
  		icon: setupIcon,
@@ -1097,7 +1067,7 @@ index 168a3d01b40..a7c9ec4c904 100644
  		walkthroughPageTitle: localize('gettingStarted.setup.walkthroughPageTitle', 'Setup VS Code'),
  		next: 'Beginner',
  		content: {
-@@ -292,7 +304,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
+@@ -281,7 +293,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
  		description: localize('gettingStarted.setupWeb.description', "Customize your editor, learn the basics, and start coding"),
  		isFeatured: true,
  		icon: setupIcon,
@@ -1106,7 +1076,7 @@ index 168a3d01b40..a7c9ec4c904 100644
  		next: 'Beginner',
  		walkthroughPageTitle: localize('gettingStarted.setupWeb.walkthroughPageTitle', 'Setup VS Code Web'),
  		content: {
-@@ -483,6 +495,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
+@@ -472,6 +484,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
  		isFeatured: false,
  		title: localize('gettingStarted.beginner.title', "Learn the Fundamentals"),
  		icon: beginnerIcon,
@@ -1114,7 +1084,7 @@ index 168a3d01b40..a7c9ec4c904 100644
  		description: localize('gettingStarted.beginner.description', "Get an overview of the most essential features"),
  		walkthroughPageTitle: localize('gettingStarted.beginner.walkthroughPageTitle', 'Essential Features'),
  		content: {
-@@ -600,7 +613,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
+@@ -589,7 +602,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
  		description: '',
  		icon: setupIcon,
  		isFeatured: false,
@@ -1123,3 +1093,25 @@ index 168a3d01b40..a7c9ec4c904 100644
  		walkthroughPageTitle: localize('gettingStarted.notebook.walkthroughPageTitle', 'Notebooks'),
  		content: {
  			type: 'steps',
+diff --git a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+index ddc9d0000a2..c5320ee1c66 100644
+--- a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
++++ b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+@@ -86,6 +86,7 @@ import { BuiltInExtensionsContext, ExtensionMarketplaceStatusUpdater, Extensions
+ import { ExtensionsWorkbenchService } from './extensionsWorkbenchService.js';
+ import './media/extensionManagement.css';
+ import { UnsupportedExtensionsMigrationContrib } from './unsupportedExtensionsMigrationContribution.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ // Singletons
+ registerSingleton(IExtensionsWorkbenchService, ExtensionsWorkbenchService, InstantiationType.Eager /* Auto updates extensions */);
+@@ -118,7 +119,8 @@ export const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainer
+ 		openCommandActionDescriptor: {
+ 			id: VIEWLET_ID,
+ 			mnemonicTitle: localize({ key: 'miViewExtensions', comment: ['&& denotes a mnemonic'] }, "E&&xtensions"),
+-			keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyX },
++			keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyX, when: PatentIdeContextKeys.Mode.toNegated() },
++			when: PatentIdeContextKeys.Mode.toNegated(), // FlowLeap Patent IDE: hide the View menu entry
+ 			order: 4,
+ 		},
+ 		ctorDescriptor: new SyncDescriptor(ExtensionsViewPaneContainer),

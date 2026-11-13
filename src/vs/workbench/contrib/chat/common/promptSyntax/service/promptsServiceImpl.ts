@@ -1793,7 +1793,8 @@ export namespace CustomAgent {
 			tools = mapClaudeTools(tools);
 		}
 		const reasoningEffort = ast.header.reasoningEffort;
-		return { id, uri, name, description, model, ...(reasoningEffort !== undefined ? { reasoningEffort } : {}), ...(ast.header.modelPolicy ? { modelPolicy: ast.header.modelPolicy } : {}), tools, handOffs, argumentHint, target, visibility, agents, agentInstructions, source, sessionTypes, hooks, enabled };
+		const icon = ast.header.icon;
+		return { id, uri, name, description, ...(icon !== undefined ? { icon } : {}), model, ...(reasoningEffort !== undefined ? { reasoningEffort } : {}), ...(ast.header.modelPolicy ? { modelPolicy: ast.header.modelPolicy } : {}), tools, handOffs, argumentHint, target, visibility, agents, agentInstructions, source, sessionTypes, hooks, enabled };
 
 	}
 }
