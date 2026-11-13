@@ -1,8 +1,8 @@
-diff --git a/src/vs/sessions/contrib/chat/browser/media/chatWidget.css b/src/vs/sessions/contrib/chat/browser/media/chatWidget.css
-index 7f8034c4e58..79c068d46e7 100644
---- a/src/vs/sessions/contrib/chat/browser/media/chatWidget.css
-+++ b/src/vs/sessions/contrib/chat/browser/media/chatWidget.css
-@@ -755,3 +755,39 @@
+diff --git a/src/vs/workbench/contrib/sessions/browser/chat/media/chatWidget.css b/src/vs/workbench/contrib/sessions/browser/chat/media/chatWidget.css
+index 89c76284f90..e43bcf89069 100644
+--- a/src/vs/workbench/contrib/sessions/browser/chat/media/chatWidget.css
++++ b/src/vs/workbench/contrib/sessions/browser/chat/media/chatWidget.css
+@@ -1073,3 +1073,39 @@
  .action-widget .monaco-list-row.action.sessions-browse-inline-item.focused:not(.option-disabled) .description {
  	visibility: visible;
  }
@@ -42,37 +42,37 @@ index 7f8034c4e58..79c068d46e7 100644
 +.new-session-workflow-template-chip .codicon {
 +	font-size: var(--vscode-codiconFontSize-compact);
 +}
-diff --git a/src/vs/sessions/contrib/chat/browser/newChatWidget.ts b/src/vs/sessions/contrib/chat/browser/newChatWidget.ts
-index d56d37fb433..1cedc2e9291 100644
---- a/src/vs/sessions/contrib/chat/browser/newChatWidget.ts
-+++ b/src/vs/sessions/contrib/chat/browser/newChatWidget.ts
-@@ -73,6 +73,9 @@ import { IAuthenticationService } from '../../../../workbench/services/authentic
- import { HiddenItemStrategy, MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
- import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
- import { AccessibilityVerbositySettingId } from '../../../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
-+import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
-+import { IHoverService } from '../../../../platform/hover/browser/hover.js';
-+import { getSessionWorkflowTemplates } from '../common/sessionWorkflowTemplates.js';
- 
- // #region --- New Chat Widget ---
- 
-@@ -174,6 +177,7 @@ export class NewChatWidget extends Disposable {
- 		@INewSessionComposerService private readonly newSessionComposerService: INewSessionComposerService,
- 		@ICommandService private readonly commandService: ICommandService,
+diff --git a/src/vs/workbench/contrib/sessions/browser/chat/newChatWidget.ts b/src/vs/workbench/contrib/sessions/browser/chat/newChatWidget.ts
+index 2acb515751b..e653a09b594 100644
+--- a/src/vs/workbench/contrib/sessions/browser/chat/newChatWidget.ts
++++ b/src/vs/workbench/contrib/sessions/browser/chat/newChatWidget.ts
+@@ -83,6 +83,9 @@ import { getAdditionalFolderContextId, getAdditionalRepositoryContextId } from '
+ import { NewSessionBannerPriority, NewSessionBanners } from '../../common/newSessionBanners.js';
+ import { COLLAPSED_SESSION_OPTIONS_SHOW_ICONS_SETTING, COMPARE_AGENTS_ENABLED_SETTING, COMPARE_AGENTS_OPEN_IN_GRID_SETTING, COMPARE_AGENTS_SHOW_PICKER_HINT_SETTING, ENVIRONMENT_PICKER_SETTING, NEW_SESSION_COMPOSER_OPTIONS_EXPANDED_SETTING, NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING, WORKSPACE_OPT_OUT_SETTING } from '../../common/chatConstants.js';
+ import { getNewSessionWelcomePhrases, INewSessionWelcomeMessagesConfiguration } from '../../common/welcomePhrases.js';
++import { getDefaultHoverDelegate } from '../../../../../base/browser/ui/hover/hoverDelegateFactory.js';
++import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
++import { getSessionWorkflowTemplates } from '../../common/sessionWorkflowTemplates.js';
+ import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+ import { getSessionComparisonWorkspaceError, ISessionComparisonHarness, ISessionComparisonService } from '../../common/sessionComparison.js';
+ import { OPEN_SESSION_COMPARISON_COMMAND_ID } from '../../common/sessionComparisonConstants.js';
+@@ -266,6 +269,7 @@ export class NewChatWidget extends Disposable {
  		@INotificationService private readonly notificationService: INotificationService,
+ 		@ITelemetryService private readonly telemetryService: ITelemetryService,
+ 		@ILanguageModelsService private readonly languageModelsService: ILanguageModelsService,
 +		@IHoverService private readonly hoverService: IHoverService,
  	) {
  		super();
- 		this._register(this._pendingPreferredUpgrade);
-@@ -603,6 +607,7 @@ export class NewChatWidget extends Disposable {
+ 		this._preserveCustomView = options.preserveCustomView === true;
+@@ -879,6 +883,7 @@ export class NewChatWidget extends Disposable {
  
  		this._renderFeedbackBanner(chatWidgetContent);
  		this._newChatInput.render(chatWidgetContent, parent);
 +		this._renderWorkflowTemplates(chatWidgetContent);
  		this._register(autorun(reader => {
- 			const useExperimentalLayout = this._useExperimentalComposerLayout.read(reader);
  			const isQuickChat = this._isQuickChatComposer.read(reader);
-@@ -1263,6 +1268,27 @@ export class NewChatWidget extends Disposable {
+ 			const isWorkspacePickerQuickChat = this._isWorkspacePickerQuickChat.read(reader);
+@@ -2836,6 +2841,27 @@ export class NewChatWidget extends Disposable {
  		}
  	}
  
@@ -97,6 +97,14 @@ index d56d37fb433..1cedc2e9291 100644
 +		}
 +	}
 +
- 	focusWorkspacePicker(): void {
- 		this._workspacePicker.showPicker();
+ 	prefillInput(text: string): void {
+ 		this._newChatInput.prefillInput(text);
  	}
+diff --git a/src/vs/sessions/contrib/chat/common/sessionWorkflowTemplates.ts b/src/vs/workbench/contrib/sessions/common/sessionWorkflowTemplates.ts
+similarity index 100%
+rename from src/vs/sessions/contrib/chat/common/sessionWorkflowTemplates.ts
+rename to src/vs/workbench/contrib/sessions/common/sessionWorkflowTemplates.ts
+diff --git a/src/vs/sessions/contrib/chat/test/common/sessionWorkflowTemplates.test.ts b/src/vs/workbench/contrib/sessions/test/common/sessionWorkflowTemplates.test.ts
+similarity index 100%
+rename from src/vs/sessions/contrib/chat/test/common/sessionWorkflowTemplates.test.ts
+rename to src/vs/workbench/contrib/sessions/test/common/sessionWorkflowTemplates.test.ts
