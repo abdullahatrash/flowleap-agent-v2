@@ -1,0 +1,240 @@
+diff --git a/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts b/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
+index 5c9c9f1f909..a92a47c7d59 100644
+--- a/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
++++ b/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
+@@ -394,7 +394,9 @@ configurationRegistry.registerConfiguration({
+ 		[AgentHostCodexAgentEnabledSettingId]: {
+ 			type: 'boolean',
+ 			description: nls.localize('chat.agentHost.codexAgent.enabled', "When enabled, the agent host registers the Codex provider (subject to the Codex SDK being reachable). Enabling takes effect without restarting the agent host."),
+-			default: true,
++			// FlowLeap: Codex is hidden from the agent picker by default in every
++			// quality (upstream: on). Users can still turn it on.
++			default: false,
+ 			// Allow the default to be overridden by an experiment. Uses `startup`
+ 			// to match the sibling agent-host provider settings.
+ 			experiment: { mode: 'startup' },
+diff --git a/src/vs/platform/agentHost/common/agentService.ts b/src/vs/platform/agentHost/common/agentService.ts
+index a35986e5435..f5635ad50ed 100644
+--- a/src/vs/platform/agentHost/common/agentService.ts
++++ b/src/vs/platform/agentHost/common/agentService.ts
+@@ -253,6 +253,25 @@ export const AgentHostMultipleChatProvidersEnabledEnvVar = 'VSCODE_AGENT_HOST_MU
+  */
+ export const AgentHostCodexAgentEnabledEnvVar = 'VSCODE_AGENT_HOST_CODEX_AGENT_ENABLED';
+ 
++/**
++ * FlowLeap: environment variable that re-enables the GitHub Copilot agent
++ * provider inside the agent host. Accepts the same values as
++ * {@link isAgentEnabled}; absent means **off**. No starter forwards it and no
++ * setting backs it, so only a developer who sets it by hand gets the Copilot
++ * agent. With it off the agent host never spawns `copilot-runtime`, never asks
++ * for a GitHub token for it, and Claude is the default agent (ADR 0009, PRD
++ * 0018 A3). The Copilot agent files stay in the tree (neutralize, not delete).
++ */
++export const AgentHostCopilotAgentEnabledEnvVar = 'VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED';
++
++/**
++ * FlowLeap: whether the agent host registers the GitHub Copilot agent
++ * provider. Off unless {@link AgentHostCopilotAgentEnabledEnvVar} enables it.
++ */
++export function isCopilotAgentEnabled(env: { readonly [key: string]: string | undefined }): boolean {
++	return isAgentEnabled(env[AgentHostCopilotAgentEnabledEnvVar], false);
++}
++
+ /** Overrides the soft cap on resident session roots. Primarily used by integration tests. */
+ export const AgentHostSessionResidencyLimitEnvVar = 'VSCODE_AGENT_HOST_SESSION_RESIDENCY_LIMIT';
+ 
+diff --git a/src/vs/platform/agentHost/node/agentHostMain.ts b/src/vs/platform/agentHost/node/agentHostMain.ts
+index d7c3453ae73..816c468e442 100644
+--- a/src/vs/platform/agentHost/node/agentHostMain.ts
++++ b/src/vs/platform/agentHost/node/agentHostMain.ts
+@@ -16,7 +16,7 @@ import { generateUuid } from '../../../base/common/uuid.js';
+ import * as os from 'os';
+ import { writeSync } from 'fs';
+ import * as inspector from 'inspector';
+-import { AgentHostClaudeAgentEnabledEnvVar, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentEnabledEnvVar, AgentHostIpcChannels, IAgentHostInspectInfo, IAgentHostSocketInfo, IConnectionTrackerService, isAgentEnabled } from '../common/agentService.js';
++import { AgentHostClaudeAgentEnabledEnvVar, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentEnabledEnvVar, AgentHostIpcChannels, IAgentHostInspectInfo, IAgentHostSocketInfo, IConnectionTrackerService, isAgentEnabled, isCopilotAgentEnabled } from '../common/agentService.js';
+ import { AgentHostCodexEnabledConfigKey, platformRootSchema } from '../common/agentHostSchema.js';
+ import { AgentModelRefreshScheduler, MODEL_REFRESH_INTERVAL_MS } from './agentModelRefreshScheduler.js';
+ import { AgentService } from './agentService.js';
+@@ -191,7 +191,11 @@ async function startAgentHost(): Promise<void> {
+ 		const agentSdkDownloader = runtimeServices.agentSdkDownloader;
+ 		const providerService = runtimeServices.providerService;
+ 		sdkDownloadProgress = runtime.sdkDownloadProgress;
+-		providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
++		// FlowLeap: the Copilot agent needs GitHub sign-in and spawns `copilot-runtime`.
++		// It is off unless a developer sets the env var, so Claude is the default agent.
++		if (isCopilotAgentEnabled(process.env)) {
++			providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
++		}
+ 		// Claude and Codex providers are gated on two things:
+ 		//  1. The user-facing enable toggle (`chat.agentHost.<x>Agent.enabled`,
+ 		//     forwarded as an env var by the starters). Claude defaults to on.
+diff --git a/src/vs/platform/agentHost/node/agentHostServerMain.ts b/src/vs/platform/agentHost/node/agentHostServerMain.ts
+index d0162e24ebc..9d0f110a510 100644
+--- a/src/vs/platform/agentHost/node/agentHostServerMain.ts
++++ b/src/vs/platform/agentHost/node/agentHostServerMain.ts
+@@ -47,7 +47,7 @@ import { IAgentSdkDownloader, type IAgentSdkDownloadProgress } from './agentSdkD
+ import { IAgentHostProviderService } from './agentHostProviderService.js';
+ import { AgentHostCodexEnabledConfigKey, platformRootSchema } from '../common/agentHostSchema.js';
+ import { AgentModelRefreshScheduler, MODEL_REFRESH_INTERVAL_MS } from './agentModelRefreshScheduler.js';
+-import { AgentHostClaudeAgentEnabledEnvVar, AgentHostClaudeSdkRootEnvVar, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentEnabledEnvVar, AgentHostCodexAgentSdkRootEnvVar, isAgentEnabled } from '../common/agentService.js';
++import { AgentHostClaudeAgentEnabledEnvVar, AgentHostClaudeSdkRootEnvVar, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentEnabledEnvVar, AgentHostCodexAgentSdkRootEnvVar, isAgentEnabled, isCopilotAgentEnabled } from '../common/agentService.js';
+ import { WebSocketProtocolServer } from './webSocketTransport.js';
+ import { ProtocolServerHandler } from './protocolServerHandler.js';
+ import { AgentHostClientFileSystemProvider } from '../common/agentHostClientFileSystemProvider.js';
+@@ -243,8 +243,12 @@ async function main(): Promise<void> {
+ 	let sdkDownloadProgress: Event<IAgentSdkDownloadProgress> | undefined;
+ 	if (!options.quiet) {
+ 		sdkDownloadProgress = runtime.sdkDownloadProgress;
+-		providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
+-		log('CopilotAgent registered');
++		// FlowLeap: the Copilot agent needs GitHub sign-in and spawns `copilot-runtime`.
++		// It is off unless a developer sets the env var, so Claude is the default agent.
++		if (isCopilotAgentEnabled(process.env)) {
++			providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
++			log('CopilotAgent registered');
++		}
+ 		// Claude and Codex providers are gated on two things:
+ 		//  1. The user-facing enable toggle (`chat.agentHost.<x>Agent.enabled`,
+ 		//     forwarded as an env var by the renderer-side starters; the remote
+diff --git a/src/vs/platform/agentHost/node/claude/claudeSdkOptions.ts b/src/vs/platform/agentHost/node/claude/claudeSdkOptions.ts
+index 0f9a3ce7429..381677dd571 100644
+--- a/src/vs/platform/agentHost/node/claude/claudeSdkOptions.ts
++++ b/src/vs/platform/agentHost/node/claude/claudeSdkOptions.ts
+@@ -133,6 +133,12 @@ export async function buildOptions(
+ 		// uses its own credential resolution from the subprocess env
+ 		// (`ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` from `claude
+ 		// setup-token` — both forwarded by `buildSubprocessEnv`).
++		// FlowLeap guardrail (decision #59, ADR 0009 decision 2): Agents Window
++		// Claude runs on the user's own Claude credentials (claude.ai login or
++		// their own API key). The native path must never carry
++		// `ANTHROPIC_BASE_URL` or `ANTHROPIC_AUTH_TOKEN`, and no proxy runs for it.
++		// FlowLeap never sends a GitHub token, so the proxy branch stays unused.
++		// `claudeSdkOptions.test.ts` asserts this for both env bags.
+ 		...(transport.kind === 'proxy'
+ 			? {
+ 				ANTHROPIC_BASE_URL: transport.handle.baseUrl,
+diff --git a/src/vs/platform/agentHost/node/claude/claudeTransportMode.ts b/src/vs/platform/agentHost/node/claude/claudeTransportMode.ts
+index 4d495752149..c04b5e7f4df 100644
+--- a/src/vs/platform/agentHost/node/claude/claudeTransportMode.ts
++++ b/src/vs/platform/agentHost/node/claude/claudeTransportMode.ts
+@@ -92,6 +92,10 @@ export function isClaudeAccountSetUp(account: AccountInfo | undefined): boolean
+ 	}
+ 	// `tokenSource` spells "no credential" as `'none'` rather than absence;
+ 	// `apiKeySource` has only ever been observed absent in that case.
++	// FlowLeap (PRD 0018 A3, spike #469): a `claude login` claude.ai account in
++	// the macOS keychain reports only `subscriptionType` with SDK 0.3.281+ (no
++	// `tokenSource`, no `apiKeySource`), so a reported subscription counts too.
+ 	return (account.tokenSource !== undefined && account.tokenSource !== 'none')
+-		|| account.apiKeySource !== undefined;
++		|| account.apiKeySource !== undefined
++		|| account.subscriptionType !== undefined;
+ }
+diff --git a/src/vs/platform/agentHost/test/common/agentService.test.ts b/src/vs/platform/agentHost/test/common/agentService.test.ts
+index 7cd9812ae23..9cf02dc8229 100644
+--- a/src/vs/platform/agentHost/test/common/agentService.test.ts
++++ b/src/vs/platform/agentHost/test/common/agentService.test.ts
+@@ -9,7 +9,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/c
+ import { ConfigurationTarget, IConfigurationChangeEvent, IConfigurationService } from '../../../configuration/common/configuration.js';
+ import { COPILOT_TEMPORARY_ALLOW_LOCAL_HARNESS_KEY, thirdPartyAgentEnabledValue } from '../../../policy/common/copilotManagedSettings.js';
+ import { AgentSession, GITHUB_COPILOT_PROTECTED_RESOURCE, GITHUB_REPO_PROTECTED_RESOURCE, protectedResourcesRequireGitHubCopilotSignIn } from '../../common/agent.js';
+-import { affectsAgentHostProviderPreference, AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostOTelEnvVars, AgentHostOTelPolicyState, buildAgentHostOTelEnv, CodexPreferAgentHostEditorSettingId, isAgentEnabled, readAgentHostOTelPolicySettings, sanitizeAgentHostOTelPolicySettings, shouldSurfaceLocalAgentHostProvider } from '../../common/agentService.js';
++import { affectsAgentHostProviderPreference, AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostOTelEnvVars, AgentHostOTelPolicyState, buildAgentHostOTelEnv, CodexPreferAgentHostEditorSettingId, isAgentEnabled, isCopilotAgentEnabled, readAgentHostOTelPolicySettings, sanitizeAgentHostOTelPolicySettings, shouldSurfaceLocalAgentHostProvider } from '../../common/agentService.js';
+ import type { ProtectedResourceMetadata } from '../../common/state/protocol/state.js';
+ import { TestConfigurationService } from '../../../configuration/test/common/testConfigurationService.js';
+ 
+@@ -95,6 +95,20 @@ suite('isAgentEnabled', () => {
+ 	}
+ });
+ 
++suite('isCopilotAgentEnabled', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('the Copilot agent is off unless the env var enables it', () => {
++		assert.deepStrictEqual({
++			absent: isCopilotAgentEnabled({}),
++			empty: isCopilotAgentEnabled({ VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED: '' }),
++			off: isCopilotAgentEnabled({ VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED: 'false' }),
++			on: isCopilotAgentEnabled({ VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED: 'true' }),
++		}, { absent: false, empty: false, off: false, on: true });
++	});
++});
++
+ suite('shouldSurfaceLocalAgentHostProvider', () => {
+ 
+ 	ensureNoDisposablesAreLeakedInTestSuite();
+diff --git a/src/vs/platform/agentHost/test/node/claudeSdkOptions.test.ts b/src/vs/platform/agentHost/test/node/claudeSdkOptions.test.ts
+index 9fe3524a740..365c8c2c69a 100644
+--- a/src/vs/platform/agentHost/test/node/claudeSdkOptions.test.ts
++++ b/src/vs/platform/agentHost/test/node/claudeSdkOptions.test.ts
+@@ -372,6 +372,35 @@ suite('claudeSdkOptions / buildOptions plugins projection', () => {
+ 			nonessential: '1',
+ 		});
+ 	});
++
++	test('FlowLeap guardrail (decision #59, ADR 0009): native spawn carries no credential variables and no proxy', async () => {
++		const credentialKeys = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'];
++		const saved = credentialKeys.map(key => [key, process.env[key]] as const);
++		for (const key of credentialKeys) {
++			delete process.env[key];
++		}
++		try {
++			const opts = await buildOptions(input(undefined), { kind: 'native' }, () => { });
++			const spawnEnv = opts.env ?? {};
++			const settingsEnv = (opts.settings as { env?: Record<string, string> }).env ?? {};
++			const loopback = (env: Record<string, string | undefined>) => Object.keys(env).filter(key => /^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(env[key] ?? ''));
++			assert.deepStrictEqual({
++				spawnEnvCredentialKeys: credentialKeys.filter(key => spawnEnv[key] !== undefined),
++				settingsEnvCredentialKeys: credentialKeys.filter(key => settingsEnv[key] !== undefined),
++				loopbackEndpoints: [...loopback(spawnEnv), ...loopback(settingsEnv)],
++			}, {
++				spawnEnvCredentialKeys: [],
++				settingsEnvCredentialKeys: [],
++				loopbackEndpoints: [],
++			});
++		} finally {
++			for (const [key, value] of saved) {
++				if (value !== undefined) {
++					process.env[key] = value;
++				}
++			}
++		}
++	});
+ });
+ 
+ suite('claudeSdkOptions / buildOptions resumeSessionAt projection', () => {
+diff --git a/src/vs/platform/agentHost/test/node/claudeTransportMode.test.ts b/src/vs/platform/agentHost/test/node/claudeTransportMode.test.ts
+index 8f519aa14b6..404424d3606 100644
+--- a/src/vs/platform/agentHost/test/node/claudeTransportMode.test.ts
++++ b/src/vs/platform/agentHost/test/node/claudeTransportMode.test.ts
+@@ -52,6 +52,9 @@ suite('claudeTransportMode', () => {
+ 			// An API key reports through `apiKeySource` and leaves `tokenSource`
+ 			// at its `'none'` sentinel, so testing `tokenSource` alone misses it.
+ 			['api key', { tokenSource: 'none', apiKeySource: 'ANTHROPIC_API_KEY', apiProvider: 'firstParty' }, true],
++			// FlowLeap: a keychain `claude login` (claude.ai subscription) with SDK
++			// 0.3.281+ reports only the subscription, no credential fields.
++			['claude.ai keychain login', { apiProvider: 'firstParty', subscriptionType: 'Claude Max' }, true],
+ 			// The rows a later "simplification" silently breaks: for third-party
+ 			// backends the SDK documents the credential fields as absent, because
+ 			// auth is external (AWS creds, gcloud ADC).
+diff --git a/src/vs/workbench/contrib/chat/browser/agentSessions/agentHost/agentHostAuth.ts b/src/vs/workbench/contrib/chat/browser/agentSessions/agentHost/agentHostAuth.ts
+index 4c8ee99a5c5..1fb50856baa 100644
+--- a/src/vs/workbench/contrib/chat/browser/agentSessions/agentHost/agentHostAuth.ts
++++ b/src/vs/workbench/contrib/chat/browser/agentSessions/agentHost/agentHostAuth.ts
+@@ -960,10 +960,13 @@ function logAuthenticationSessionResolution(
+ 	resource: string,
+ 	resolution: Exclude<AuthenticationSessionResolution, { readonly kind: 'resolved' }>,
+ ): void {
++	// FlowLeap (PRD 0018 A3): trace, not info. Claude always lists the optional
++	// GitHub resources and there is no GitHub account in FlowLeap, so these
++	// lookups run many times per minute with no network and nothing to act on.
+ 	if (resolution.kind === 'unavailable') {
+-		logService.info(`${logPrefix} Authentication provider is not ready for resource: ${resource}; deferring authentication`);
++		logService.trace(`${logPrefix} Authentication provider is not ready for resource: ${resource}; deferring authentication`);
+ 	} else {
+-		logService.info(`${logPrefix} No signed-in session resolved for resource: ${resource}`);
++		logService.trace(`${logPrefix} No signed-in session resolved for resource: ${resource}`);
+ 	}
+ }
+ 
