@@ -6,9 +6,9 @@
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
+import { ISessionsProvidersService } from '../../../../workbench/contrib/sessions/browser/sessionsProvidersService.js';
 import { ISession } from '../../../../workbench/services/sessions/common/session.js';
-import { ISessionsProvider } from '../../../services/sessions/common/sessionsProvider.js';
+import { ISessionsProvider } from '../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { FlowLeapCliNudge, isClaudeSessionType } from './flowleapCliNudge.js';
 
 /**
