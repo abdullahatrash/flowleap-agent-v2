@@ -1,0 +1,12 @@
+diff --git a/src/vs/workbench/contrib/chat/common/languageModels.ts b/src/vs/workbench/contrib/chat/common/languageModels.ts
+index 3480423318b..a51d6fe24b8 100644
+--- a/src/vs/workbench/contrib/chat/common/languageModels.ts
++++ b/src/vs/workbench/contrib/chat/common/languageModels.ts
+@@ -73,6 +73,7 @@ const BUILT_IN_BYOK_VENDOR_IDS = new Set<string>([
+ 	'openrouter',
+ 	'azure',
+ 	'xai',
++	'mistral',
+ 	'customoai',
+ 	'customendpoint',
+ ]);
