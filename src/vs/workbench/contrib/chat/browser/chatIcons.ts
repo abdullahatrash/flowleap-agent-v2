@@ -10,7 +10,9 @@ import { chatWorkingProgressInsidersIconForeground, chatWorkingProgressStableIco
 
 export function getChatWorkingProgressIcon(quality: string | undefined): ThemeIcon {
 	return {
-		id: Codicon.vscode.id,
+		// FlowLeap: the product mark, not the VS Code logo. The fork's codicon font draws the
+		// `copilot` glyph as the FlowLeap mark (build/flowleap/patch-copilot-glyphs.py).
+		id: Codicon.copilot.id,
 		color: { id: quality === 'insider' ? chatWorkingProgressInsidersIconForeground : chatWorkingProgressStableIconForeground },
 	};
 }
