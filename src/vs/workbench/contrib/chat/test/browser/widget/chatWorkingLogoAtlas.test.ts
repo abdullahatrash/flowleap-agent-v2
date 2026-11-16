@@ -339,7 +339,7 @@ suite('ChatWorkingLogoAtlas', () => {
 		}, { errors: ['Unable to prepare Draw atlas; using SVG animation'], atlas: false });
 	});
 
-	test('theme updates replace the colored atlas and inactive styles do not allocate it', async () => {
+	test('configured Draw styles show the static mark and never allocate an atlas across theme updates', async () => {
 		const changed = store.add(new Emitter<IColorTheme>());
 		const theme = new class extends mock<IThemeService>() {
 			override readonly onDidColorThemeChange = changed.event;
@@ -352,33 +352,32 @@ suite('ChatWorkingLogoAtlas', () => {
 		store.add(toDisposable(() => host.remove()));
 		const logo = store.add(new ChatWorkingProgressLogo('stable', configuration, store.add(new NullLogService()), new TestAccessibilityService(), theme));
 		host.appendChild(logo.domNode);
-		const image = () => logo.domNode.querySelector<HTMLImageElement>('.chat-working-logo-atlas-sheet');
-		await waitForMutation(logo.domNode, () => !!image()?.complete);
-		const original = image()!;
+		const snapshot = () => ({
+			animation: logo.domNode.dataset.animation,
+			atlas: !!logo.domNode.querySelector('.chat-working-logo-atlas-sheet'),
+			drawArtwork: !!logo.domNode.querySelector('.chat-working-logo-draw-container'),
+			drawClass: logo.domNode.classList.contains('chat-working-logo-draw'),
+			animations: logo.domNode.getAnimations({ subtree: true }).length,
+			faceDisplay: mainWindow.getComputedStyle(logo.domNode.querySelector<HTMLElement>('.chat-working-logo-face')!).display,
+			visibility: mainWindow.getComputedStyle(logo.domNode).visibility,
+		});
+		const initial = snapshot();
 		host.style.setProperty('--vscode-chat-workingProgressStableIconForeground', '#24bfa5');
 		changed.fire(new TestColorTheme());
-		await waitForMutation(logo.domNode, () => !!image() && image() !== original);
-		const colored = image()!;
-		const canvas = $<HTMLCanvasElement>('canvas');
-		canvas.width = colored.naturalWidth;
-		canvas.height = colored.naturalHeight;
-		const context = canvas.getContext('2d', { willReadFrequently: true });
-		assert.ok(context);
-		context.drawImage(colored, 0, 0);
-		const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
-		const opaque = data.findIndex((value, index) => index % 4 === 3 && value === 255);
-		assert.ok(opaque >= 3);
-		const rgba = [...data.slice(opaque - 3, opaque + 1)];
+		await timeout(0);
+		await new Promise<void>(resolve => mainWindow.requestAnimationFrame(() => mainWindow.requestAnimationFrame(() => resolve())));
+		const recolored = snapshot();
 		logo.setAnimation(ChatProgressAnimation.DrawMonochromeNoIcon);
 		changed.fire(new TestColorTheme());
 		await timeout(0);
-		assert.deepStrictEqual({
-			rgba,
-			atlas: !!image(),
-			animations: logo.domNode.getAnimations({ subtree: true }).length,
-			hidden: mainWindow.getComputedStyle(logo.domNode).visibility,
-		}, { rgba: [36, 191, 165, 255], atlas: false, animations: 0, hidden: 'hidden' });
-	}).timeout(atlasGenerationTimeout);
+		const noIcon = snapshot();
+		const staticMark = { atlas: false, drawArtwork: false, drawClass: false, animations: 0, faceDisplay: 'block' };
+		assert.deepStrictEqual({ initial, recolored, noIcon }, {
+			initial: { animation: 'draw', visibility: 'visible', ...staticMark },
+			recolored: { animation: 'draw', visibility: 'visible', ...staticMark },
+			noIcon: { animation: 'drawMonochromeNoIcon', visibility: 'hidden', ...staticMark },
+		});
+	});
 
 	test('disposal during generation prevents late image and animation attachment', async () => {
 		const pending = new DeferredPromise<IChatWorkingLogoAtlas>();

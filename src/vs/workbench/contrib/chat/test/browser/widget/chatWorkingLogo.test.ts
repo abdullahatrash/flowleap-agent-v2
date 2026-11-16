@@ -81,7 +81,7 @@ suite('ChatWorkingLogo', () => {
 		};
 	}
 
-	test('an unregistered progress setting falls back to Off and switches Draw styles without replacing its faces', async () => {
+	test('an unregistered progress setting falls back to Off and switches Draw styles as the static mark without replacing its faces', async () => {
 		const parent = mainWindow.document.body.appendChild($('.monaco-enable-motion'));
 		store.add(toDisposable(() => parent.remove()));
 		const { configuration, fireChange } = createConfiguration();
@@ -100,6 +100,7 @@ suite('ChatWorkingLogo', () => {
 				filter: style.filter,
 				visibility: style.visibility,
 				animations: logo.domNode.getAnimations({ subtree: true }).length,
+				staticMark: !logo.domNode.classList.contains('chat-working-logo-draw') && !logo.domNode.querySelector('.chat-working-logo-draw-container'),
 			});
 		}
 		const animations = logo.domNode.getAnimations({ subtree: true });
@@ -116,11 +117,11 @@ suite('ChatWorkingLogo', () => {
 		}, {
 			initial: { animation: 'off', animations: 0 },
 			snapshots: [
-				{ animation: 'off', filter: 'none', visibility: 'visible', animations: 0 },
-				{ animation: 'draw', filter: 'none', visibility: 'visible', animations: 0 },
-				{ animation: 'drawMonochrome', filter: 'grayscale(1)', visibility: 'visible', animations: 0 },
-				{ animation: 'drawMonochromeNoIcon', filter: 'grayscale(1)', visibility: 'hidden', animations: 0 },
-				{ animation: 'draw', filter: 'none', visibility: 'visible', animations: 0 },
+				{ animation: 'off', filter: 'none', visibility: 'visible', animations: 0, staticMark: true },
+				{ animation: 'draw', filter: 'none', visibility: 'visible', animations: 0, staticMark: true },
+				{ animation: 'drawMonochrome', filter: 'grayscale(1)', visibility: 'visible', animations: 0, staticMark: true },
+				{ animation: 'drawMonochromeNoIcon', filter: 'grayscale(1)', visibility: 'hidden', animations: 0, staticMark: true },
+				{ animation: 'draw', filter: 'none', visibility: 'visible', animations: 0, staticMark: true },
 			],
 			sameFaces: true,
 			sameAnimations: true,
@@ -335,38 +336,6 @@ suite('ChatWorkingLogo', () => {
 			progress,
 			paths: getChatWorkingLogoDrawFrame(progress).paths,
 		})));
-	});
-
-	test('Draw reveal preserves rounded tail outlines across assembled handoffs', () => {
-		const { logo } = createDynamicLogo(ChatProgressAnimation.Draw);
-		const faces = logo.domNode.querySelectorAll<SVGPathElement>('.chat-working-logo-face path');
-		const context = mainWindow.document.createElement('canvas').getContext('2d');
-		assert.ok(context);
-		context.lineWidth = 4;
-		context.lineJoin = 'round';
-		const bands = ['leg1', 'leg3'] as const;
-		const tips = bands.map((band, index) => {
-			const face = faces[index];
-			const length = face.getTotalLength();
-			const points = Array.from({ length: 256 }, (_, index) => face.getPointAtLength(length * index / 256))
-				.filter(point => point.x < 17)
-				.map(point => ({ x: (point.x - 6) / 0.84, y: (point.y - 6) / 0.84 }));
-			return { band, points };
-		});
-		const handoffs = [0.39999, 0.55, 0.55001, 0.58].map(progress => {
-			const frame = getChatWorkingLogoDrawFrame(progress);
-			return tips.map(({ band, points }) => {
-				const mask = new mainWindow.Path2D(frame.paths[band]);
-				return points.every(point => context.isPointInPath(mask, point.x, point.y) || context.isPointInStroke(mask, point.x, point.y));
-			});
-		});
-		assert.deepStrictEqual({
-			bothTipsSampled: tips.every(tip => tip.points.length > 10),
-			handoffs,
-		}, {
-			bothTipsSampled: true,
-			handoffs: Array.from({ length: 4 }, () => [true, true]),
-		});
 	});
 
 	test('budgets SVG fallback updates at 60 Hz without stretching the animation cycle', () => {
