@@ -107,6 +107,8 @@ export class ChatWorkingLogo extends Disposable {
 			readonly hasAtlas?: typeof hasChatWorkingLogoAtlas;
 			readonly atlasPreparationDelay?: number;
 			readonly onAtlasError?: (error: Error) => void;
+			/** FlowLeap: show the Draw styles as the static mark. The face is the FlowLeap mark; the draw bands are VS Code ribbon geometry (chatWorkingLogoDraw.ts). */
+			readonly staticMark?: boolean;
 		} = {},
 	) {
 		super();
@@ -141,7 +143,7 @@ export class ChatWorkingLogo extends Disposable {
 
 	setAnimation(animation: ChatProgressAnimation): void {
 		const noIcon = animation === ChatProgressAnimation.DrawMonochromeNoIcon;
-		const draw = isDrawAnimation(animation);
+		const draw = this.usesDrawArtwork(animation);
 		if (draw) {
 			this.ensureDrawArtwork();
 		}
@@ -181,7 +183,12 @@ export class ChatWorkingLogo extends Disposable {
 	}
 
 	private canAnimate(): boolean {
-		return this.active && this.visible && isDrawAnimation(this.animation) && !this.isMotionReduced() && !this._store.isDisposed;
+		return this.active && this.visible && this.usesDrawArtwork(this.animation) && !this.isMotionReduced() && !this._store.isDisposed;
+	}
+
+	/** Whether the style draws the mark through the ribbon bands; a static-mark logo shows the assembled face for every style. */
+	private usesDrawArtwork(animation: ChatProgressAnimation): boolean {
+		return !this.animationOptions.staticMark && isDrawAnimation(animation);
 	}
 
 	private observeSizeAndPixelRatio(): void {
@@ -349,7 +356,7 @@ export class ChatWorkingLogo extends Disposable {
 	private restartDrawAnimation(): void {
 		this.animationFrame?.clear();
 		this.clearAtlas();
-		if (!isDrawAnimation(this.animation)) {
+		if (!this.usesDrawArtwork(this.animation)) {
 			return;
 		}
 		if (!this.active || this.isMotionReduced()) {
@@ -368,7 +375,7 @@ export class ChatWorkingLogo extends Disposable {
 
 	private queueAnimationFrame(): void {
 		const animationFrame = this.animationFrame;
-		if (!animationFrame || animationFrame.value || this.atlasPlaying || !this.active || !this.visible || !isDrawAnimation(this.animation)) {
+		if (!animationFrame || animationFrame.value || this.atlasPlaying || !this.active || !this.visible || !this.usesDrawArtwork(this.animation)) {
 			return;
 		}
 		animationFrame.value = this.scheduleFrame(getWindow(this.domNode), () => {
@@ -378,7 +385,7 @@ export class ChatWorkingLogo extends Disposable {
 	}
 
 	private renderNextDrawFrame(): void {
-		if (this.atlasPlaying || !this.active || !this.visible || !isDrawAnimation(this.animation)) {
+		if (this.atlasPlaying || !this.active || !this.visible || !this.usesDrawArtwork(this.animation)) {
 			return;
 		}
 		if (this.isMotionReduced()) {
@@ -439,6 +446,7 @@ export class ChatWorkingProgressLogo extends ChatWorkingLogo {
 		super(getConfiguredProgressAnimation(configurationService, logService), quality, {
 			isMotionReduced: () => accessibilityService.isMotionReduced(),
 			onAtlasError: error => logService.error(error),
+			staticMark: true,
 		});
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ChatConfiguration.PersistentProgress)) {

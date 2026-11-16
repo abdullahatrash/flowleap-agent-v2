@@ -3232,7 +3232,8 @@ suite('ChatListRenderer', () => {
 			shimmerCount: template.value.querySelectorAll('.shimmer-progress').length,
 			workingIsActive: workingProgress?.classList.contains('chat-working-progress-active'),
 			workingIsFinalPart: template.value.lastElementChild === workingProgress,
-			hasStableProductIcon: !!workingProgress?.querySelector('.chat-progress-icon.codicon-vscode.chat-working-progress-icon-stable[aria-hidden="true"]'),
+			// FlowLeap: the product mark is the fork's `copilot` glyph (chatIcons.ts), rendered in its registered compact variant, not the VS Code logo.
+			hasStableProductIcon: !!workingProgress?.querySelector('.chat-progress-icon.codicon-copilot-compact.chat-working-progress-icon-stable[aria-hidden="true"]'),
 		}, {
 			defaultOff: { hasPersistentState: false, workingLogos: 0 },
 			hasPersistentState: true,
@@ -3303,7 +3304,7 @@ suite('ChatListRenderer', () => {
 				sameLogo: true,
 				iconVisibility: animation === 'drawMonochromeNoIcon' ? 'hidden' : 'visible',
 				iconAnimations: 0,
-				drawBands: 3,
+				drawBands: 0,
 				text: 'Working',
 				textVisibility: 'visible',
 				textAligned: true,
@@ -3313,7 +3314,7 @@ suite('ChatListRenderer', () => {
 		});
 	});
 
-	test('hidden retained progress stops Draw motion when the response completes', async () => {
+	test('hidden retained progress keeps the static mark when the response completes', async () => {
 		const { request, container, renderer, template, node } = createPersistentProgressRenderer();
 		container.classList.remove('monaco-reduce-motion');
 		container.classList.add('monaco-enable-motion');
@@ -3324,17 +3325,14 @@ suite('ChatListRenderer', () => {
 		renderer.setVisible(false);
 		container.style.display = 'none';
 		request.response?.complete();
-		const pathsAfterCompletion = [...logo.querySelectorAll<SVGPathElement>('.chat-working-logo-draw-band')].map(path => path.getAttribute('d'));
 		// Exercise the progressive-render interval instead of relying on two frames finishing before it.
 		await timeout(100);
 		await new Promise<void>(resolve => mainWindow.requestAnimationFrame(() => mainWindow.requestAnimationFrame(() => resolve())));
-		const pathsAfterFrames = [...logo.querySelectorAll<SVGPathElement>('.chat-working-logo-draw-band')].map(path => path.getAttribute('d'));
 		const retained = {
 			sameLogo: footer.querySelector('.chat-working-logo') === logo,
 			active: logo.classList.contains('chat-working-logo-active'),
 			progressActive: footer.classList.contains('chat-working-progress-active'),
-			assembled: logo.classList.contains('chat-working-logo-draw-assembled'),
-			pathsStopped: pathsAfterFrames.every((path, index) => path === pathsAfterCompletion[index]),
+			staticMark: !logo.classList.contains('chat-working-logo-draw') && logo.querySelectorAll('.chat-working-logo-draw-band').length === 0,
 		};
 		container.style.display = '';
 		renderer.setVisible(true);
@@ -3348,8 +3346,7 @@ suite('ChatListRenderer', () => {
 				sameLogo: true,
 				active: false,
 				progressActive: false,
-				assembled: true,
-				pathsStopped: true,
+				staticMark: true,
 			},
 			disposedAfterReveal: true,
 			completedProgressRows: 0,
@@ -12708,7 +12705,7 @@ suite('ChatListRenderer', () => {
 			const expected = {
 				shimmers: [{ location: 'footer', paintsText: true, includesDetail: false }],
 				logoAnimations: 0,
-				drawBands: 3,
+				drawBands: 0,
 				innerRows: 0,
 				headerLogos: 0,
 				footerIsLast: true,
