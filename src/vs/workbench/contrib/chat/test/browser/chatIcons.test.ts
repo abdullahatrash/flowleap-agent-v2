@@ -19,7 +19,7 @@ suite('ChatIcons', () => {
 			getChatWorkingProgressIcon('stable').id,
 			getChatWorkingProgressIcon('insider').id,
 			getChatWorkingProgressIcon(undefined).id,
-		], [Codicon.vscode.id, Codicon.vscode.id, Codicon.vscode.id]);
+		], [Codicon.copilot.id, Codicon.copilot.id, Codicon.copilot.id]);
 	});
 
 	test('uses compact variants when registered', () => {
