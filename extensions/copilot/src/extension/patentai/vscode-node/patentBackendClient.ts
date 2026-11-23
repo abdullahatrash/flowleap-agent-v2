@@ -213,7 +213,7 @@ export function patentBackendErrorRecoveryHint(error: PatentBackendError): strin
 	if (error instanceof TransientBackendError) {
 		const statusClause = error.status !== undefined ? ` (HTTP ${error.status})` : '';
 		if (error.retryAfterSeconds !== undefined) {
-			return ` The patent data office asked for a wait${statusClause}: its per-minute budget on the shared trial keys is used up. Wait at least ${error.retryAfterSeconds} seconds before retrying this tool — do NOT re-issue it sooner, and do not spend the wait on other calls to the same office. Work on other offices or keyless tools meanwhile. The user's own free EPO/USPTO keys give them a private budget ("FlowLeap: Patent Data Keys").`;
+			return ` The patent data office asked for a wait${statusClause}: its per-minute budget on FlowLeap's shared keys is used up. Wait at least ${error.retryAfterSeconds} seconds before retrying this tool — do NOT re-issue it sooner, and do not spend the wait on other calls to the same office. Work on other offices or keyless tools meanwhile. The user's own free EPO/USPTO keys give them a private budget ("FlowLeap: Patent Data Keys").`;
 		}
 		return ` The patent backend is temporarily unavailable${statusClause} — this is transient, not a coverage limit. Wait briefly and retry the same query, or try a different office (USPTO) meanwhile.`;
 	}

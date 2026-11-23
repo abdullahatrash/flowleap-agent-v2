@@ -30,12 +30,12 @@ describe('buildSetupItems', () => {
 		]);
 	});
 
-	it('frames the missing patent-data key rows against the trial deadline while trialing', () => {
+	it('says the missing patent-data key rows are optional while trialing', () => {
 		const items = buildSetupItems({ signedIn: true, byokModelCount: 1, epoConfigured: false, usptoConfigured: false, trialing: true });
 
 		const byId = Object.fromEntries(items.map(i => [i.id, i.description]));
-		expect(byId.epo).toBe('Add before your trial ends — free to obtain');
-		expect(byId.uspto).toBe('Add before your trial ends — free to obtain');
+		expect(byId.epo).toBe('Optional — free to obtain');
+		expect(byId.uspto).toBe('Optional — free to obtain');
 	});
 
 	it('satisfies the AI Model row with trial-only models but says who pays and names the deadline (ADR 0015, #243)', () => {
@@ -61,6 +61,6 @@ describe('buildSetupItems', () => {
 
 		const byId = Object.fromEntries(items.map(i => [i.id, i.description]));
 		expect(byId.epo).toBe('Configured');
-		expect(byId.uspto).toBe('Add before your trial ends — free to obtain');
+		expect(byId.uspto).toBe('Optional — free to obtain');
 	});
 });

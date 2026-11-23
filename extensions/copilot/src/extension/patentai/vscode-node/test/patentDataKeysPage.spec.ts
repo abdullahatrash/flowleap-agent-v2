@@ -164,13 +164,14 @@ describe('cost and trial-vs-paid copy (E2)', () => {
 		expect(html.match(/Free from the patent office — signup takes a few minutes\./g)).toHaveLength(2);
 	});
 
-	it('explains that server keys serve the trial and a paid plan needs your own', () => {
+	it('explains that the keys are optional: server keys serve the trial and a paid plan', () => {
 		const html = renderPatentDataKeysPageHtml('test-nonce');
 
-		// Mirrors the Setup tree's deadline framing ("Add before your trial ends — free to obtain"),
-		// so both surfaces tell the same story about when the keys become load-bearing.
-		expect(html).toContain('During your trial');
-		expect(html).toContain('add them before your trial ends');
+		// Backend ADR 0026: no user needs a Patent-Data Key. Mirrors the Setup tree's framing
+		// ("Optional — free to obtain"), so both surfaces tell the same story.
+		expect(html).toContain('<strong>optional</strong>');
+		expect(html).toContain('during your trial and on a paid plan');
+		expect(html).not.toContain('before your trial ends');
 	});
 });
 
