@@ -35,7 +35,7 @@ export function trialPillTooltip(daysRemaining: number | null): string {
 	} else {
 		deadline = l10n.t('Your FlowLeap trial ends in {0} days.', daysRemaining);
 	}
-	const disclosure = l10n.t('During the trial, your trial models and patent data both run on FlowLeap\'s credentials: chat uses FlowLeap-supplied trial models via OpenRouter, and you can switch to your own key at any time. Add your own LLM API key and your EPO/USPTO data keys before the trial ends.');
+	const disclosure = l10n.t('During the trial, your trial models and patent data both run on FlowLeap\'s credentials: chat uses FlowLeap-supplied trial models via OpenRouter, and you can switch to your own key at any time. Add your own LLM API key before the trial ends. Your own EPO/USPTO data keys are optional: they remove the daily limit on live patent data.');
 	return `${deadline}\n\n${disclosure}\n\n${l10n.t('Click to review your setup.')}`;
 }
 

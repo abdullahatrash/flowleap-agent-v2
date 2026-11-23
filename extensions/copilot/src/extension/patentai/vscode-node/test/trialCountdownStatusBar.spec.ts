@@ -11,7 +11,7 @@ describe('trialPillTooltip (ADR 0015 disclosure, #243)', () => {
 	it('carries the deadline and the full credential disclosure while trialing', () => {
 		expect(trialPillTooltip(5)).toBe(
 			'Your FlowLeap trial ends in 5 days.\n\n'
-			+ 'During the trial, your trial models and patent data both run on FlowLeap\'s credentials: chat uses FlowLeap-supplied trial models via OpenRouter, and you can switch to your own key at any time. Add your own LLM API key and your EPO/USPTO data keys before the trial ends.\n\n'
+			+ 'During the trial, your trial models and patent data both run on FlowLeap\'s credentials: chat uses FlowLeap-supplied trial models via OpenRouter, and you can switch to your own key at any time. Add your own LLM API key before the trial ends. Your own EPO/USPTO data keys are optional: they remove the daily limit on live patent data.\n\n'
 			+ 'Click to review your setup.'
 		);
 	});

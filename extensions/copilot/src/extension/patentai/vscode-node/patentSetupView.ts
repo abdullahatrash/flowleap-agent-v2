@@ -56,9 +56,12 @@ export interface SetupState {
 	readonly trialing?: boolean;
 }
 
-/** Description for a missing patent-data key row — deadline-framed while trialing, plain otherwise. */
+/**
+ * Description for a missing patent-data key row. While trialing it says the key is optional
+ * (backend ADR 0026: no user needs a Patent-Data Key), with no deadline; plain otherwise.
+ */
 function missingKeyDescription(trialing: boolean | undefined): string {
-	return trialing ? 'Add before your trial ends — free to obtain' : 'Add key…';
+	return trialing ? 'Optional — free to obtain' : 'Add key…';
 }
 
 /** The AI Model row's description/tooltip triple — own-key models, trial-only models, or none. */
@@ -113,7 +116,7 @@ export function buildSetupItems(state: SetupState): SetupItemData[] {
 			description: state.epoConfigured ? 'Configured' : missingKeyDescription(state.trialing),
 			tooltip: state.epoConfigured
 				? 'Your EPO OPS credentials are stored on this machine. Click to test, update, or remove.'
-				: 'Add your EPO OPS consumer key + secret for European patent data.',
+				: 'Optional: add your EPO OPS consumer key + secret to remove the daily limit on live European patent data.',
 			icon: 'key',
 			ok: state.epoConfigured,
 			command: { command: PATENT_DATA_KEYS_COMMAND, arguments: ['epo'] },
@@ -124,7 +127,7 @@ export function buildSetupItems(state: SetupState): SetupItemData[] {
 			description: state.usptoConfigured ? 'Configured' : missingKeyDescription(state.trialing),
 			tooltip: state.usptoConfigured
 				? 'Your USPTO ODP key is stored on this machine. Click to test, update, or remove.'
-				: 'Add your USPTO ODP API key for US patent data and citation analysis.',
+				: 'Optional: add your USPTO ODP API key to remove the daily limit on live US patent data and citation analysis.',
 			icon: 'key',
 			ok: state.usptoConfigured,
 			command: { command: PATENT_DATA_KEYS_COMMAND, arguments: ['uspto'] },

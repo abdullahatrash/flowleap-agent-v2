@@ -673,7 +673,7 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			</div>
 		</div>
 
-		<p class="notice">Both patent-office keys are <strong>free</strong>. During your trial FlowLeap's own server keys cover patent data; on a paid plan the patent offices are reached with your keys, so add them before your trial ends.</p>
+		<p class="notice">Both patent-office keys are <strong>free</strong> and <strong>optional</strong>. Without a key, FlowLeap's own server keys cover patent data during your trial and on a paid plan, up to 300 live calls per office each day. Your own key removes that daily limit for its office.</p>
 
 		<p class="privacy">The patent-office keys below stay on this machine in secure storage and are only sent to reach the patent offices. They are never shown again once saved — entering a new value replaces the stored one.</p>
 
